@@ -4,4 +4,3 @@ pypdf
 pandas
 openpyxl
 pyreadstat
-openai
