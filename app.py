@@ -4,12 +4,17 @@ from pypdf import PdfReader
 import pandas as pd
 
 # ==========================================
-# CẤU HÌNH TRANG & GIAO DIỆN (NỀN XANH TÍM)
+# CẤU HÌNH TRANG & GIAO DIỆN (NỀN XANH TÍM + FONT ARIAL)
 # ==========================================
 st.set_page_config(page_title="Trợ lý NCKH Dược Lâm Sàng", layout="wide")
 
 custom_css = """
 <style>
+    /* ÉP BỘ TẤT CẢ PHÔNG CHỮ VỀ ARIAL */
+    html, body, [class*="css"], * {
+        font-family: 'Arial', sans-serif !important;
+    }
+
     /* Nền toàn bộ trang web (Gradient xanh dương - tím nhạt) */
     .stApp {
         background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
