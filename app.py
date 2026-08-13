@@ -5,7 +5,7 @@ import pandas as pd
 
 st.set_page_config(page_title="Trợ lý NCKH Dược Lâm Sàng", layout="wide")
 
-st.title("Trợ lý Nghiên cứu & Phân tích Dữ liệu Y khoa")
+st.title("HỖ TRỢ NGHIÊN CỨU KHOA HỌC")
 
 # Tự động lấy API Key từ bộ nhớ bảo mật của Streamlit Cloud
 try:
