@@ -31,7 +31,6 @@ tab1, tab2 = st.tabs(["📄 Đọc Y văn & Viết Luận văn (PDF)", "📊 Ph�
 with tab1:
     st.header("Trợ lý tổng hợp tài liệu y văn")
     
-    # THÊM THAM SỐ accept_multiple_files=True Ở ĐÂY
     uploaded_files = st.file_uploader(
         "Tải lên nhiều tài liệu nghiên cứu (PDF)", 
         type="pdf", 
@@ -40,7 +39,6 @@ with tab1:
     )
     
     if uploaded_files:
-        # Gom toàn bộ nội dung văn bản từ các file lại với nhau
         combined_text = ""
         for uploaded_file in uploaded_files:
             reader = PdfReader(uploaded_file)
@@ -49,31 +47,40 @@ with tab1:
         
         st.success(f"Đã đọc thành công {len(uploaded_files)} tài liệu PDF!")
         
+        # Đưa các nút bấm lên TRÊN để luôn hiển thị ngay lập tức
         st.write("---")
         st.subheader("📝 Lệnh viết nhanh cho luận văn (Bấm là chạy):")
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            if st.button("Viết Tổng quan"):
-                with st.spinner("AI đang tổng hợp toàn bộ tài liệu để viết Tổng quan..."):
-                    prompt = "Viết phần tổng quan tài liệu dựa trên tất cả các file PDF được cung cấp. Sử dụng văn phong học thuật, khách quan, trích dẫn đầy đủ."
+            if st.button("Viết Đặt vấn đề"):
+                with st.spinner("AI đang viết phần Đặt vấn đề..."):
+                    prompt = "Dựa trên các tài liệu được cung cấp, hãy viết phần 'Đặt vấn đề' cho luận văn CKI Dược lâm sàng, nêu bật tính cấp thiết, ý nghĩa khoa học và mục tiêu nghiên cứu. Sử dụng văn phong học thuật, khách quan."
                     full_prop = f"Tổng hợp tài liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {prompt}"
                     response = model.generate_content(full_prop)
                     st.markdown(response.text)
                     
         with col2:
-            if st.button("Viết Bàn luận"):
-                with st.spinner("AI đang đối chiếu và viết phần Bàn luận..."):
-                    prompt = "Dựa trên các tài liệu này, hãy viết phần bàn luận: so sánh kết quả nghiên cứu giữa các tài liệu, giải thích cơ chế sinh lý bệnh và nêu rõ hạn chế."
+            if st.button("Viết Tổng quan"):
+                with st.spinner("AI đang viết phần Tổng quan..."):
+                    prompt = "Viết phần tổng quan tài liệu dựa trên tất cả các file PDF được cung cấp. Sử dụng văn phong học thuật, khách quan, trích dẫn đầy đủ."
                     full_prop = f"Tổng hợp tài liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {prompt}"
                     response = model.generate_content(full_prop)
                     st.markdown(response.text)
                     
         with col3:
-            if st.button("Tạo Bảng trích dẫn"):
-                with st.spinner("AI đang tổng hợp bảng trích dẫn..."):
-                    prompt = "Trích xuất danh sách các nghiên cứu quan trọng từ tất cả tài liệu này và lập bảng gồm: Tác giả | Năm | Kết quả chính | Ghi chú."
+            if st.button("Viết Bàn luận"):
+                with st.spinner("AI đang viết phần Bàn luận..."):
+                    prompt = "Dựa trên các tài liệu này, hãy viết phần bàn luận: so sánh kết quả nghiên cứu, giải thích cơ chế sinh lý bệnh và nêu rõ hạn chế."
+                    full_prop = f"Tổng hợp tài liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {prompt}"
+                    response = model.generate_content(full_prop)
+                    st.markdown(response.text)
+                    
+        with col4:
+            if st.button("Trích dẫn Vancouver"):
+                with st.spinner("AI đang lập danh mục tài liệu tham khảo chuẩn Vancouver..."):
+                    prompt = "Từ các tài liệu y văn được cung cấp, hãy lập danh mục tài liệu tham khảo được định dạng chính xác theo chuẩn Vancouver (Số thứ tự [1], [2]... theo mẫu: Tác giả AA, Tác giả BB. Tên bài báo. Tên tạp chí viết tắt Năm;Tập(Số):Trang)."
                     full_prop = f"Tổng hợp tài liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {prompt}"
                     response = model.generate_content(full_prop)
                     st.markdown(response.text)
@@ -88,7 +95,11 @@ with tab1:
                     st.markdown(response.text)
             else:
                 st.warning("Vui lòng nhập yêu cầu vào ô trống!")
-
+                
+        # Thu gọn danh sách file trong khung bấm mở rộng để giao diện không bị dài trôi trang
+        with st.expander("📂 Xem danh sách các file PDF đã tải lên"):
+            for f in uploaded_files:
+                st.text(f"- {f.name} ({round(f.size / 1024, 1)} KB)")
 with tab2:
     st.header("Phân tích thống kê mô tả số liệu")
     excel_file = st.file_uploader("Tải lên file số liệu bệnh án (Excel .xlsx)", type="xlsx", key="excel_uploader")
