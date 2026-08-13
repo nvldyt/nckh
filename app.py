@@ -4,15 +4,15 @@ from pypdf import PdfReader
 import pandas as pd
 
 # ==========================================
-# CẤU HÌNH TRANG & GIAO DIỆN (NỀN XANH TÍM + FONT ARIAL)
+# CẤU HÌNH TRANG & GIAO DIỆN (NỀN XANH TÍM + FONT ARIAL AN TOÀN)
 # ==========================================
 st.set_page_config(page_title="Trợ lý NCKH Dược Lâm Sàng", layout="wide")
 
 custom_css = """
 <style>
-    /* ÉP BỘ TẤT CẢ PHÔNG CHỮ VỀ ARIAL */
-    html, body, [class*="css"], * {
-        font-family: 'Arial', sans-serif !important;
+    /* Ép phông chữ Arial an toàn (Không làm hỏng icon tải file) */
+    html, body, p, h1, h2, h3, h4, h5, h6, span, div, label, li {
+        font-family: 'Arial', sans-serif;
     }
 
     /* Nền toàn bộ trang web (Gradient xanh dương - tím nhạt) */
@@ -92,7 +92,7 @@ try:
     5. Bàn luận: Phải phân tích sâu sắc tại sao số liệu lại như vậy, không chỉ liệt kê số.
     """
     
-    # Khai báo sử dụng lõi gemini-3.6-flash theo yêu cầu
+    # Khai báo sử dụng lõi gemini-3.6-flash
     model = genai.GenerativeModel("gemini-3.6-flash", system_instruction=system_prompt)
     
 except Exception as e:
