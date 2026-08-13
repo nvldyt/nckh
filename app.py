@@ -20,7 +20,7 @@ try:
     4. Bảng biểu: Kết quả phải được trình bày dưới dạng bảng Markdown chuẩn.
     5. Bàn luận: Phải phân tích sâu sắc tại sao số liệu lại như vậy, không chỉ liệt kê số.
     """
-    model = genai.GenerativeModel("gemini-3.1-pro")
+    model = genai.GenerativeModel("gemini-3.6-flash")
 except Exception as e:
     st.error("Chưa cấu hình API Key trong Streamlit Secrets. Vui lòng thêm khóa vào mục cài đặt của ứng dụng.")
     st.stop()
