@@ -3,3 +3,5 @@ google-generativeai
 pypdf
 pandas
 openpyxl
+pyreadstat
+openai
