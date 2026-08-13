@@ -39,13 +39,37 @@ with tab1:
             text += page.extract_text()
         
         st.success("Đã đọc xong tài liệu PDF!")
-        prompt = st.text_area("Bạn muốn viết gì từ tài liệu này?")
         
+        st.write("---")
+        st.subheader("📝 Lệnh viết nhanh cho luận văn:")
+        
+        # Khởi tạo biến prompt
+        prompt = ""
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if st.button("Viết Tổng quan"):
+                prompt = "Viết phần tổng quan tài liệu dựa trên file PDF này. Sử dụng văn phong học thuật, khách quan, trích dẫn đầy đủ."
+        with col2:
+            if st.button("Viết Bàn luận"):
+                prompt = "Dựa trên tài liệu này, hãy viết phần bàn luận: so sánh kết quả nghiên cứu, giải thích cơ chế sinh lý bệnh và nêu rõ hạn chế."
+        with col3:
+            if st.button("Tạo Bảng trích dẫn"):
+                prompt = "Trích xuất danh sách các nghiên cứu quan trọng trong tài liệu này và lập bảng gồm: Tác giả | Năm | Kết quả chính | Ghi chú."
+        
+        # Cho phép tự nhập yêu cầu riêng nếu muốn
+        custom_prompt = st.text_area("Hoặc tự nhập yêu cầu riêng của anh vào đây:")
+        if custom_prompt:
+            prompt = custom_prompt
+            
         if st.button("Chạy lệnh viết văn"):
-            with st.spinner("AI đang tổng hợp và viết..."):
-                full_prop = f"Dựa vào tài liệu sau đây:\n{text}\n\nHãy thực hiện yêu cầu: {prompt}"
-                response = model.generate_content(full_prop)
-                st.write(response.text)
+            if prompt:
+                with st.spinner("AI đang nghiên cứu tài liệu và viết..."):
+                    full_prop = f"Tài liệu y văn:\n{text}\n\nYêu cầu của tôi: {prompt}"
+                    response = model.generate_content(full_prop)
+                    st.markdown(response.text)
+            else:
+                st.warning("Vui lòng bấm chọn một nút lệnh nhanh hoặc nhập yêu cầu vào ô trống bên trên!")
 
 with tab2:
     st.header("Phân tích thống kê mô tả số liệu")
