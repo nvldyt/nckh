@@ -30,15 +30,24 @@ tab1, tab2 = st.tabs(["📄 Đọc Y văn & Viết Luận văn (PDF)", "📊 Ph�
 
 with tab1:
     st.header("Trợ lý tổng hợp tài liệu y văn")
-    uploaded_file = st.file_uploader("Tải lên tài liệu nghiên cứu (PDF)", type="pdf", key="pdf_uploader")
     
-    if uploaded_file is not None:
-        reader = PdfReader(uploaded_file)
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text()
+    # THÊM THAM SỐ accept_multiple_files=True Ở ĐÂY
+    uploaded_files = st.file_uploader(
+        "Tải lên nhiều tài liệu nghiên cứu (PDF)", 
+        type="pdf", 
+        accept_multiple_files=True, 
+        key="pdf_uploader"
+    )
+    
+    if uploaded_files:
+        # Gom toàn bộ nội dung văn bản từ các file lại với nhau
+        combined_text = ""
+        for uploaded_file in uploaded_files:
+            reader = PdfReader(uploaded_file)
+            for page in reader.pages:
+                combined_text += page.extract_text() + "\n"
         
-        st.success("Đã đọc xong tài liệu PDF!")
+        st.success(f"Đã đọc thành công {len(uploaded_files)} tài liệu PDF!")
         
         st.write("---")
         st.subheader("📝 Lệnh viết nhanh cho luận văn (Bấm là chạy):")
@@ -47,34 +56,34 @@ with tab1:
         
         with col1:
             if st.button("Viết Tổng quan"):
-                with st.spinner("AI đang viết phần Tổng quan..."):
-                    prompt = "Viết phần tổng quan tài liệu dựa trên file PDF này. Sử dụng văn phong học thuật, khách quan, trích dẫn đầy đủ."
-                    full_prop = f"Tài liệu y văn:\n{text}\n\nYêu cầu của tôi: {prompt}"
+                with st.spinner("AI đang tổng hợp toàn bộ tài liệu để viết Tổng quan..."):
+                    prompt = "Viết phần tổng quan tài liệu dựa trên tất cả các file PDF được cung cấp. Sử dụng văn phong học thuật, khách quan, trích dẫn đầy đủ."
+                    full_prop = f"Tổng hợp tài liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {prompt}"
                     response = model.generate_content(full_prop)
                     st.markdown(response.text)
                     
         with col2:
             if st.button("Viết Bàn luận"):
-                with st.spinner("AI đang viết phần Bàn luận..."):
-                    prompt = "Dựa trên tài liệu này, hãy viết phần bàn luận: so sánh kết quả nghiên cứu, giải thích cơ chế sinh lý bệnh và nêu rõ hạn chế."
-                    full_prop = f"Tài liệu y văn:\n{text}\n\nYêu cầu của tôi: {prompt}"
+                with st.spinner("AI đang đối chiếu và viết phần Bàn luận..."):
+                    prompt = "Dựa trên các tài liệu này, hãy viết phần bàn luận: so sánh kết quả nghiên cứu giữa các tài liệu, giải thích cơ chế sinh lý bệnh và nêu rõ hạn chế."
+                    full_prop = f"Tổng hợp tài liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {prompt}"
                     response = model.generate_content(full_prop)
                     st.markdown(response.text)
                     
         with col3:
             if st.button("Tạo Bảng trích dẫn"):
-                with st.spinner("AI đang tạo bảng trích dẫn..."):
-                    prompt = "Trích xuất danh sách các nghiên cứu quan trọng trong tài liệu này và lập bảng gồm: Tác giả | Năm | Kết quả chính | Ghi chú."
-                    full_prop = f"Tài liệu y văn:\n{text}\n\nYêu cầu của tôi: {prompt}"
+                with st.spinner("AI đang tổng hợp bảng trích dẫn..."):
+                    prompt = "Trích xuất danh sách các nghiên cứu quan trọng từ tất cả tài liệu này và lập bảng gồm: Tác giả | Năm | Kết quả chính | Ghi chú."
+                    full_prop = f"Tổng hợp tài liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {prompt}"
                     response = model.generate_content(full_prop)
                     st.markdown(response.text)
         
         st.write("---")
-        custom_prompt = st.text_area("Hoặc tự nhập yêu cầu riêng của anh vào đây:")
+        custom_prompt = st.text_area("Hoặc tự nhập yêu cầu riêng của anh cho toàn bộ tập tài liệu:")
         if st.button("Chạy lệnh tùy chỉnh"):
             if custom_prompt:
                 with st.spinner("AI đang xử lý yêu cầu..."):
-                    full_prop = f"Tài liệu y văn:\n{text}\n\nYêu cầu của tôi: {custom_prompt}"
+                    full_prop = f"Tổng hợp tài liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {custom_prompt}"
                     response = model.generate_content(full_prop)
                     st.markdown(response.text)
             else:
