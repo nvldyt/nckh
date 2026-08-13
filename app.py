@@ -92,7 +92,7 @@ except Exception as e:
 tab1, tab2 = st.tabs(["📄 Đọc Y văn & Viết Luận văn (PDF)", "📊 Phân tích Số liệu Bệnh án (Excel)"])
 
 with tab1:
-    st.header("Trợ lý tổng hợp tài liệu y văn")
+    st.header("Phân tích tài liệu và Viết bài")
     
     uploaded_files = st.file_uploader(
         "Tải lên nhiều tài liệu nghiên cứu (PDF)", 
@@ -164,7 +164,7 @@ with tab1:
             for f in uploaded_files:
                 st.text(f"- {f.name} ({round(f.size / 1024, 1)} KB)")
 with tab2:
-    st.header("Phân tích thống kê mô tả số liệu")
+    st.header("Phân tích thống kê số liệu")
     excel_file = st.file_uploader("Tải lên file số liệu bệnh án (Excel .xlsx)", type="xlsx", key="excel_uploader")
     
     if excel_file is not None:
