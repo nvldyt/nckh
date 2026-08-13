@@ -11,7 +11,7 @@ st.title("Trợ lý Nghiên cứu & Phân tích Dữ liệu Y khoa")
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-pro")
+    model = genai.GenerativeModel("models/gemini-1.5-flash")
 except Exception as e:
     st.error("Chưa cấu hình API Key trong Streamlit Secrets. Vui lòng thêm khóa vào mục cài đặt của ứng dụng.")
     st.stop()
