@@ -12,7 +12,7 @@ api_key = st.sidebar.text_input("Nhập Google Gemini API Key:", type="password"
 
 if api_key:
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-pro")
 
     # Tạo các Tab phân chia chức năng rõ ràng
     tab1, tab2 = st.tabs(["📄 Đọc Y văn & Viết Luận văn (PDF)", "📊 Phân tích Số liệu Bệnh án (Excel)"])
