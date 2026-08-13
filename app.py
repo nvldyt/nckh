@@ -115,7 +115,7 @@ with tab2:
         
         analysis_prompt = st.text_area("Nhập yêu cầu phân tích số liệu:")
         
-        if st.button("Chạy phân tích số liệu bằng AI"):
+        if st.button("Chạy phân tích số liệu bằng AI, hãy đưa ra các bảng số liệu cần dùng cho đề tài, sau mỗi bảng số liệu hãy viết nhận xét cho bảng số liệu thật đầy đủ, ngắn gọn, logic"):
             with st.spinner("AI đang đọc bảng số liệu và viết báo cáo..."):
                 stats_string = desc_stats.to_string()
                 data_prompt = f"Dưới đây là bảng thống kê mô tả số liệu nghiên cứu:\n{stats_string}\n\nYêu cầu: {analysis_prompt}."
