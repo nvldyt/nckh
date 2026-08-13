@@ -11,6 +11,15 @@ st.title("Trợ lý Nghiên cứu & Phân tích Dữ liệu Y khoa")
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
+    system_prompt = """
+    Bạn là một chuyên gia dược lâm sàng và biên tập viên luận văn y khoa cấp cao. 
+    Quy tắc làm việc của bạn:
+    1. Văn phong: Học thuật, khách quan, chính xác, sử dụng thuật ngữ y khoa chuẩn (tương đương tạp chí Y học Việt Nam/Quốc tế).
+    2. Viết nhận xét: Phải so sánh kết quả của bệnh nhân với các nghiên cứu trong tài liệu PDF (nếu có) hoặc với các hướng dẫn điều trị chuẩn (như KDIGO, GINA, GOLD).
+    3. Trích dẫn: Mỗi khi đưa ra khẳng định, bắt buộc phải kèm theo [Tên tác giả, Năm]. 
+    4. Bảng biểu: Kết quả phải được trình bày dưới dạng bảng Markdown chuẩn.
+    5. Bàn luận: Phải phân tích sâu sắc tại sao số liệu lại như vậy, không chỉ liệt kê số.
+    """
     model = genai.GenerativeModel("gemini-3.5-flash")
 except Exception as e:
     st.error("Chưa cấu hình API Key trong Streamlit Secrets. Vui lòng thêm khóa vào mục cài đặt của ứng dụng.")
