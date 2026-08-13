@@ -82,18 +82,23 @@ try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
     
+    # 1. NÂNG CẤP SYSTEM PROMPT: ÉP VĂN PHONG KHÔ KHAN, CHUYÊN SÂU
     system_prompt = """
     Bạn là một chuyên gia dược lâm sàng, thống kê y học và biên tập viên luận văn y khoa cấp cao. 
     Quy tắc làm việc của bạn:
-    1. Văn phong: Học thuật, khách quan, chính xác, sử dụng thuật ngữ y khoa chuẩn (tương đương tạp chí Y học Việt Nam/Quốc tế).
-    2. Viết nhận xét: Phải so sánh kết quả của bệnh nhân với các nghiên cứu trong tài liệu PDF (nếu có) hoặc với các hướng dẫn điều trị chuẩn.
-    3. Trích dẫn: Mỗi khi đưa ra khẳng định, bắt buộc phải kèm theo [Tên tác giả, Năm]. 
-    4. Bảng biểu: Kết quả phải được trình bày dưới dạng bảng Markdown chuẩn (mô phỏng chuẩn bảng của SPSS).
-    5. Bàn luận: Phải phân tích sâu sắc tại sao số liệu lại như vậy, không chỉ liệt kê số.
+    1. VĂN PHONG (QUAN TRỌNG NHẤT): Tuyệt đối KHÔNG sử dụng từ ngữ hoa mỹ, bay bổng, sáo rỗng, hoặc mang tính cảm xúc. Văn phong phải cực kỳ khô khan, trực diện, logic chặt chẽ và đậm chất khoa học.
+    2. TÍNH CHUYÊN SÂU: Sử dụng chính xác 100% các thuật ngữ chuyên ngành. Tập trung vào bằng chứng (Evidence-based), cơ sở sinh lý bệnh, cơ chế dược lý, số liệu dịch tễ và ý nghĩa lâm sàng lâm sàng (p-value, OR, RR...). Không viết chung chung.
+    3. Viết nhận xét: Phải so sánh kết quả của bệnh nhân với các nghiên cứu trong tài liệu PDF (nếu có) hoặc với các hướng dẫn điều trị chuẩn.
+    4. Trích dẫn: Mỗi khi đưa ra khẳng định, bắt buộc phải kèm theo [Tên tác giả, Năm]. 
+    5. Bảng biểu: Kết quả phải được trình bày dưới dạng bảng Markdown chuẩn.
     """
     
-    # Khai báo sử dụng lõi gemini-3.6-flash
     model = genai.GenerativeModel("gemini-3.6-flash", system_instruction=system_prompt)
+    
+    # 2. THIẾT LẬP NHIỆT ĐỘ (TEMPERATURE) = 0.1 ĐỂ DIỆT SỰ SÁNG TẠO/BAY BỔNG
+    generation_config = genai.types.GenerationConfig(
+        temperature=0.1,
+    )
     
 except Exception as e:
     st.error("Chưa cấu hình API Key trong Streamlit Secrets. Vui lòng thêm khóa vào mục cài đặt của ứng dụng.")
@@ -102,10 +107,10 @@ except Exception as e:
 # ==========================================
 # CÁC TAB CHỨC NĂNG
 # ==========================================
-tab1, tab2 = st.tabs(["📄 Đọc Y văn & Viết Luận văn (PDF)", "📊 Phân tích Số liệu Bệnh án (Excel)"])
+tab1, tab2 = st.tabs(["📄 Đọc Tài liệu & Viết Luận văn (PDF)", "📊 Phân tích Số liệu Bệnh án (Excel)"])
 
 # ----------------------------------------------------
-# TAB 1: PHÂN TÍCH TÀI LIỆU Y VĂN (NÂNG CẤP TRÍCH DẪN)
+# TAB 1: PHÂN TÍCH TÀI LIỆU THAM KHẢO
 # ----------------------------------------------------
 with tab1:
     st.header("Phân tích tài liệu và Viết bài")
@@ -119,7 +124,6 @@ with tab1:
     
     if uploaded_files:
         combined_text = ""
-        # Trích xuất văn bản và đính kèm tên file để AI biết nguồn
         for index, uploaded_file in enumerate(uploaded_files, start=1):
             reader = PdfReader(uploaded_file)
             file_content = ""
@@ -132,13 +136,12 @@ with tab1:
         st.write("---")
         st.subheader("📝 Lệnh viết nhanh cho luận văn (Bấm là chạy):")
         
-        # Bổ sung câu lệnh gốc (Core Prompt) ép buộc trích dẫn Vancouver nghiêm ngặt
         citation_rules = """
-        QUY TẮC TRÍCH DẪN BẮT BUỘC (CHUẨN VANCOUVER):
-        1. Bất kỳ một câu khẳng định số liệu, dịch tễ, hay kết luận y khoa nào trong văn bản cũng PHẢI có trích dẫn ở cuối câu bằng số đặt trong ngoặc vuông (VD: [1], [2, 3]).
-        2. Các số trích dẫn phải được đánh số theo đúng thứ tự xuất hiện liên tục trong đoạn văn bản bạn viết ra (Bắt đầu từ [1] cho tài liệu đầu tiên được nhắc đến, [2] cho tài liệu tiếp theo...). Không được nhảy cóc số.
-        3. Tuyệt đối không tự bịa (hallucinate) thông tin. Chỉ sử dụng số liệu/kiến thức từ các Tài liệu PDF được cung cấp.
-        4. Cuối đoạn văn bản, BẮT BUỘC phải tạo một danh sách "Tài liệu tham khảo" chi tiết tương ứng với các số [1], [2]... bạn vừa dùng trong bài.
+        QUY TẮC TRÍCH DẪN & HÀN LÂM BẮT BUỘC:
+        1. Bất kỳ câu khẳng định số liệu, dịch tễ, hay kết luận y khoa nào cũng PHẢI có trích dẫn số trong ngoặc vuông (VD: [1], [2, 3]) ở cuối câu.
+        2. Các số trích dẫn phải theo đúng thứ tự xuất hiện liên tục trong đoạn văn bản. Không nhảy cóc số.
+        3. Văn phong tuyệt đối không bay bổng. Đi thẳng vào phân tích cơ chế, số liệu và ý nghĩa lâm sàng.
+        4. Cuối đoạn văn bản, BẮT BUỘC liệt kê "Tài liệu tham khảo" chi tiết tương ứng với các số đã dùng.
         """
 
         col1, col2, col3, col4 = st.columns(4)
@@ -146,42 +149,33 @@ with tab1:
         with col1:
             if st.button("Viết Đặt vấn đề"):
                 with st.spinner("AI đang viết phần Đặt vấn đề..."):
-                    prompt = f"""
-                    Dựa trên các tài liệu PDF được cung cấp, hãy viết phần 'Đặt vấn đề' cho luận văn CKI Dược lâm sàng, nêu bật tính cấp thiết, ý nghĩa khoa học và mục tiêu nghiên cứu. 
-                    {citation_rules}
-                    """
-                    full_prop = f"Cơ sở dữ liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {prompt}"
-                    response = model.generate_content(full_prop)
+                    prompt = f"Dựa trên các tài liệu PDF, hãy viết phần 'Đặt vấn đề' cho luận văn CKI Dược lâm sàng, tập trung vào số liệu dịch tễ, tính cấp thiết lâm sàng và khoảng trống nghiên cứu. {citation_rules}"
+                    full_prop = f"Cơ sở dữ liệu:\n{combined_text}\n\nYêu cầu: {prompt}"
+                    response = model.generate_content(full_prop, generation_config=generation_config)
                     st.markdown(response.text)
                     
         with col2:
             if st.button("Viết Tổng quan"):
                 with st.spinner("AI đang viết phần Tổng quan..."):
-                    prompt = f"""
-                    Viết phần tổng quan tài liệu (Tổng quan y văn) một cách logic, mạch lạc dựa trên tất cả các file PDF được cung cấp. 
-                    {citation_rules}
-                    """
-                    full_prop = f"Cơ sở dữ liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {prompt}"
-                    response = model.generate_content(full_prop)
+                    prompt = f"Viết phần tổng quan y văn chuyên sâu, phân tích cơ chế sinh lý bệnh, dược lý và phác đồ điều trị dựa trên các file PDF. {citation_rules}"
+                    full_prop = f"Cơ sở dữ liệu:\n{combined_text}\n\nYêu cầu: {prompt}"
+                    response = model.generate_content(full_prop, generation_config=generation_config)
                     st.markdown(response.text)
                     
         with col3:
             if st.button("Viết Bàn luận"):
                 with st.spinner("AI đang viết phần Bàn luận..."):
-                    prompt = f"""
-                    Dựa trên các tài liệu này, hãy viết phần bàn luận: so sánh các kết quả nghiên cứu, giải thích cơ chế sinh lý bệnh, nguyên nhân của sự khác biệt số liệu và nêu rõ hạn chế.
-                    {citation_rules}
-                    """
-                    full_prop = f"Cơ sở dữ liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {prompt}"
-                    response = model.generate_content(full_prop)
+                    prompt = f"Viết phần bàn luận y khoa chuyên sâu: so sánh kết quả (p-value, tỷ lệ), giải thích nguyên nhân khác biệt dựa trên dược động học/dược lực học, và nêu hạn chế nghiên cứu. {citation_rules}"
+                    full_prop = f"Cơ sở dữ liệu:\n{combined_text}\n\nYêu cầu: {prompt}"
+                    response = model.generate_content(full_prop, generation_config=generation_config)
                     st.markdown(response.text)
                     
         with col4:
             if st.button("Trích dẫn Vancouver"):
-                with st.spinner("AI đang lập danh mục tài liệu tham khảo chuẩn Vancouver..."):
-                    prompt = "Từ các tài liệu y văn được cung cấp, hãy lập danh mục tài liệu tham khảo tổng hợp được định dạng chính xác theo chuẩn Vancouver (Tác giả AA, Tác giả BB. Tên bài báo. Tên tạp chí viết tắt Năm;Tập(Số):Trang)."
-                    full_prop = f"Cơ sở dữ liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {prompt}"
-                    response = model.generate_content(full_prop)
+                with st.spinner("AI đang lập danh mục tài liệu..."):
+                    prompt = "Lập danh mục tài liệu tham khảo định dạng Vancouver chuẩn xác từ các tài liệu trên."
+                    full_prop = f"Cơ sở dữ liệu:\n{combined_text}\n\nYêu cầu: {prompt}"
+                    response = model.generate_content(full_prop, generation_config=generation_config)
                     st.markdown(response.text)
         
         st.write("---")
@@ -189,8 +183,8 @@ with tab1:
         if st.button("Chạy lệnh tùy chỉnh"):
             if custom_prompt:
                 with st.spinner("AI đang xử lý yêu cầu..."):
-                    full_prop = f"Cơ sở dữ liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {custom_prompt}\n{citation_rules}"
-                    response = model.generate_content(full_prop)
+                    full_prop = f"Cơ sở dữ liệu:\n{combined_text}\n\nYêu cầu: {custom_prompt}\n{citation_rules}"
+                    response = model.generate_content(full_prop, generation_config=generation_config)
                     st.markdown(response.text)
             else:
                 st.warning("Vui lòng nhập yêu cầu vào ô trống!")
@@ -198,6 +192,7 @@ with tab1:
         with st.expander("📂 Xem danh sách các file PDF đã tải lên"):
             for f in uploaded_files:
                 st.text(f"- {f.name} ({round(f.size / 1024, 1)} KB)")
+
 # ----------------------------------------------------
 # TAB 2: PHÂN TÍCH SỐ LIỆU TỪ EXCEL (MÔ PHỎNG SPSS)
 # ----------------------------------------------------
@@ -207,7 +202,6 @@ with tab2:
     excel_file = st.file_uploader("Tải lên file số liệu bệnh án (Excel .xlsx)", type=["xlsx", "xls"], key="excel_uploader")
     
     if excel_file is not None:
-        # Đọc dữ liệu từ file Excel
         df = pd.read_excel(excel_file)
         columns = df.columns.tolist()
         
@@ -219,9 +213,7 @@ with tab2:
         st.write("---")
         st.subheader("🛠️ CÔNG CỤ PHÂN TÍCH CHUYÊN SÂU")
         
-        # --- TÍNH NĂNG 1: THỐNG KÊ TẦN SỐ (FREQUENCIES) ---
-        st.markdown("### 1. Thống kê mô tả (Frequencies)")
-        var_desc = st.selectbox("Chọn biến cần thống kê (VD: Giới tính, Nhóm tuổi, Mức độ bệnh):", columns, key="var_desc")
+        var_desc = st.selectbox("1. Thống kê mô tả (Frequencies) - Chọn biến:", columns, key="var_desc")
         
         if st.button("Chạy Thống kê & Nhận xét"):
             with st.spinner(f"AI đang tính toán tần số cho biến {var_desc}..."):
@@ -229,57 +221,43 @@ with tab2:
                 total = len(df[var_desc].dropna())
                 
                 prompt = f"""
-                Dưới đây là số liệu đếm thực tế của biến '{var_desc}' từ file Excel:
-                {freq_table}
-                (Tổng số mẫu hợp lệ: {total})
-                
-                Yêu cầu:
-                1. Hãy vẽ lại một bảng chuẩn format SPSS bao gồm các cột: Phân loại, Tần số (n), Tỷ lệ (%).
-                2. Viết một đoạn nhận xét y khoa chuyên nghiệp dựa trên các con số trong bảng này (Dùng cho luận văn CKI).
+                Dữ liệu đếm thực tế của biến '{var_desc}': {freq_table} (Tổng: {total}).
+                Yêu cầu: 1. Vẽ bảng SPSS (Phân loại, n, %). 2. Viết nhận xét y khoa chuyên sâu, khô khan, không bay bổng.
                 """
-                response = model.generate_content(prompt)
+                response = model.generate_content(prompt, generation_config=generation_config)
                 st.markdown(response.text)
 
         st.write("---")
         
-        # --- TÍNH NĂNG 2: BẢNG CHÉO & MỐI LIÊN QUAN (CROSSTABS) ---
         st.markdown("### 2. Bảng chéo & Phân tích mối liên quan (Crosstabs)")
-        st.info("💡 Tính năng này mô phỏng Crosstabs của SPSS để xem xét mối liên quan giữa 2 biến (VD: Tuổi và Mức độ nặng).")
-        
         col_a, col_b = st.columns(2)
         with col_a:
-            var_row = st.selectbox("Biến Độc lập / Hàng (VD: Giới tính):", columns, key="var_row")
+            var_row = st.selectbox("Biến Độc lập / Hàng:", columns, key="var_row")
         with col_b:
-            var_col = st.selectbox("Biến Phụ thuộc / Cột (VD: Mức độ bệnh):", columns, key="var_col")
+            var_col = st.selectbox("Biến Phụ thuộc / Cột:", columns, key="var_col")
             
         if st.button("Chạy Crosstabs & Nhận xét"):
             with st.spinner("AI đang xử lý bảng chéo..."):
                 crosstab_df = pd.crosstab(df[var_row], df[var_col])
-                crosstab_str = crosstab_df.to_string()
                 
                 prompt = f"""
-                Dưới đây là bảng chéo (Crosstabs) thực tế trích xuất từ file Excel giữa 2 biến: '{var_row}' và '{var_col}':
-                \n{crosstab_str}\n
-                Yêu cầu:
-                1. Hãy trình bày lại thành một bảng biểu chuẩn khoa học (Có cột Tổng, Hàng Tổng và tính Tỷ lệ % theo hàng hoặc cột sao cho hợp lý).
-                2. Đóng vai trò chuyên gia, viết nhận xét về mối phân bố/liên quan giữa '{var_row}' và '{var_col}' dựa hoàn toàn vào các con số thực tế trong bảng trên.
+                Bảng Crosstabs thực tế giữa '{var_row}' và '{var_col}':\n{crosstab_df.to_string()}\n
+                Yêu cầu: 1. Trình bày bảng khoa học (% hàng/cột). 2. Nhận xét cực kỳ chuyên sâu về y học, tuyệt đối không dùng từ ngữ cảm xúc.
                 """
-                response = model.generate_content(prompt)
+                response = model.generate_content(prompt, generation_config=generation_config)
                 st.markdown(response.text)
 
         st.write("---")
         
-        # --- TÍNH NĂNG 3: AI TỰ PHÂN TÍCH THEO YÊU CẦU ---
-        st.markdown("### 3. Trợ lý AI tự do (Phân tích toàn bộ dữ liệu)")
-        analysis_prompt = st.text_area("Nhập câu hỏi hoặc yêu cầu (VD: Viết nhận xét tổng quan về độ tuổi và các bệnh mắc kèm của tập dữ liệu này):")
+        st.markdown("### 3. Trợ lý AI tự do")
+        analysis_prompt = st.text_area("Nhập yêu cầu (VD: Nhận xét tổng quan):")
         
         if st.button("Chạy lệnh tùy chỉnh"):
             if analysis_prompt:
                 with st.spinner("AI đang xử lý..."):
                     desc_stats = df.describe(include='all').to_string()
-                    data_prompt = f"Đây là bảng thống kê tổng quát của file Excel:\n{desc_stats}\n\nYêu cầu của tôi: {analysis_prompt}"
-                    
-                    response = model.generate_content(data_prompt)
+                    data_prompt = f"Bảng thống kê tổng quát:\n{desc_stats}\n\nYêu cầu: {analysis_prompt}. Viết văn phong hàn lâm, khô khan."
+                    response = model.generate_content(data_prompt, generation_config=generation_config)
                     st.markdown(response.text)
             else:
                 st.warning("Vui lòng nhập yêu cầu!")
