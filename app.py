@@ -105,7 +105,7 @@ except Exception as e:
 tab1, tab2 = st.tabs(["📄 Đọc Y văn & Viết Luận văn (PDF)", "📊 Phân tích Số liệu Bệnh án (Excel)"])
 
 # ----------------------------------------------------
-# TAB 1: PHÂN TÍCH TÀI LIỆU Y VĂN
+# TAB 1: PHÂN TÍCH TÀI LIỆU Y VĂN (NÂNG CẤP TRÍCH DẪN)
 # ----------------------------------------------------
 with tab1:
     st.header("Phân tích tài liệu và Viết bài")
@@ -119,47 +119,68 @@ with tab1:
     
     if uploaded_files:
         combined_text = ""
-        for uploaded_file in uploaded_files:
+        # Trích xuất văn bản và đính kèm tên file để AI biết nguồn
+        for index, uploaded_file in enumerate(uploaded_files, start=1):
             reader = PdfReader(uploaded_file)
+            file_content = ""
             for page in reader.pages:
-                combined_text += page.extract_text() + "\n"
+                file_content += page.extract_text() + "\n"
+            combined_text += f"\n--- TÀI LIỆU {index}: {uploaded_file.name} ---\n{file_content}\n"
         
         st.success(f"Đã đọc thành công {len(uploaded_files)} tài liệu PDF!")
         
         st.write("---")
         st.subheader("📝 Lệnh viết nhanh cho luận văn (Bấm là chạy):")
         
+        # Bổ sung câu lệnh gốc (Core Prompt) ép buộc trích dẫn Vancouver nghiêm ngặt
+        citation_rules = """
+        QUY TẮC TRÍCH DẪN BẮT BUỘC (CHUẨN VANCOUVER):
+        1. Bất kỳ một câu khẳng định số liệu, dịch tễ, hay kết luận y khoa nào trong văn bản cũng PHẢI có trích dẫn ở cuối câu bằng số đặt trong ngoặc vuông (VD: [1], [2, 3]).
+        2. Các số trích dẫn phải được đánh số theo đúng thứ tự xuất hiện liên tục trong đoạn văn bản bạn viết ra (Bắt đầu từ [1] cho tài liệu đầu tiên được nhắc đến, [2] cho tài liệu tiếp theo...). Không được nhảy cóc số.
+        3. Tuyệt đối không tự bịa (hallucinate) thông tin. Chỉ sử dụng số liệu/kiến thức từ các Tài liệu PDF được cung cấp.
+        4. Cuối đoạn văn bản, BẮT BUỘC phải tạo một danh sách "Tài liệu tham khảo" chi tiết tương ứng với các số [1], [2]... bạn vừa dùng trong bài.
+        """
+
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             if st.button("Viết Đặt vấn đề"):
                 with st.spinner("AI đang viết phần Đặt vấn đề..."):
-                    prompt = "Dựa trên các tài liệu được cung cấp, hãy viết phần 'Đặt vấn đề' cho luận văn CKI Dược lâm sàng, nêu bật tính cấp thiết, ý nghĩa khoa học và mục tiêu nghiên cứu. Sử dụng văn phong học thuật, khách quan."
-                    full_prop = f"Tổng hợp tài liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {prompt}"
+                    prompt = f"""
+                    Dựa trên các tài liệu PDF được cung cấp, hãy viết phần 'Đặt vấn đề' cho luận văn CKI Dược lâm sàng, nêu bật tính cấp thiết, ý nghĩa khoa học và mục tiêu nghiên cứu. 
+                    {citation_rules}
+                    """
+                    full_prop = f"Cơ sở dữ liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {prompt}"
                     response = model.generate_content(full_prop)
                     st.markdown(response.text)
                     
         with col2:
             if st.button("Viết Tổng quan"):
                 with st.spinner("AI đang viết phần Tổng quan..."):
-                    prompt = "Viết phần tổng quan tài liệu dựa trên tất cả các file PDF được cung cấp. Sử dụng văn phong học thuật, khách quan, trích dẫn đầy đủ."
-                    full_prop = f"Tổng hợp tài liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {prompt}"
+                    prompt = f"""
+                    Viết phần tổng quan tài liệu (Tổng quan y văn) một cách logic, mạch lạc dựa trên tất cả các file PDF được cung cấp. 
+                    {citation_rules}
+                    """
+                    full_prop = f"Cơ sở dữ liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {prompt}"
                     response = model.generate_content(full_prop)
                     st.markdown(response.text)
                     
         with col3:
             if st.button("Viết Bàn luận"):
                 with st.spinner("AI đang viết phần Bàn luận..."):
-                    prompt = "Dựa trên các tài liệu này, hãy viết phần bàn luận: so sánh kết quả nghiên cứu, giải thích cơ chế sinh lý bệnh và nêu rõ hạn chế."
-                    full_prop = f"Tổng hợp tài liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {prompt}"
+                    prompt = f"""
+                    Dựa trên các tài liệu này, hãy viết phần bàn luận: so sánh các kết quả nghiên cứu, giải thích cơ chế sinh lý bệnh, nguyên nhân của sự khác biệt số liệu và nêu rõ hạn chế.
+                    {citation_rules}
+                    """
+                    full_prop = f"Cơ sở dữ liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {prompt}"
                     response = model.generate_content(full_prop)
                     st.markdown(response.text)
                     
         with col4:
             if st.button("Trích dẫn Vancouver"):
                 with st.spinner("AI đang lập danh mục tài liệu tham khảo chuẩn Vancouver..."):
-                    prompt = "Từ các tài liệu y văn được cung cấp, hãy lập danh mục tài liệu tham khảo được định dạng chính xác theo chuẩn Vancouver (Số thứ tự [1], [2]... theo mẫu: Tác giả AA, Tác giả BB. Tên bài báo. Tên tạp chí viết tắt Năm;Tập(Số):Trang)."
-                    full_prop = f"Tổng hợp tài liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {prompt}"
+                    prompt = "Từ các tài liệu y văn được cung cấp, hãy lập danh mục tài liệu tham khảo tổng hợp được định dạng chính xác theo chuẩn Vancouver (Tác giả AA, Tác giả BB. Tên bài báo. Tên tạp chí viết tắt Năm;Tập(Số):Trang)."
+                    full_prop = f"Cơ sở dữ liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {prompt}"
                     response = model.generate_content(full_prop)
                     st.markdown(response.text)
         
@@ -168,7 +189,7 @@ with tab1:
         if st.button("Chạy lệnh tùy chỉnh"):
             if custom_prompt:
                 with st.spinner("AI đang xử lý yêu cầu..."):
-                    full_prop = f"Tổng hợp tài liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {custom_prompt}"
+                    full_prop = f"Cơ sở dữ liệu y văn:\n{combined_text}\n\nYêu cầu của tôi: {custom_prompt}\n{citation_rules}"
                     response = model.generate_content(full_prop)
                     st.markdown(response.text)
             else:
@@ -177,7 +198,6 @@ with tab1:
         with st.expander("📂 Xem danh sách các file PDF đã tải lên"):
             for f in uploaded_files:
                 st.text(f"- {f.name} ({round(f.size / 1024, 1)} KB)")
-
 # ----------------------------------------------------
 # TAB 2: PHÂN TÍCH SỐ LIỆU TỪ EXCEL (MÔ PHỎNG SPSS)
 # ----------------------------------------------------
