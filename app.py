@@ -164,23 +164,86 @@ with tab1:
             for f in uploaded_files:
                 st.text(f"- {f.name} ({round(f.size / 1024, 1)} KB)")
 with tab2:
-    st.header("Phân tích thống kê số liệu")
-    excel_file = st.file_uploader("Tải lên file số liệu bệnh án (Excel .xlsx)", type="xlsx", key="excel_uploader")
+    st.header("📊 Phân tích thống kê & Kiểm định (Chuẩn SPSS từ Excel)")
+    
+    excel_file = st.file_uploader("Tải lên file số liệu bệnh án (Excel .xlsx)", type=["xlsx", "xls"], key="excel_uploader")
     
     if excel_file is not None:
+        # Đọc dữ liệu từ file Excel
         df = pd.read_excel(excel_file)
-        st.subheader("1. Xem trước 5 dòng dữ liệu đầu tiên:")
-        st.dataframe(df.head())
+        columns = df.columns.tolist()
         
-        st.subheader("2. Bảng thống kê mô tả tự động:")
-        desc_stats = df.describe(include='all')
-        st.dataframe(desc_stats)
+        st.success(f"Đọc dữ liệu thành công! File có {df.shape[0]} dòng và {df.shape[1]} cột.")
         
-        analysis_prompt = st.text_area("Nhập yêu cầu phân tích số liệu:")
+        with st.expander("👀 Xem trước dữ liệu gốc"):
+            st.dataframe(df.head())
+
+        st.write("---")
+        st.subheader("🛠️ CÔNG CỤ PHÂN TÍCH CHUYÊN SÂU")
         
-        if st.button("Chạy phân tích số liệu bằng AI, hãy đưa ra các bảng số liệu cần dùng cho đề tài, sau mỗi bảng số liệu hãy viết nhận xét cho bảng số liệu thật đầy đủ, ngắn gọn, logic"):
-            with st.spinner("AI đang đọc bảng số liệu và viết báo cáo..."):
-                stats_string = desc_stats.to_string()
-                data_prompt = f"Dưới đây là bảng thống kê mô tả số liệu nghiên cứu:\n{stats_string}\n\nYêu cầu: {analysis_prompt}."
-                res = model.generate_content(data_prompt)
-                st.write(res.text)
+        # --- TÍNH NĂNG 1: THỐNG KÊ TẦN SỐ (FREQUENCIES) ---
+        st.markdown("### 1. Thống kê mô tả (Frequencies)")
+        var_desc = st.selectbox("Chọn biến cần thống kê (VD: Giới tính, Nhóm tuổi, Mức độ bệnh):", columns, key="var_desc")
+        
+        if st.button("Chạy Thống kê & Nhận xét"):
+            with st.spinner(f"Đang tính toán tần số cho biến {var_desc}..."):
+                # Dùng Python tính toán số lượng thực tế
+                freq_table = df[var_desc].value_counts().to_string()
+                total = len(df[var_desc].dropna())
+                
+                prompt = f"""
+                Dưới đây là số liệu đếm thực tế của biến '{var_desc}' từ file Excel:
+                {freq_table}
+                (Tổng số mẫu hợp lệ: {total})
+                
+                Yêu cầu:
+                1. Hãy vẽ lại một bảng chuẩn format SPSS bao gồm các cột: Phân loại, Tần số (n), Tỷ lệ (%).
+                2. Viết một đoạn nhận xét y khoa chuyên nghiệp dựa trên các con số trong bảng này (Dùng cho luận văn CKI).
+                """
+                res = model.generate_content(prompt)
+                st.markdown(res.text)
+
+        st.write("---")
+        
+        # --- TÍNH NĂNG 2: BẢNG CHÉO & MỐI LIÊN QUAN (CROSSTABS) ---
+        st.markdown("### 2. Bảng chéo & Phân tích mối liên quan (Crosstabs)")
+        st.info("💡 Tính năng này mô phỏng Crosstabs của SPSS để xem xét mối liên quan giữa 2 biến (VD: Tuổi và Mức độ nặng).")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            var_row = st.selectbox("Biến Độc lập / Hàng (VD: Giới tính):", columns, key="var_row")
+        with col2:
+            var_col = st.selectbox("Biến Phụ thuộc / Cột (VD: Mức độ bệnh):", columns, key="var_col")
+            
+        if st.button("Chạy Crosstabs & Nhận xét"):
+            with st.spinner("Đang xử lý bảng chéo..."):
+                # Dùng Python tính bảng chéo (Crosstab) thực tế từ file Excel
+                crosstab_df = pd.crosstab(df[var_row], df[var_col])
+                crosstab_str = crosstab_df.to_string()
+                
+                prompt = f"""
+                Dưới đây là bảng chéo (Crosstabs) thực tế trích xuất từ file Excel giữa 2 biến: '{var_row}' và '{var_col}':
+                \n{crosstab_str}\n
+                Yêu cầu:
+                1. Hãy trình bày lại thành một bảng biểu chuẩn khoa học (Có cột Tổng, Hàng Tổng và tính Tỷ lệ % theo hàng hoặc cột sao cho hợp lý).
+                2. Đóng vai trò chuyên gia, viết nhận xét về mối phân bố/liên quan giữa '{var_row}' và '{var_col}' dựa hoàn toàn vào các con số thực tế trong bảng trên.
+                """
+                res = model.generate_content(prompt)
+                st.markdown(res.text)
+
+        st.write("---")
+        
+        # --- TÍNH NĂNG 3: AI TỰ PHÂN TÍCH THEO YÊU CẦU ---
+        st.markdown("### 3. Trợ lý AI tự do (Phân tích toàn bộ dữ liệu)")
+        analysis_prompt = st.text_area("Nhập câu hỏi hoặc yêu cầu (VD: Viết nhận xét tổng quan về độ tuổi và các bệnh mắc kèm của tập dữ liệu này):")
+        
+        if st.button("Chạy lệnh tùy chỉnh"):
+            if analysis_prompt:
+                with st.spinner("AI đang xử lý..."):
+                    # Gửi bảng mô tả tổng quát cho AI
+                    desc_stats = df.describe(include='all').to_string()
+                    data_prompt = f"Đây là bảng thống kê tổng quát của file Excel:\n{desc_stats}\n\nYêu cầu của tôi: {analysis_prompt}"
+                    res = model.generate_content(data_prompt)
+                    st.markdown(res.text)
+            else:
+                st.warning("Vui lòng nhập yêu cầu!")
