@@ -3,7 +3,70 @@ import google.generativeai as genai
 from pypdf import PdfReader
 import pandas as pd
 
+# Cấu hình trang
 st.set_page_config(page_title="Trợ lý NCKH Dược Lâm Sàng", layout="wide")
+
+# --- BỔ SUNG GIAO DIỆN NỀN XANH TÍM (CUSTOM CSS) ---
+custom_css = """
+<style>
+    /* Nền toàn bộ trang web (Gradient xanh dương - tím nhạt) */
+    .stApp {
+        background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+    }
+    
+    /* Chỉnh màu và hiệu ứng cho Tiêu đề chính */
+    h1 {
+        color: #4a148c !important; 
+        text-align: center;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        font-weight: 800;
+        margin-bottom: 30px;
+    }
+
+    /* Nền trắng mờ cho các Tab để dễ đọc chữ trên nền màu */
+    .stTabs [data-baseweb="tab-panel"] {
+        background-color: rgba(255, 255, 255, 0.9);
+        border-radius: 15px;
+        padding: 25px;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+    }
+    
+    /* Trang trí thanh Tab */
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: rgba(255, 255, 255, 0.5);
+        border-radius: 10px;
+        padding: 5px;
+    }
+
+    /* Làm đẹp các nút bấm (Button) - Màu tím đậm */
+    div.stButton > button {
+        background-color: #6a1b9a !important;
+        color: white !important;
+        font-weight: bold;
+        border-radius: 8px;
+        border: none;
+        padding: 10px 20px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+    }
+    
+    /* Hiệu ứng khi di chuột vào nút bấm */
+    div.stButton > button:hover {
+        background-color: #4a148c !important;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+    }
+    
+    /* Tùy chỉnh bảng dữ liệu Dataframe */
+    [data-testid="stDataFrame"] {
+        background-color: white;
+        border-radius: 10px;
+        padding: 10px;
+    }
+</style>
+"""
+st.markdown(custom_css, unsafe_allow_html=True)
+# ----------------------------------------------------
 
 st.title("HỖ TRỢ NGHIÊN CỨU KHOA HỌC")
 
