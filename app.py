@@ -6,7 +6,7 @@ import pandas as pd
 # ==========================================
 # CẤU HÌNH TRANG & GIAO DIỆN (NỀN XANH TÍM + FONT ARIAL AN TOÀN)
 # ==========================================
-st.set_page_config(page_title="Trợ lý NCKH Dược Lâm Sàng", layout="wide")
+st.set_page_config(page_title="NCKH", layout="wide")
 
 custom_css = """
 <style>
