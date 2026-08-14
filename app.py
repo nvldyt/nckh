@@ -186,10 +186,8 @@ with tab1:
     2. Chỉ sử dụng dữ liệu từ 'NGÂN HÀNG Y VĂN' để phân tích, không tự bịa.
     3. Cuối đoạn, BẮT BUỘC liệt kê "Tài liệu tham khảo".
     """
-
-    col1, col2, col3, col4, col5 = st.columns(5)
-    
-    # LƯU Ý QUAN TRỌNG: Nguồn dữ liệu giờ đây là st.session_state["ngan_hang_y_van"] chứ không phải file PDF nữa!
+    # Chia làm 6 cột để tách biệt 2 tính năng Bàn luận
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     
     with col1:
         if st.button("Viết Đặt vấn đề"):
@@ -208,7 +206,7 @@ with tab1:
                 st.markdown(response.text)
                 
     with col3:
-        if st.button("Viết Phương pháp NC"):
+        if st.button("Phương pháp NC"):
             with st.spinner("AI đang thiết kế Chương 2..."):
                 prompt = f"""
                 Viết "Chương 2. ĐỐI TƯỢNG VÀ PHƯƠNG PHÁP NGHIÊN CỨU".
@@ -220,22 +218,45 @@ with tab1:
                 st.markdown(response.text)
                 
     with col4:
-        if st.button("Viết Bàn luận (Có so sánh)"):
+        if st.button("Bàn luận (Tự thân)"):
             if not my_research_data:
-                st.warning("Anh cần nhập số liệu của mình vào ô 'Bộ nhớ Số liệu của riêng bạn' trước khi chạy Bàn luận!")
+                st.warning("Anh cần nhập số liệu của mình vào ô 'Bộ nhớ Số liệu' trước!")
             else:
-                with st.spinner("AI đang phân tích chéo số liệu của anh với Ngân hàng Y văn..."):
+                with st.spinner("AI đang phân tích ý nghĩa lâm sàng số liệu của riêng anh..."):
                     prompt = f"""
                     KẾT QUẢ NGHIÊN CỨU THỰC TẾ CỦA TÔI:
                     {my_research_data}
                     
-                    YÊU CẦU: Lấy số liệu của TÔI làm trung tâm. Đối chiếu (cao hơn, thấp hơn) với các tác giả trong NGÂN HÀNG Y VĂN. Giải thích nguyên nhân y khoa. {citation_rules}
+                    YÊU CẦU: 
+                    1. CHỈ tập trung phân tích và bàn luận về số liệu của TÔI. 
+                    2. Giải thích cơ chế sinh lý bệnh, dược lý, đặc điểm lâm sàng và nguyên nhân tại sao lại có những con số này.
+                    3. KHÔNG cần so sánh với các tác giả khác ở phần này.
+                    4. Văn phong hàn lâm, logic.
+                    """
+                    full_prop = f"Yêu cầu: {prompt}"
+                    response = model.generate_content(full_prop, generation_config=generation_config)
+                    st.markdown(response.text)
+                    
+    with col5:
+        if st.button("Bàn luận (So sánh)"):
+            if not my_research_data:
+                st.warning("Anh cần nhập số liệu của mình vào ô 'Bộ nhớ Số liệu' trước!")
+            else:
+                with st.spinner("AI đang đối chiếu số liệu của anh với Ngân hàng Y văn..."):
+                    prompt = f"""
+                    KẾT QUẢ NGHIÊN CỨU THỰC TẾ CỦA TÔI:
+                    {my_research_data}
+                    
+                    YÊU CẦU: 
+                    1. Lấy số liệu của TÔI làm trung tâm. Đối chiếu trực tiếp (cao hơn, thấp hơn, tương đương) với số liệu của các tác giả trong NGÂN HÀNG Y VĂN.
+                    2. Giải thích sự khác biệt giữa nghiên cứu của tôi và của họ (do cỡ mẫu, tiêu chuẩn lựa chọn, phác đồ, thời gian...).
+                    {citation_rules}
                     """
                     full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
                     response = model.generate_content(full_prop, generation_config=generation_config)
                     st.markdown(response.text)
                 
-    with col5:
+    with col6:
         if st.button("Trích dẫn Vancouver"):
             with st.spinner("AI đang lập danh mục..."):
                 prompt = f"Lập danh mục tài liệu tham khảo Vancouver từ các tác giả trong Ngân hàng y văn."
