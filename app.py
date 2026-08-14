@@ -268,16 +268,21 @@ with tab1:
         
         with col_up2:
             if st.button("📝 Rút trích số liệu & Ghi vào Ngân hàng", type="primary"):
-                with st.spinner("AI đang vắt kiệt thông tin từ các file PDF và lưu vào bộ nhớ..."):
-                    combined_text = ""
-                    for index, uploaded_file in enumerate(uploaded_files, start=1):
+                combined_text = ""
+                for uploaded_file in uploaded_files:
+                    try:
                         reader = PdfReader(uploaded_file)
                         for page in reader.pages:
                             page_text = page.extract_text()
                             if page_text:
                                 combined_text += page_text + "\n"
-                    
-                    if combined_text.strip():
+                    except Exception as e:
+                        st.session_state["last_error"] = f"Lỗi đọc file {uploaded_file.name}: {e}"
+
+                if not combined_text.strip():
+                    st.session_state["last_error"] = "Không đọc được chữ từ các file PDF này (có thể là file ảnh chụp/scan không có lớp text)."
+                else:
+                    with st.spinner(f"AI đang đọc {len(combined_text)} ký tự từ {len(uploaded_files)} file PDF..."):
                         extract_prompt = """
                         Hãy đọc các tài liệu PDF trên và TÓM TẮT CÔ ĐẶC lại những thông tin sau:
                         1. Tên tác giả, năm nghiên cứu, tên bài báo.
@@ -286,17 +291,28 @@ with tab1:
                         4. Kết luận chính của tác giả.
                         Tuyệt đối không bịa số liệu. Trình bày dưới dạng gạch đầu dòng ngắn gọn.
                         """
-                        full_prop = f"Tài liệu gốc:\n{combined_text}\n\nYêu cầu: {extract_prompt}"
-                        response = safe_generate_content(full_prop)
-                        
-                        if response:
-                            # Cộng dồn dữ liệu mới vào dữ liệu cũ
-                            st.session_state["ngan_hang_y_van"] += f"\n\n{response.text}"
-                            st.rerun()  # Tải lại trang để cập nhật ô Text Area
-                        else:
-                            st.error("AI không trả về kết quả. Vui lòng thử lại.")
-                    else:
-                        st.error("Lỗi: Không đọc được chữ từ file PDF này (có thể là file ảnh chụp).")
+                        # Gemini có giới hạn input - nếu quá dài, cắt bớt để tránh lỗi
+                        text_to_send = combined_text[:120000]
+                        full_prop = f"Tài liệu gốc:\n{text_to_send}\n\nYêu cầu: {extract_prompt}"
+
+                        try:
+                            response = model.generate_content(full_prop, generation_config=generation_config)
+                            if response and response.text:
+                                st.session_state["ngan_hang_y_van"] += f"\n\n{response.text}"
+                                st.session_state["last_error"] = None
+                                st.session_state["last_success"] = f"✅ Đã rút trích và ghi thêm dữ liệu ({len(response.text)} ký tự)."
+                            else:
+                                st.session_state["last_error"] = "AI trả về phản hồi rỗng (có thể do bộ lọc an toàn chặn nội dung)."
+                        except Exception as e:
+                            st.session_state["last_error"] = f"Lỗi gọi API Gemini: {e}"
+
+                st.rerun()
+
+        # Hiển thị lỗi/thành công đã lưu lại XUYÊN SUỐT qua rerun (không bị mất)
+        if st.session_state.get("last_error"):
+            st.error(st.session_state["last_error"])
+        if st.session_state.get("last_success"):
+            st.success(st.session_state["last_success"])
         
         # Ô hiển thị + cho phép chỉnh sửa Ngân hàng y văn đã rút trích
         st.text_area(
