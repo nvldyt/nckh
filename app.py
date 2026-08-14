@@ -180,7 +180,7 @@ try:
     """
     
     # SỬ DỤNG ĐÚNG TÊN MODEL CHUẨN CỦA GOOGLE
-    model = genai.GenerativeModel("gemini-3.6-flash", system_instruction=system_prompt)
+    model = genai.GenerativeModel("gemini-3.7-flash", system_instruction=system_prompt)
     generation_config = genai.types.GenerationConfig(temperature=0.1)
     
     # HÀM BỌC AN TOÀN: Tự động né lỗi quá tải API
@@ -338,7 +338,25 @@ with tab1:
         placeholder="VD: Nhập 'Tỷ lệ nam/nữ là 1.42:1' hoặc dán nguyên cái bảng Crosstabs vào đây...",
         height=150
     )
-    
+    def retrieve_context(query, k=5):
+        if st.session_state.get("vector_store") is not None:
+            docs = st.session_state["vector_store"].similarity_search(query, k=k)
+            return "\n\n".join([f"--- Đoạn trích ---:\n{d.page_content}" for d in docs])
+        return "Không có dữ liệu y văn trong Vector Database."
+
+    def build_context(query, k=6):
+        vector_context = retrieve_context(query, k=k)
+        ngan_hang = st.session_state.get("ngan_hang_y_van", "").strip()
+        
+        parts = []
+        if vector_context and "Không có dữ liệu" not in vector_context:
+            parts.append(f"[TRÍCH ĐOẠN GỐC TỪ VECTOR DATABASE - PDF]:\n{vector_context}")
+        if ngan_hang:
+            parts.append(f"[TÓM TẮT TỪ NGÂN HÀNG Y VĂN]:\n{ngan_hang}")
+        
+        if not parts:
+            return "Không có dữ liệu y văn nào được cung cấp. Hãy trả lời: 'Tài liệu không đề cập'."
+        return "\n\n".join(parts)
     st.subheader("📝 Lệnh viết nhanh cho luận văn (Bấm là chạy):")
     
     citation_rules = """  
