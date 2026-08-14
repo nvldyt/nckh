@@ -213,20 +213,32 @@ with tab2:
         st.write("---")
         st.subheader("🛠️ CÔNG CỤ PHÂN TÍCH CHUYÊN SÂU")
         
-        var_desc = st.selectbox("1. Thống kê mô tả (Frequencies) - Chọn biến:", columns, key="var_desc")
+        # --- TÍNH NĂNG 1: THỐNG KÊ TẦN SỐ (AUTO FREQUENCIES) ---
+        st.markdown("### 1. Thống kê mô tả (Auto Frequencies)")
+        st.info("💡 Mẹo: Chọn nhiều biến cùng lúc để AI tự động đếm tần số và nhận xét hàng loạt. KHÔNG chọn biến định danh (Họ tên, Số bệnh án...).")
         
-        if st.button("Chạy Thống kê & Nhận xét"):
-            with st.spinner(f"AI đang tính toán tần số cho biến {var_desc}..."):
-                freq_table = df[var_desc].value_counts().to_string()
-                total = len(df[var_desc].dropna())
-                
-                prompt = f"""
-                Dữ liệu đếm thực tế của biến '{var_desc}': {freq_table} (Tổng: {total}).
-                Yêu cầu: 1. Vẽ bảng SPSS (Phân loại, n, %). 2. Viết nhận xét y khoa chuyên sâu, khô khan, không bay bổng.
-                """
-                response = model.generate_content(prompt, generation_config=generation_config)
-                st.markdown(response.text)
-
+        vars_desc = st.multiselect("🏷️ Chọn TẤT CẢ các biến cần thống kê (VD: Giới tính, Nhóm tuổi, Mức độ bệnh...):", columns, key="auto_var_desc")
+        
+        if st.button("🚀 Chạy toàn bộ Thống kê & Nhận xét"):
+            if not vars_desc:
+                st.warning("Vui lòng chọn ít nhất 1 biến để phân tích!")
+            else:
+                for var in vars_desc:
+                    with st.spinner(f"AI đang tính toán tần số cho biến '{var}'..."):
+                        # Dùng Python đếm số liệu thực tế
+                        freq_table = df[var].value_counts().to_string()
+                        total = len(df[var].dropna())
+                        
+                        prompt = f"""
+                        Dữ liệu đếm thực tế của biến '{var}': {freq_table} (Tổng: {total}).
+                        Yêu cầu: 1. Vẽ bảng SPSS (Phân loại, n, %). 2. Viết nhận xét y khoa chuyên sâu, khô khan, không bay bổng.
+                        """
+                        response = model.generate_content(prompt, generation_config=generation_config)
+                        
+                        # In kết quả ra màn hình
+                        st.subheader(f"► Phân tích biến: {var}")
+                        st.markdown(response.text)
+                        st.write("---") # Đường kẻ ngang phân cách
         st.write("---")
         
         st.markdown("### 2. Bảng chéo & Phân tích mối liên quan (Auto Crosstabs)")
