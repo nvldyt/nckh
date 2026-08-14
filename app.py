@@ -229,6 +229,8 @@ with tab1:
     
     if "vector_store" not in st.session_state:
         st.session_state["vector_store"] = None
+    if "ngan_hang_y_van" not in st.session_state:
+        st.session_state["ngan_hang_y_van"] = ""
         
     st.markdown("### 🏦 Ngân hàng Y văn (Cơ sở dữ liệu Vector SKLearn)")
     st.info("💡 Tải file PDF lên và bấm 'Xử lý & Mã hóa Vector'. Hệ thống sẽ tự động băm nhỏ tài liệu để tìm kiếm siêu tốc, chống quá tải API.")
@@ -236,30 +238,78 @@ with tab1:
     uploaded_files = st.file_uploader("Tải lên tài liệu nghiên cứu (PDF) để AI đọc:", type="pdf", accept_multiple_files=True, key="pdf_uploader")
     
     if uploaded_files:
-        if st.button("📥 Xử lý & Mã hóa Vector Database", type="primary"):
-            with st.spinner("AI đang băm nhỏ tài liệu và chuyển đổi thành Vector..."):
-                combined_text = ""
-                for index, uploaded_file in enumerate(uploaded_files, start=1):
-                    reader = PdfReader(uploaded_file)
-                    for page in reader.pages:
-                        page_text = page.extract_text()
-                        if page_text:
-                            combined_text += page_text + "\n"
-                
-                if combined_text.strip():
-                    # Chia nhỏ tài liệu thành các đoạn 1500 ký tự
-                    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=300)
-                    chunks = text_splitter.split_text(combined_text)
+        col_up1, col_up2 = st.columns(2)
+        
+        with col_up1:
+            if st.button("📥 Xử lý & Mã hóa Vector Database", type="primary"):
+                with st.spinner("AI đang băm nhỏ tài liệu và chuyển đổi thành Vector..."):
+                    combined_text = ""
+                    for index, uploaded_file in enumerate(uploaded_files, start=1):
+                        reader = PdfReader(uploaded_file)
+                        for page in reader.pages:
+                            page_text = page.extract_text()
+                            if page_text:
+                                combined_text += page_text + "\n"
                     
-                    # Tạo nhúng với SKLearn (Rất nhẹ, chạy hoàn toàn bằng CPU)
-                    if st.session_state["vector_store"] is None:
-                        st.session_state["vector_store"] = SKLearnVectorStore.from_texts(chunks, embedding=embeddings)
-                    else:
-                        st.session_state["vector_store"].add_texts(chunks)
+                    if combined_text.strip():
+                        # Chia nhỏ tài liệu thành các đoạn 1500 ký tự
+                        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=300)
+                        chunks = text_splitter.split_text(combined_text)
                         
-                    st.success(f"✅ Đã lập chỉ mục Vector thành công {len(chunks)} phân đoạn dữ liệu. RAG đã sẵn sàng hoạt động!")
-                else:
-                    st.error("Lỗi: Không đọc được chữ từ file PDF này (có thể là file ảnh chụp).")
+                        # Tạo nhúng với SKLearn (Rất nhẹ, chạy hoàn toàn bằng CPU)
+                        if st.session_state["vector_store"] is None:
+                            st.session_state["vector_store"] = SKLearnVectorStore.from_texts(chunks, embedding=embeddings)
+                        else:
+                            st.session_state["vector_store"].add_texts(chunks)
+                            
+                        st.success(f"✅ Đã lập chỉ mục Vector thành công {len(chunks)} phân đoạn dữ liệu. RAG đã sẵn sàng hoạt động!")
+                    else:
+                        st.error("Lỗi: Không đọc được chữ từ file PDF này (có thể là file ảnh chụp).")
+        
+        with col_up2:
+            if st.button("📝 Rút trích số liệu & Ghi vào Ngân hàng", type="primary"):
+                with st.spinner("AI đang vắt kiệt thông tin từ các file PDF và lưu vào bộ nhớ..."):
+                    combined_text = ""
+                    for index, uploaded_file in enumerate(uploaded_files, start=1):
+                        reader = PdfReader(uploaded_file)
+                        for page in reader.pages:
+                            page_text = page.extract_text()
+                            if page_text:
+                                combined_text += page_text + "\n"
+                    
+                    if combined_text.strip():
+                        extract_prompt = """
+                        Hãy đọc các tài liệu PDF trên và TÓM TẮT CÔ ĐẶC lại những thông tin sau:
+                        1. Tên tác giả, năm nghiên cứu, tên bài báo.
+                        2. Mục tiêu nghiên cứu và đối tượng nghiên cứu.
+                        3. Các kết quả, số liệu quan trọng nhất (tỷ lệ %, p-value, OR, RR...).
+                        4. Kết luận chính của tác giả.
+                        Tuyệt đối không bịa số liệu. Trình bày dưới dạng gạch đầu dòng ngắn gọn.
+                        """
+                        full_prop = f"Tài liệu gốc:\n{combined_text}\n\nYêu cầu: {extract_prompt}"
+                        response = safe_generate_content(full_prop)
+                        
+                        if response:
+                            # Cộng dồn dữ liệu mới vào dữ liệu cũ
+                            st.session_state["ngan_hang_y_van"] += f"\n\n{response.text}"
+                            st.rerun()  # Tải lại trang để cập nhật ô Text Area
+                        else:
+                            st.error("AI không trả về kết quả. Vui lòng thử lại.")
+                    else:
+                        st.error("Lỗi: Không đọc được chữ từ file PDF này (có thể là file ảnh chụp).")
+        
+        # Ô hiển thị + cho phép chỉnh sửa Ngân hàng y văn đã rút trích
+        st.text_area(
+            "📚 Ngân hàng y văn đã rút trích (có thể sửa tay trước khi dùng):",
+            value=st.session_state["ngan_hang_y_van"],
+            height=200,
+            key="ngan_hang_y_van_display"
+        )
+        col_clear, _ = st.columns([1, 4])
+        with col_clear:
+            if st.button("🗑️ Xóa Ngân hàng y văn"):
+                st.session_state["ngan_hang_y_van"] = ""
+                st.rerun()
                 
     st.write("---")
     
