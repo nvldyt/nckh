@@ -321,9 +321,9 @@ with tab1:
         # Ô hiển thị + cho phép chỉnh sửa Ngân hàng y văn đã rút trích
         st.text_area(
             "📚 Ngân hàng y văn đã rút trích (có thể sửa tay trước khi dùng):",
-            value=st.session_state["ngan_hang_y_van"],
             height=200,
-            key="ngan_hang_y_van_display"
+            key="ngan_hang_y_van"
+        )
         )
         col_clear, _ = st.columns([1, 4])
         with col_clear:
