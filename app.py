@@ -225,20 +225,23 @@ with tab1:
                     st.markdown(response.text)
                 
     with col4:
-        if st.button("Viết Bàn luận"):
+        if st.button("viết Bàn luận"):
             if not my_research_data:
                 st.warning("Anh cần nhập số liệu của mình vào ô 'Bộ nhớ Số liệu' trước!")
             else:
-                with st.spinner("AI đang phân tích ý nghĩa lâm sàng số liệu của riêng anh..."):
+                with st.spinner("AI đang viết Bàn luận phần 4.1 và Thực trạng 4.2..."):
                     prompt = f"""
                     KẾT QUẢ NGHIÊN CỨU THỰC TẾ CỦA TÔI:
                     {my_research_data}
                     
-                    YÊU CẦU: 
-                    1. CHỈ tập trung phân tích và bàn luận về số liệu của TÔI. Không dùng Heading 1 (#).
-                    2. Giải thích cơ chế sinh lý bệnh, dược lý, đặc điểm lâm sàng và nguyên nhân tại sao lại có những con số này.
-                    3. KHÔNG cần so sánh với các tác giả khác ở phần này.
-                    4. Văn phong hàn lâm, logic.
+                    YÊU CẦU ĐẦU RA BẮT BUỘC (Trình bày đúng các cấu trúc tiểu mục sau, không dùng Heading 1 hoặc 2):
+                    ### 4.1. Đặc điểm bệnh nhân và phẫu thuật trong mẫu nghiên cứu
+                    (Phân tích các số liệu của TÔI về tuổi, giới tính, ASA, bệnh lý mắc kèm, đặc điểm phẫu thuật. Giải thích nguyên nhân mang tính đặc thù tại cơ sở y tế của tôi, không cần so sánh với tác giả khác ở đây).
+                    
+                    ### 4.2. Thực trạng tình hình can thiệp / sử dụng thuốc
+                    (Chỉ phân tích số liệu của TÔI: Tỷ lệ sử dụng, lựa chọn phác đồ, thời điểm, thời gian duy trì. Nhận định khách quan những điểm đã làm tốt và những điểm còn tồn tại do thói quen lâm sàng hoặc rào cản khách quan).
+                    
+                    LƯU Ý: Văn phong hàn lâm, logic, khô khan. Tuyệt đối KHÔNG tự bịa số liệu.
                     """
                     full_prop = f"Yêu cầu: {prompt}"
                     response = model.generate_content(full_prop, generation_config=generation_config)
@@ -250,14 +253,21 @@ with tab1:
             if not my_research_data:
                 st.warning("Anh cần nhập số liệu của mình vào ô 'Bộ nhớ Số liệu' trước!")
             else:
-                with st.spinner("AI đang đối chiếu số liệu của anh với Ngân hàng Y văn..."):
+                with st.spinner("AI đang đối chiếu Y văn và viết phần 4.2, 4.3, 4.4..."):
                     prompt = f"""
                     KẾT QUẢ NGHIÊN CỨU THỰC TẾ CỦA TÔI:
                     {my_research_data}
                     
-                    YÊU CẦU: 
-                    1. Lấy số liệu của TÔI làm trung tâm. Đối chiếu trực tiếp (cao hơn, thấp hơn, tương đương) với số liệu của các tác giả trong NGÂN HÀNG Y VĂN. Không dùng Heading 1 (#).
-                    2. Giải thích sự khác biệt giữa nghiên cứu của tôi và của họ (do cỡ mẫu, tiêu chuẩn lựa chọn, phác đồ, thời gian...).
+                    YÊU CẦU ĐẦU RA BẮT BUỘC (Trình bày đúng các cấu trúc tiểu mục sau, không dùng Heading 1 hoặc 2):
+                    ### 4.2.2. So sánh với các nghiên cứu và khuyến cáo
+                    (Lấy số liệu của TÔI làm gốc. Trích xuất thông tin từ NGÂN HÀNG Y VĂN để đối chiếu trực tiếp (cao hơn, thấp hơn, hay tương đồng). BẮT BUỘC giải thích sâu sắc nguyên nhân của sự khác biệt dựa trên: cỡ mẫu, đặc thù kỹ thuật, phương pháp, sự tuân thủ khuyến cáo).
+                    
+                    ### 4.3. Ý nghĩa lâm sàng và thực tiễn
+                    (Rút ra bài học từ nghiên cứu này. Đề xuất các thay đổi thực tiễn để tối ưu hóa quy trình, giảm chi phí, nâng cao hiệu quả điều trị).
+                    
+                    ### 4.4. Hạn chế của nghiên cứu
+                    (Tự đưa ra 2-3 hạn chế logic về cỡ mẫu, thời gian, phương pháp hồi cứu...).
+                    
                     {citation_rules}
                     """
                     full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
