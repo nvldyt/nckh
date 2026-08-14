@@ -3,4 +3,7 @@ google-generativeai
 pypdf
 pandas
 openpyxl
-pyreadstat
+langchain
+langchain-google-genai
+langchain-community
+faiss-cpu
