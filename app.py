@@ -321,91 +321,142 @@ with tab1:
     )
     
     st.subheader("📝 Lệnh viết nhanh cho luận văn (Bấm là chạy):")
-    citation_rules = "BẮT BUỘC sử dụng trích dẫn số [1], [2]. Tuyệt đối KHÔNG dùng [Tên tác giả, Năm]. Liệt kê TLTK chuẩn Vancouver ở cuối."
-        
-    col1, col2, col3, col4 = st.columns(4)
+    
+    citation_rules = """  
+        QUY TẮC TRÍCH DẪN & HÀN LÂM BẮT BUỘC:
+        1. BẮT BUỘC sử dụng kiểu trích dẫn số trong ngoặc vuông (VD: [1], [2]).
+        2. TUYỆT ĐỐI KHÔNG dùng kiểu [Tên tác giả, Năm] (ví dụ: không dùng [Gordis, 2014]).
+        3. Các số trích dẫn phải theo thứ tự xuất hiện liên tục trong bài.
+        4. Cuối văn bản, BẮT BUỘC liệt kê danh mục 'Tài liệu tham khảo' tương ứng với các số đã dùng theo định dạng Vancouver.
+        """
+    # Chia làm 6 cột để hiển thị nút bấm
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    
+    # TẠO MÀN HÌNH HIỂN THỊ KẾT QUẢ FULL TRANG BÊN DƯỚI NÚT BẤM
     st.write("---")
     ket_qua_container = st.container()
     
-    # HÀM TRUY XUẤT RAG TỰ ĐỘNG
-    def retrieve_context(query, k=6):
-        if st.session_state["vector_store"] is not None:
-            docs = st.session_state["vector_store"].similarity_search(query, k=k)
-            return "\n\n".join([f"--- Đoạn trích ---:\n{d.page_content}" for d in docs])
-        return "Không có dữ liệu y văn trong Vector Database."
-
     with col1:
-        if st.button("Viết Đặt vấn đề", key="btn_dt_tq"):
-            with st.spinner("AI đang quét Vector Database và viết..."):
+        if st.button("Viết Đặt vấn đề"):
+            with st.spinner("AI đang quét Vector DB + Ngân hàng y văn và viết..."):
                 query = "Đặt vấn đề, tính cấp thiết, lý do nghiên cứu, tổng quan dịch tễ học"
-                context = retrieve_context(query)
-                
-                prompt = f"Dựa trên các đoạn trích y văn, viết Đặt vấn đề và Tổng quan. Chỉ dùng Heading 3 (###). {citation_rules}"
-                full_prop = f"TÀI LIỆU Y VĂN TRÍCH XUẤT TỪ VECTOR DB:\n{context}\n\nYêu cầu: {prompt}"
-                
+                context = build_context(query, k=6)
+                prompt = f"Dựa trên TÀI LIỆU Y VĂN được cung cấp, viết 'Đặt vấn đề' luận văn CKI Dược lâm sàng. Không dùng Heading 1 (#) để tránh chữ quá to, chỉ dùng Heading 3 (###). {citation_rules}"
+                full_prop = f"TÀI LIỆU Y VĂN:\n{context}\n\nYêu cầu: {prompt}"
                 response = safe_generate_content(full_prop)
                 if response:
-                    with ket_qua_container: st.markdown(response.text)
+                    with ket_qua_container:
+                        st.markdown(response.text)
                 
     with col2:
-        if st.button("Phương pháp NC", key="btn_pp"):
-            with st.spinner("AI đang thiết kế Chương 2..."):
-                query = "Đối tượng nghiên cứu, tiêu chuẩn nhận loại trừ, thiết kế nghiên cứu, cỡ mẫu"
-                context = retrieve_context(query, k=4)
-                
-                prompt = f"""Viết "Chương 2. ĐỐI TƯỢNG VÀ PHƯƠNG PHÁP NGHIÊN CỨU". Chỉ dùng Heading 3. 
-                BẮT BUỘC kẻ Bảng Markdown 5 cột (TT | Tên chỉ tiêu | Định nghĩa | Phân loại | Kỹ thuật thu thập). {citation_rules}"""
-                full_prop = f"TÀI LIỆU Y VĂN TRÍCH XUẤT TỪ VECTOR DB:\n{context}\n\nYêu cầu: {prompt}"
-                
+        if st.button("Viết Tổng quan"):
+            with st.spinner("AI đang quét Vector DB + Ngân hàng y văn và viết..."):
+                query = "Tổng quan y văn, các nghiên cứu liên quan, kết quả chính, kết luận"
+                context = build_context(query, k=8)
+                prompt = f"Viết phần tổng quan y văn chuyên sâu, tổng hợp các kết quả từ TÀI LIỆU Y VĂN được cung cấp. Không dùng Heading 1 (#). {citation_rules}"
+                full_prop = f"TÀI LIỆU Y VĂN:\n{context}\n\nYêu cầu: {prompt}"
                 response = safe_generate_content(full_prop)
                 if response:
-                    with ket_qua_container: st.markdown(response.text)
+                    with ket_qua_container:
+                        st.markdown(response.text)
                 
     with col3:
-        if st.button("Viết Bàn luận (So sánh)", key="btn_bl"):
+        if st.button("Phương pháp NC"):
+            with st.spinner("AI đang thiết kế Chương 2..."):
+                query = "Đối tượng nghiên cứu, tiêu chuẩn nhận loại trừ, thiết kế nghiên cứu, cỡ mẫu, phương pháp thu thập số liệu"
+                context = build_context(query, k=4)
+                prompt = f"""
+                Viết "Chương 2. ĐỐI TƯỢNG VÀ PHƯƠNG PHÁP NGHIÊN CỨU". Không dùng Heading 1 (#).
+                Mục 2.2.3 BẮT BUỘC kẻ Bảng Markdown 5 cột (TT | Tên chỉ tiêu | Định nghĩa | Phân loại | Kỹ thuật thu thập). 
+                {citation_rules}
+                """
+                full_prop = f"TÀI LIỆU Y VĂN:\n{context}\n\nYêu cầu: {prompt}"
+                response = safe_generate_content(full_prop)
+                if response:
+                    with ket_qua_container:
+                        st.markdown(response.text)
+                
+    with col4:
+        if st.button("Viết Bàn luận toàn diện"):
             if not my_research_data:
                 st.warning("Anh cần nhập số liệu của mình vào ô 'Bộ nhớ Số liệu' trước!")
             else:
-                with st.spinner("AI đang tìm kiếm các đoạn y văn có tương đồng với số liệu của anh..."):
-                    context = retrieve_context(my_research_data, k=8)
-                    
+                with st.spinner("AI đang viết Bàn luận phân đoạn theo tiêu đề chuẩn..."):
+                    # Dùng chính số liệu của anh làm từ khóa tìm kiếm ngữ nghĩa trong Vector DB
+                    context = build_context(my_research_data, k=8)
                     prompt = f"""
                     KẾT QUẢ NGHIÊN CỨU THỰC TẾ CỦA TÔI:
                     {my_research_data}
                     
                     YÊU CẦU TRÌNH BÀY (BẮT BUỘC TUÂN THỦ):
-                    1. Chia bàn luận thành các tiêu đề phụ (Heading 3). KHÔNG gạch đầu dòng liệt kê.
-                    2. TRONG MỖI ĐOẠN VĂN: Nêu số liệu thực tế của tôi -> Bàn luận giải thích nguyên nhân y khoa -> Lồng ghép SO SÁNH trực tiếp với số liệu trong TÀI LIỆU Y VĂN TRÍCH XUẤT.
-                    3. Văn phong chuyên khảo y khoa hàn lâm. {citation_rules}
+                    1. CHỈ SỬ DỤNG TRÍCH DẪN SỐ [1], [2]. TUYỆT ĐỐI KHÔNG DÙNG [Tên, Năm].
+                    2. CHIA BÀN LUẬN THÀNH CÁC TIÊU ĐỀ PHỤ (TIỂU MỤC) CHUẨN XÁC DỰA TRÊN SỐ LIỆU ĐÃ CUNG CẤP. Sử dụng định dạng Heading 3 (ví dụ: ### 4.1. Đặc điểm bệnh nhân và phẫu thuật, ### 4.2. Thực trạng sử dụng kháng sinh, ### 4.3. Kết quả điều trị và so sánh...). Tuyệt đối không dùng Heading 1 hoặc 2.
+                    3. Dưới mỗi tiêu đề, BẮT BUỘC viết thành các ĐOẠN VĂN HOÀN CHỈNH, mạch lạc, liên tục. TUYỆT ĐỐI KHÔNG dùng dạng liệt kê gạch đầu dòng (bullet points) để mô tả số liệu.
+                    4. TRONG MỖI ĐOẠN VĂN BÀN LUẬN, phải kết hợp nhịp nhàng theo đúng cấu trúc:
+                       - Nêu số liệu thực tế của tôi.
+                       - Bàn luận và giải thích nguyên nhân y khoa (cơ chế, đặc thù tại viện).
+                       - Lồng ghép so sánh, đối chiếu trực tiếp (cao hơn, thấp hơn, tương đồng) với số liệu của các tác giả trong TÀI LIỆU Y VĂN ngay trong cùng đoạn văn đó.
+                    5. Văn phong chuyên khảo y khoa hàn lâm, logic, không dùng từ ngữ cảm xúc.
+                    {citation_rules}
                     """
-                    full_prop = f"TÀI LIỆU Y VĂN TRÍCH XUẤT TỪ VECTOR DB (Chỉ dùng dữ liệu này để so sánh):\n{context}\n\nYêu cầu: {prompt}"
-                    
+                    full_prop = f"TÀI LIỆU Y VĂN:\n{context}\n\nYêu cầu: {prompt}"
                     response = safe_generate_content(full_prop)
                     if response:
-                        with ket_qua_container: st.markdown(response.text) 
-                            
-    with col4:
-        if st.button("Trích dẫn TLTK", key="btn_tltk"):
+                        with ket_qua_container:
+                            st.markdown(response.text) 
+                        
+    with col5:
+        if st.button("So sánh NC liên quan"):
+            if not my_research_data:
+                st.warning("Anh cần nhập số liệu của mình vào ô 'Bộ nhớ Số liệu' trước!")
+            else:
+                with st.spinner("AI đang đối chiếu Y văn và viết phần 4.2, 4.3, 4.4..."):
+                    context = build_context(my_research_data, k=8)
+                    prompt = f"""
+                    KẾT QUẢ NGHIÊN CỨU THỰC TẾ CỦA TÔI:
+                    {my_research_data}
+                    
+                    YÊU CẦU ĐẦU RA BẮT BUỘC (Trình bày đúng các cấu trúc tiểu mục sau, không dùng Heading 1 hoặc 2):
+                    ### 4.2.2. So sánh với các nghiên cứu và khuyến cáo
+                    (Lấy số liệu của TÔI làm gốc. Trích xuất thông tin từ TÀI LIỆU Y VĂN để đối chiếu trực tiếp (cao hơn, thấp hơn, hay tương đồng). BẮT BUỘC giải thích sâu sắc nguyên nhân của sự khác biệt dựa trên: cỡ mẫu, đặc thù kỹ thuật, phương pháp, sự tuân thủ khuyến cáo).
+                    
+                    ### 4.3. Ý nghĩa lâm sàng và thực tiễn
+                    (Rút ra bài học từ nghiên cứu này. Đề xuất các thay đổi thực tiễn để tối ưu hóa quy trình, giảm chi phí, nâng cao hiệu quả điều trị).
+                    
+                    ### 4.4. Hạn chế của nghiên cứu
+                    (Tự đưa ra 2-3 hạn chế logic về cỡ mẫu, thời gian, phương pháp hồi cứu...).
+                    
+                    {citation_rules}
+                    """
+                    full_prop = f"TÀI LIỆU Y VĂN:\n{context}\n\nYêu cầu: {prompt}"
+                    response = safe_generate_content(full_prop)
+                    if response:
+                        with ket_qua_container:
+                            st.markdown(response.text)
+                
+    with col6:
+        if st.button("Trích dẫn TLTK"):
             with st.spinner("AI đang lập danh mục..."):
-                query = "Tài liệu tham khảo, References, Tên tác giả, Năm xuất bản"
-                context = retrieve_context(query, k=10)
-                
-                prompt = f"Trích xuất tên các tác giả và bài báo, lập danh mục Tài liệu tham khảo chuẩn Vancouver."
-                full_prop = f"TÀI LIỆU Y VĂN TRÍCH XUẤT:\n{context}\n\nYêu cầu: {prompt}"
-                
+                query = "Tài liệu tham khảo, References, tên tác giả, năm xuất bản"
+                context = build_context(query, k=10)
+                prompt = f"Trích xuất tên các tác giả và bài báo có trong TÀI LIỆU Y VĂN, lập danh mục Tài liệu tham khảo chuẩn Vancouver. Không dùng Heading 1 (#)."
+                full_prop = f"TÀI LIỆU Y VĂN:\n{context}\n\nYêu cầu: {prompt}"
                 response = safe_generate_content(full_prop)
                 if response:
-                    with ket_qua_container: st.markdown(response.text)
+                    with ket_qua_container:
+                        st.markdown(response.text)
     
     st.write("---")
-    custom_prompt = st.text_area("Hỏi đáp trực tiếp với kho tài liệu (Chat with PDF):", key="custom_prompt_tab1")
-    if st.button("Chạy lệnh", key="btn_custom_tab1"):
+    custom_prompt = st.text_area("Nhập câu lệnh khác ở đây:")
+    if st.button("Chạy lệnh"):
         if custom_prompt:
-            with st.spinner("Đang lục tìm trong Database..."):
-                context = retrieve_context(custom_prompt, k=5)
-                full_prop = f"TÀI LIỆU TRÍCH XUẤT:\n{context}\n\nCâu hỏi: {custom_prompt}\n(Lưu ý: Chỉ trả lời dựa trên tài liệu trích xuất, tuyệt đối không bịa. {citation_rules})"
+            with st.spinner("AI đang xử lý..."):
+                context = build_context(custom_prompt, k=6)
+                anti_hallucination = "\nLƯU Ý NGHIÊM NGẶT: Không tự bịa thông tin. Chỉ dùng dữ liệu đã cung cấp, trích dẫn số liệu cụ thể."
+                full_prop = f"TÀI LIỆU Y VĂN:\n{context}\n\nYêu cầu: {custom_prompt}\n{anti_hallucination}\n{citation_rules}"
                 response = safe_generate_content(full_prop)
-                if response: st.markdown(response.text)
+                if response:
+                    st.markdown(response.text)
         else:
             st.warning("Vui lòng nhập yêu cầu!")
             
