@@ -179,15 +179,22 @@ try:
     5. BẢNG BIỂU: Trình bày dưới dạng bảng Markdown chuẩn.
     """
     
-    # SỬ DỤNG ĐÚNG TÊN MODEL CHUẨN CỦA GOOGLE
+    # MODEL CHÍNH: dùng cho các tác vụ cần suy luận sâu, độ chính xác cao
+    # (viết Đặt vấn đề, Tổng quan, Bàn luận, Phương pháp NC, trích dẫn TLTK...)
     model = genai.GenerativeModel("gemini-3.7-flash", system_instruction=system_prompt)
     generation_config = genai.types.GenerationConfig(temperature=0.1)
     
+    # MODEL NHẸ - TỐC ĐỘ CAO: chỉ dùng để tóm tắt/rút trích PDF (tác vụ đơn giản, khối lượng lớn)
+    # Nhanh hơn, rẻ hơn, và thường có hạn mức miễn phí (quota) cao hơn model chính
+    model_extract = genai.GenerativeModel("gemini-3.5-flash-lite", system_instruction=system_prompt)
+    generation_config_extract = genai.types.GenerationConfig(temperature=0.1)
+    
     # HÀM BỌC AN TOÀN: Tự động né lỗi quá tải API
-    def safe_generate_content(prompt, config=generation_config, max_retries=10):
+    def safe_generate_content(prompt, config=generation_config, max_retries=10, use_model=None):
+        target_model = use_model if use_model is not None else model
         for attempt in range(max_retries):
             try:
-                return model.generate_content(prompt, generation_config=config)
+                return target_model.generate_content(prompt, generation_config=config)
             except ResourceExhausted:
                 if attempt < max_retries - 1:
                     wait_time = 15 
@@ -277,6 +284,7 @@ with tab1:
                     st.session_state["last_success"] = None
                 else:
                     progress_bar = st.progress(0, text="Chuẩn bị xử lý...")
+                    status_text = st.empty()
                     total_files = len(uploaded_files)
                     ket_qua_gop = ""
                     loi_gop = []
@@ -303,7 +311,6 @@ with tab1:
                             loi_gop.append(f"{uploaded_file.name}: không đọc được chữ (có thể là file scan/ảnh)")
                             continue
 
-                        # Cắt bớt nếu 1 file quá dài, tránh vượt giới hạn token
                         text_to_send = file_text[:60000]
 
                         extract_prompt = f"""
@@ -317,25 +324,28 @@ with tab1:
                         """
                         full_prop = f"Tài liệu gốc:\n{text_to_send}\n\nYêu cầu: {extract_prompt}"
 
-                        try:
-                            response = model.generate_content(full_prop, generation_config=generation_config)
-                            if response and response.text:
-                                ket_qua_gop += f"\n\n--- Nguồn: {uploaded_file.name} ---\n{response.text}"
-                            else:
-                                loi_gop.append(f"{uploaded_file.name}: AI trả về phản hồi rỗng (có thể do bộ lọc an toàn chặn nội dung)")
-                        except ResourceExhausted:
-                            loi_gop.append(f"{uploaded_file.name}: quá tải API, bỏ qua file này (thử lại sau)")
-                        except Exception as e:
-                            loi_gop.append(f"{uploaded_file.name}: lỗi gọi API Gemini ({e})")
+                        # Dùng model NHẸ (Flash-Lite) cho tác vụ tóm tắt - nhanh hơn, ít bị quá tải hơn
+                        response = safe_generate_content(
+                            full_prop,
+                            config=generation_config_extract,
+                            max_retries=3,
+                            use_model=model_extract
+                        )
 
-                        # Nghỉ giữa các file để tránh dồn request liên tiếp gây quá tải
-                        time.sleep(4)
+                        if response and response.text:
+                            ket_qua_gop += f"\n\n--- Nguồn: {uploaded_file.name} ---\n{response.text}"
+                        else:
+                            loi_gop.append(f"{uploaded_file.name}: không nhận được kết quả từ AI sau nhiều lần thử")
+
+                        status_text.empty()
+                        # Nghỉ ngắn giữa các file - Flash-Lite nhanh & nhẹ nên không cần nghỉ lâu như model chính
+                        time.sleep(3)
 
                     progress_bar.empty()
 
                     if ket_qua_gop:
                         st.session_state["ngan_hang_y_van"] += ket_qua_gop
-                        st.session_state["last_success"] = f"✅ Đã rút trích xong {total_files - len(loi_gop)}/{total_files} file thành công."
+                        st.session_state["last_success"] = f"✅ Đã rút trích xong {total_files - len(loi_gop)}/{total_files} file thành công (dùng model Flash-Lite tốc độ cao)."
                     else:
                         st.session_state["last_success"] = None
 
