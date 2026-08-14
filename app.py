@@ -225,23 +225,23 @@ with tab1:
                     st.markdown(response.text)
                 
     with col4:
-        if st.button("Viết Bàn luận toàn diện"):
+        if st.button("Viết Bàn luận toàn diện (Có tiêu đề)"):
             if not my_research_data:
                 st.warning("Anh cần nhập số liệu của mình vào ô 'Bộ nhớ Số liệu' trước!")
             else:
-                with st.spinner("AI đang viết đoạn văn bàn luận chuyên sâu kết hợp so sánh..."):
+                with st.spinner("AI đang viết Bàn luận phân đoạn theo tiêu đề chuẩn..."):
                     prompt = f"""
                     KẾT QUẢ NGHIÊN CỨU THỰC TẾ CỦA TÔI:
                     {my_research_data}
                     
-                    YÊU CẦU TRÌNH BÀY (CỰC KỲ QUAN TRỌNG):
-                    1. TUYỆT ĐỐI KHÔNG dùng dạng liệt kê gạch đầu dòng (bullet points) hay liệt kê số liệu khô khan. 
-                    2. BẮT BUỘC viết thành các ĐOẠN VĂN HOÀN CHỈNH, mạch lạc, liên tục theo từng chủ đề (đặc điểm mẫu, tỷ lệ can thiệp, thời gian, kết quả hậu phẫu).
-                    3. TRONG MỖI ĐOẠN VĂN, cấu trúc phải tuân thủ chặt chẽ chuỗi logic sau:
-                       - Bước 1: Nêu rõ số liệu/kết quả thực tế của tôi.
-                       - Bước 2: Bàn luận và giải thích nguyên nhân y khoa (cơ chế, đặc thù tại cơ sở y tế).
-                       - Bước 3: Lập tức lồng ghép so sánh, đối chiếu (cao hơn, thấp hơn, hay tương đồng) với số liệu của các tác giả khác trong NGÂN HÀNG Y VĂN ngay trong cùng đoạn văn đó.
-                    4. Văn phong hàn lâm, chuyên khảo y khoa, không dùng từ ngữ cảm xúc. Không dùng Heading 1 hoặc 2.
+                    YÊU CẦU TRÌNH BÀY (BẮT BUỘC TUÂN THỦ):
+                    1. CHIA BÀN LUẬN THÀNH CÁC TIÊU ĐỀ PHỤ (TIỂU MỤC) CHUẨN XÁC DỰA TRÊN SỐ LIỆU ĐÃ CUNG CẤP. Sử dụng định dạng Heading 3 (ví dụ: ### 4.1. Đặc điểm bệnh nhân và phẫu thuật, ### 4.2. Thực trạng sử dụng kháng sinh, ### 4.3. Kết quả điều trị và so sánh...). Tuyệt đối không dùng Heading 1 hoặc 2.
+                    2. Dưới mỗi tiêu đề, BẮT BUỘC viết thành các ĐOẠN VĂN HOÀN CHỈNH, mạch lạc, liên tục. TUYỆT ĐỐI KHÔNG dùng dạng liệt kê gạch đầu dòng (bullet points) để mô tả số liệu.
+                    3. TRONG MỖI ĐOẠN VĂN BÀN LUẬN, phải kết hợp nhịp nhàng theo đúng cấu trúc:
+                       - Nêu số liệu thực tế của tôi.
+                       - Bàn luận và giải thích nguyên nhân y khoa (cơ chế, đặc thù tại viện).
+                       - Lồng ghép so sánh, đối chiếu trực tiếp (cao hơn, thấp hơn, tương đồng) với số liệu của các tác giả trong NGÂN HÀNG Y VĂN ngay trong cùng đoạn văn đó.
+                    4. Văn phong chuyên khảo y khoa hàn lâm, logic, không dùng từ ngữ cảm xúc.
                     {citation_rules}
                     """
                     full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
