@@ -180,12 +180,13 @@ with tab1:
     
     st.subheader("📝 Lệnh viết nhanh cho luận văn (Bấm là chạy):")
     
-    citation_rules = """
-    QUY TẮC TRÍCH DẪN & HÀN LÂM BẮT BUỘC:
-    1. Mọi khẳng định số liệu phải có trích dẫn số trong ngoặc vuông (VD: [1]).
-    2. Chỉ sử dụng dữ liệu từ 'NGÂN HÀNG Y VĂN' để phân tích, không tự bịa.
-    3. Cuối đoạn, BẮT BUỘC liệt kê "Tài liệu tham khảo".
-    """
+    citation_rules = """  
+        QUY TẮC TRÍCH DẪN & HÀN LÂM BẮT BUỘC:
+        1. BẮT BUỘC sử dụng kiểu trích dẫn số trong ngoặc vuông (VD: [1], [2]).
+        2. TUYỆT ĐỐI KHÔNG dùng kiểu [Tên tác giả, Năm] (ví dụ: không dùng [Gordis, 2014]).
+        3. Các số trích dẫn phải theo thứ tự xuất hiện liên tục trong bài.
+        4. Cuối văn bản, BẮT BUỘC liệt kê danh mục 'Tài liệu tham khảo' tương ứng với các số đã dùng theo định dạng Vancouver.
+        """
     # Chia làm 6 cột để hiển thị nút bấm
     col1, col2, col3, col4, col5, col6 = st.columns(6)
     
@@ -225,7 +226,7 @@ with tab1:
                     st.markdown(response.text)
                 
     with col4:
-        if st.button("Viết Bàn luận toàn diện"):
+        if st.button("Viết Bàn luận toàn diện (Có tiêu đề)"):
             if not my_research_data:
                 st.warning("Anh cần nhập số liệu của mình vào ô 'Bộ nhớ Số liệu' trước!")
             else:
@@ -235,13 +236,11 @@ with tab1:
                     {my_research_data}
                     
                     YÊU CẦU TRÌNH BÀY (BẮT BUỘC TUÂN THỦ):
-                    1. CHIA BÀN LUẬN THÀNH CÁC TIÊU ĐỀ PHỤ (TIỂU MỤC) CHUẨN XÁC DỰA TRÊN SỐ LIỆU ĐÃ CUNG CẤP. Sử dụng định dạng Heading 3 (ví dụ: ### 4.1. Đặc điểm bệnh nhân và phẫu thuật, ### 4.2. Thực trạng sử dụng kháng sinh, ### 4.3. Kết quả điều trị và so sánh...). Tuyệt đối không dùng Heading 1 hoặc 2.
-                    2. Dưới mỗi tiêu đề, BẮT BUỘC viết thành các ĐOẠN VĂN HOÀN CHỈNH, mạch lạc, liên tục. TUYỆT ĐỐI KHÔNG dùng dạng liệt kê gạch đầu dòng (bullet points) để mô tả số liệu.
-                    3. TRONG MỖI ĐOẠN VĂN BÀN LUẬN, phải kết hợp nhịp nhàng theo đúng cấu trúc:
-                       - Nêu số liệu thực tế của tôi.
-                       - Bàn luận và giải thích nguyên nhân y khoa (cơ chế, đặc thù tại viện).
-                       - Lồng ghép so sánh, đối chiếu trực tiếp (cao hơn, thấp hơn, tương đồng) với số liệu của các tác giả trong NGÂN HÀNG Y VĂN ngay trong cùng đoạn văn đó.
-                    4. Văn phong chuyên khảo y khoa hàn lâm, logic, không dùng từ ngữ cảm xúc.
+                    1. CHỈ SỬ DỤNG TRÍCH DẪN SỐ [1], [2]. TUYỆT ĐỐI KHÔNG DÙNG [Tên, Năm].
+                    2. CHIA BÀN LUẬN THÀNH CÁC TIỂU MỤC (Sử dụng ###). Không dùng Heading 1 hoặc 2.
+                    3. BẮT BUỘC viết thành các ĐOẠN VĂN HOÀN CHỈNH, mạch lạc. KHÔNG dùng gạch đầu dòng liệt kê số liệu.
+                    4. TRONG MỖI ĐOẠN VĂN: Nêu số liệu của tôi -> Giải thích cơ chế y khoa -> So sánh với y văn (dùng số trích dẫn).
+                    5. Văn phong hàn lâm, logic.
                     {citation_rules}
                     """
                     full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
