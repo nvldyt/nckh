@@ -286,7 +286,7 @@ with tab1:
     
     st.write("---")
     custom_prompt = st.text_area("Hoặc tự nhập yêu cầu riêng của anh cho Ngân hàng Y văn:")
-    if st.button("Chạy lệnh tùy chỉnh"):
+    if st.button("Chạy lệnh tùy chỉnh Y văn"):
         if custom_prompt:
             with st.spinner("AI đang xử lý..."):
                 anti_hallucination = "\nLƯU Ý NGHIÊM NGẶT: Không tự bịa thông tin. Trích dẫn số liệu cụ thể."
@@ -378,7 +378,7 @@ with tab2:
         st.markdown("### 3. Trợ lý AI tự do")
         analysis_prompt = st.text_area("Nhập yêu cầu (VD: Nhận xét tổng quan):")
         
-        if st.button("Chạy lệnh tùy chỉnh"):
+        if st.button("Chạy lệnh tùy chỉnh Excel"):
             if analysis_prompt:
                 with st.spinner("AI đang xử lý..."):
                     desc_stats = df.describe(include='all').to_string()
