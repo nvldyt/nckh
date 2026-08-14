@@ -218,7 +218,7 @@ with tab1:
                 st.markdown(response.text)
                 
     with col4:
-        if st.button("Bàn luận (Tự thân)"):
+        if st.button("Bàn luận"):
             if not my_research_data:
                 st.warning("Anh cần nhập số liệu của mình vào ô 'Bộ nhớ Số liệu' trước!")
             else:
@@ -238,7 +238,7 @@ with tab1:
                     st.markdown(response.text)
                     
     with col5:
-        if st.button("Bàn luận (So sánh)"):
+        if st.button("So sánh NC liên quan"):
             if not my_research_data:
                 st.warning("Anh cần nhập số liệu của mình vào ô 'Bộ nhớ Số liệu' trước!")
             else:
@@ -257,7 +257,7 @@ with tab1:
                     st.markdown(response.text)
                 
     with col6:
-        if st.button("Trích dẫn Vancouver"):
+        if st.button("Trích dẫn TLTK"):
             with st.spinner("AI đang lập danh mục..."):
                 prompt = f"Lập danh mục tài liệu tham khảo Vancouver từ các tác giả trong Ngân hàng y văn."
                 full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
