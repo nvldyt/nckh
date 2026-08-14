@@ -381,7 +381,7 @@ with tab2:
         st.markdown("### 3. Phân tích thêm số liệu khác nếu cần")
         analysis_prompt = st.text_area("Nhập yêu cầu:")
         
-        if st.button("Chạy lệnh"):
+        if st.button("Chạy lệnh xử lý số liệu"):
             if analysis_prompt:
                 with st.spinner("AI đang xử lý..."):
                     desc_stats = df.describe(include='all').to_string()
