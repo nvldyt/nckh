@@ -200,12 +200,12 @@ with tab1:
                     full_prop = f"Cơ sở dữ liệu:\n{combined_text}\n\nYêu cầu: {prompt}"
                     response = model.generate_content(full_prop, generation_config=generation_config)
                     st.markdown(response.text)
-       st.write("---")
-        custom_prompt = st.text_area("Hoặc tự nhập yêu cầu riêng của anh cho toàn bộ tập tài liệu:")      
+      st.write("---")
+        custom_prompt = st.text_area("Hoặc tự nhập yêu cầu riêng của anh cho toàn bộ tập tài liệu:")
+        
         if st.button("Chạy lệnh tùy chỉnh"):
             if custom_prompt:
                 with st.spinner("AI đang xử lý yêu cầu..."):
-                    # Tự động nhúng Lớp 3 và Lớp 4 vào mọi yêu cầu tự do của anh
                     anti_hallucination_spell = """
                     \nLƯU Ý NGHIÊM NGẶT: Tuyệt đối không tự bịa thông tin. Nếu trong tài liệu PDF KHÔNG có số liệu hoặc thông tin tôi hỏi, bắt buộc phải trả lời: 'Tài liệu không đề cập'. Yêu cầu BẮT BUỘC trích dẫn lại NGUYÊN VĂN (Copy - Paste) câu văn chứa số liệu đó trong tài liệu PDF gốc và đặt trong dấu ngoặc kép ("...") để tôi kiểm chứng.
                     """
