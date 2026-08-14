@@ -144,7 +144,8 @@ with tab1:
         4. Cuối đoạn văn bản, BẮT BUỘC liệt kê "Tài liệu tham khảo" chi tiết tương ứng với các số đã dùng.
         """
 
-        col1, col2, col3, col4 = st.columns(4)
+       # Tạo 5 cột cho 5 nút bấm đúng theo tiến trình luận văn
+        col1, col2, col3, col4, col5 = st.columns(5)
         
         with col1:
             if st.button("Viết Đặt vấn đề"):
@@ -163,6 +164,26 @@ with tab1:
                     st.markdown(response.text)
                     
         with col3:
+            if st.button("Viết Phương pháp NC"):
+                with st.spinner("AI đang thiết kế Chương 2: Phương pháp nghiên cứu..."):
+                    prompt = f"""
+                    Dựa trên phương pháp luận của các tài liệu PDF, hãy viết "Chương 2. ĐỐI TƯỢNG VÀ PHƯƠNG PHÁP NGHIÊN CỨU" cho luận văn.
+                    BẮT BUỘC tuân thủ NGHIÊM NGẶT cấu trúc sau:
+                    2.1. Đối tượng, thời gian, địa điểm nghiên cứu (Nêu rõ tiêu chuẩn lựa chọn, loại trừ).
+                    2.2. Phương pháp nghiên cứu
+                    2.2.1. Thiết kế nghiên cứu.
+                    2.2.2. Cỡ mẫu và phương pháp chọn mẫu.
+                    2.2.3. Chỉ tiêu nghiên cứu (BẮT BUỘC trình bày dưới dạng Bảng Markdown gồm 5 cột: TT | Tên chỉ tiêu/Biến số | Định nghĩa/Giải thích | Phân loại biến | Kỹ thuật thu thập).
+                    2.2.4. Phương pháp thu thập số liệu.
+                    2.2.5. Xử lý và phân tích số liệu (Chia làm 2 tiểu mục: 2.2.5.1. Xử lý số liệu; 2.2.5.2. Phân tích số liệu - Nêu rõ phần mềm và các test thống kê).
+                    
+                    Văn phong khô khan, chuyên sâu. {citation_rules}
+                    """
+                    full_prop = f"Cơ sở dữ liệu:\n{combined_text}\n\nYêu cầu: {prompt}"
+                    response = model.generate_content(full_prop, generation_config=generation_config)
+                    st.markdown(response.text)
+                    
+        with col4:
             if st.button("Viết Bàn luận"):
                 with st.spinner("AI đang viết phần Bàn luận..."):
                     prompt = f"Viết phần bàn luận y khoa chuyên sâu: so sánh kết quả (p-value, tỷ lệ), giải thích nguyên nhân khác biệt dựa trên dược động học/dược lực học, và nêu hạn chế nghiên cứu. {citation_rules}"
@@ -170,7 +191,7 @@ with tab1:
                     response = model.generate_content(full_prop, generation_config=generation_config)
                     st.markdown(response.text)
                     
-        with col4:
+        with col5:
             if st.button("Trích dẫn Vancouver"):
                 with st.spinner("AI đang lập danh mục tài liệu..."):
                     prompt = "Lập danh mục tài liệu tham khảo định dạng Vancouver chuẩn xác từ các tài liệu trên."
