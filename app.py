@@ -225,7 +225,7 @@ with tab1:
                     st.markdown(response.text)
                 
     with col4:
-        if st.button("Viết Bàn luận toàn diện (Có tiêu đề)"):
+        if st.button("Viết Bàn luận toàn diện"):
             if not my_research_data:
                 st.warning("Anh cần nhập số liệu của mình vào ô 'Bộ nhớ Số liệu' trước!")
             else:
