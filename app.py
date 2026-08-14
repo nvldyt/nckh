@@ -324,7 +324,6 @@ with tab1:
             height=200,
             key="ngan_hang_y_van"
         )
-        )
         col_clear, _ = st.columns([1, 4])
         with col_clear:
             if st.button("🗑️ Xóa Ngân hàng y văn"):
