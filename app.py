@@ -1,43 +1,146 @@
-import streamlit as st
-import google.generativeai as genai
-from pypdf import PdfReader
-import pandas as pd
-import time
-from google.api_core.exceptions import ResourceExhausted
-
-# THƯ VIỆN KIẾN TRÚC RAG (CHUẨN MỚI NHẤT, KHÔNG LỖI)
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import SKLearnVectorStore
-
-# ==========================================
-# CẤU HÌNH TRANG & GIAO DIỆN
-# ==========================================
-st.set_page_config(page_title="NCKH - Hỗ trợ Nghiên cứu", layout="wide")
-
 custom_css = """
 <style>
-    /* Ép phông chữ Arial an toàn */
-    html, body, p, h1, h2, h3, h4, h5, h6, span, div, label, li { font-family: 'Arial', sans-serif; }
+    /* ===== FONT & TỔNG THỂ ===== */
+    @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&display=swap');
     
-    /* Nền toàn bộ trang web (Gradient xanh dương - tím nhạt) */
-    .stApp { background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%); }
+    html, body, p, h1, h2, h3, h4, h5, h6, span, div, label, li, .stMarkdown {
+        font-family: 'Be Vietnam Pro', 'Arial', sans-serif;
+    }
     
-    /* Chỉnh màu và hiệu ứng cho Tiêu đề chính */
-    h1 { color: #4a148c !important; text-align: center; text-shadow: 2px 2px 4px rgba(0,0,0,0.2); font-weight: 800; margin-bottom: 30px; }
+    /* ===== NỀN TOÀN TRANG - GRADIENT ĐA SẮC ĐỘNG ===== */
+    .stApp {
+        background: linear-gradient(-45deg, #ff9a9e, #a18cd1, #667eea, #43e97b, #38f9d7);
+        background-size: 400% 400%;
+        animation: gradientShift 18s ease infinite;
+    }
+    @keyframes gradientShift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
     
-    /* Nền trắng mờ cho các Tab */
-    .stTabs [data-baseweb="tab-panel"] { background-color: rgba(255, 255, 255, 0.9); border-radius: 15px; padding: 25px; box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
+    /* ===== TIÊU ĐỀ CHÍNH ===== */
+    h1 {
+        color: #ffffff !important;
+        text-align: center;
+        font-weight: 800;
+        font-size: 2.6rem !important;
+        letter-spacing: 1px;
+        margin-bottom: 30px;
+        text-shadow: 0 4px 12px rgba(0,0,0,0.35), 0 0 30px rgba(255,255,255,0.25);
+        -webkit-text-stroke: 0.5px rgba(255,255,255,0.15);
+    }
     
-    /* Trang trí thanh Tab */
-    .stTabs [data-baseweb="tab-list"] { background-color: rgba(255, 255, 255, 0.5); border-radius: 10px; padding: 5px; }
+    h2, h3 {
+        color: #4a148c !important;
+        font-weight: 700;
+    }
     
-    /* Làm đẹp các nút bấm (Button) */
-    div.stButton > button { background-color: #6a1b9a !important; color: white !important; font-weight: bold; border-radius: 8px; border: none; padding: 10px 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: all 0.3s ease; }
-    div.stButton > button:hover { background-color: #4a148c !important; transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.2); }
+    /* ===== KHỐI NỘI DUNG TAB - HIỆU ỨNG KÍNH MỜ (GLASSMORPHISM) ===== */
+    .stTabs [data-baseweb="tab-panel"] {
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-radius: 20px;
+        padding: 28px;
+        box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+        border: 1px solid rgba(255,255,255,0.4);
+    }
     
-    /* Tùy chỉnh bảng dữ liệu Dataframe */
-    [data-testid="stDataFrame"] { background-color: white; border-radius: 10px; padding: 10px; }
+    /* ===== THANH TAB ===== */
+    .stTabs [data-baseweb="tab-list"] {
+        background: rgba(255, 255, 255, 0.35);
+        backdrop-filter: blur(8px);
+        border-radius: 14px;
+        padding: 6px;
+        gap: 6px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 10px !important;
+        font-weight: 700;
+        color: #4a148c;
+        transition: all 0.25s ease;
+    }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #6a1b9a, #ab47bc) !important;
+        color: #fff !important;
+        box-shadow: 0 4px 10px rgba(106,27,154,0.4);
+    }
+    
+    /* ===== NÚT BẤM - GRADIENT SẶC SỠ + HIỆU ỨNG HOVER ===== */
+    div.stButton > button {
+        background: linear-gradient(135deg, #6a1b9a 0%, #ab47bc 50%, #ff6ec4 100%) !important;
+        color: white !important;
+        font-weight: 700;
+        border-radius: 12px;
+        border: none;
+        padding: 12px 22px;
+        box-shadow: 0 6px 14px rgba(106,27,154,0.35);
+        transition: all 0.25s ease;
+        letter-spacing: 0.3px;
+    }
+    div.stButton > button:hover {
+        transform: translateY(-3px) scale(1.02);
+        box-shadow: 0 10px 22px rgba(106,27,154,0.5);
+        filter: brightness(1.08);
+    }
+    div.stButton > button:active {
+        transform: translateY(0px) scale(0.98);
+    }
+    
+    /* ===== NÚT LOẠI PRIMARY (nổi bật hơn) ===== */
+    div.stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #ff512f, #f09819) !important;
+        box-shadow: 0 6px 14px rgba(255,81,47,0.4);
+    }
+    
+    /* ===== BẢNG DỮ LIỆU ===== */
+    [data-testid="stDataFrame"] {
+        background-color: white;
+        border-radius: 14px;
+        padding: 12px;
+        box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+    }
+    
+    /* ===== Ô NHẬP LIỆU (text_area, selectbox, multiselect...) ===== */
+    .stTextArea textarea, .stTextInput input {
+        border-radius: 12px !important;
+        border: 1.5px solid #d1a3f0 !important;
+        background-color: rgba(255,255,255,0.9) !important;
+    }
+    .stTextArea textarea:focus, .stTextInput input:focus {
+        border-color: #6a1b9a !important;
+        box-shadow: 0 0 0 3px rgba(106,27,154,0.15) !important;
+    }
+    div[data-baseweb="select"] > div {
+        border-radius: 12px !important;
+        border: 1.5px solid #d1a3f0 !important;
+    }
+    
+    /* ===== EXPANDER / INFO BOX ===== */
+    .streamlit-expanderHeader {
+        background: rgba(171, 71, 188, 0.12);
+        border-radius: 10px;
+        font-weight: 600;
+        color: #4a148c;
+    }
+    .stAlert {
+        border-radius: 12px !important;
+    }
+    
+    /* ===== FILE UPLOADER ===== */
+    [data-testid="stFileUploader"] {
+        border-radius: 14px;
+        background: rgba(255,255,255,0.6);
+        padding: 10px;
+    }
+    
+    /* ===== SUBHEADER (► Phân tích biến...) ===== */
+    .stMarkdown h3 {
+        border-left: 5px solid #ab47bc;
+        padding-left: 12px;
+        margin-top: 10px;
+    }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
@@ -61,7 +164,7 @@ try:
     """
     
     # SỬ DỤNG ĐÚNG TÊN MODEL CHUẨN CỦA GOOGLE
-    model = genai.GenerativeModel("gemini-1.5-flash", system_instruction=system_prompt)
+    model = genai.GenerativeModel("gemini-3.6-flash", system_instruction=system_prompt)
     generation_config = genai.types.GenerationConfig(temperature=0.1)
     
     # HÀM BỌC AN TOÀN: Tự động né lỗi quá tải API
