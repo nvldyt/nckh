@@ -1,3 +1,19 @@
+import streamlit as st
+import google.generativeai as genai
+from pypdf import PdfReader
+import pandas as pd
+import time
+from google.api_core.exceptions import ResourceExhausted
+
+# THƯ VIỆN KIẾN TRÚC RAG (CHUẨN MỚI NHẤT, KHÔNG LỖI)
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import SKLearnVectorStore
+
+# ==========================================
+# CẤU HÌNH TRANG & GIAO DIỆN
+# ==========================================
+st.set_page_config(page_title="NCKH - Hỗ trợ Nghiên cứu", layout="wide")
 custom_css = """
 <style>
     /* ===== FONT & TỔNG THỂ ===== */
