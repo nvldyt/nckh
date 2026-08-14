@@ -272,43 +272,77 @@ with tab1:
         
         with col_up2:
             if st.button("📝 Rút trích số liệu & Ghi vào Ngân hàng", type="primary"):
-                combined_text = ""
-                for uploaded_file in uploaded_files:
-                    try:
-                        reader = PdfReader(uploaded_file)
-                        for page in reader.pages:
-                            page_text = page.extract_text()
-                            if page_text:
-                                combined_text += page_text + "\n"
-                    except Exception as e:
-                        st.session_state["last_error"] = f"Lỗi đọc file {uploaded_file.name}: {e}"
-
-                if not combined_text.strip():
-                    st.session_state["last_error"] = "Không đọc được chữ từ các file PDF này (có thể là file ảnh chụp/scan không có lớp text)."
+                if not uploaded_files:
+                    st.session_state["last_error"] = "Vui lòng tải lên ít nhất 1 file PDF."
+                    st.session_state["last_success"] = None
                 else:
-                    with st.spinner(f"AI đang đọc {len(combined_text)} ký tự từ {len(uploaded_files)} file PDF..."):
-                        extract_prompt = """
-                        Hãy đọc các tài liệu PDF trên và TÓM TẮT CÔ ĐẶC lại những thông tin sau:
+                    progress_bar = st.progress(0, text="Chuẩn bị xử lý...")
+                    total_files = len(uploaded_files)
+                    ket_qua_gop = ""
+                    loi_gop = []
+
+                    for idx, uploaded_file in enumerate(uploaded_files, start=1):
+                        progress_bar.progress(
+                            idx / total_files,
+                            text=f"Đang xử lý file {idx}/{total_files}: {uploaded_file.name}"
+                        )
+
+                        # Đọc riêng từng file PDF
+                        file_text = ""
+                        try:
+                            reader = PdfReader(uploaded_file)
+                            for page in reader.pages:
+                                page_text = page.extract_text()
+                                if page_text:
+                                    file_text += page_text + "\n"
+                        except Exception as e:
+                            loi_gop.append(f"{uploaded_file.name}: lỗi đọc file ({e})")
+                            continue
+
+                        if not file_text.strip():
+                            loi_gop.append(f"{uploaded_file.name}: không đọc được chữ (có thể là file scan/ảnh)")
+                            continue
+
+                        # Cắt bớt nếu 1 file quá dài, tránh vượt giới hạn token
+                        text_to_send = file_text[:60000]
+
+                        extract_prompt = f"""
+                        Đây là nội dung trích từ file "{uploaded_file.name}".
+                        Hãy đọc và TÓM TẮT CÔ ĐẶC lại những thông tin sau:
                         1. Tên tác giả, năm nghiên cứu, tên bài báo.
                         2. Mục tiêu nghiên cứu và đối tượng nghiên cứu.
                         3. Các kết quả, số liệu quan trọng nhất (tỷ lệ %, p-value, OR, RR...).
                         4. Kết luận chính của tác giả.
                         Tuyệt đối không bịa số liệu. Trình bày dưới dạng gạch đầu dòng ngắn gọn.
                         """
-                        # Gemini có giới hạn input - nếu quá dài, cắt bớt để tránh lỗi
-                        text_to_send = combined_text[:120000]
                         full_prop = f"Tài liệu gốc:\n{text_to_send}\n\nYêu cầu: {extract_prompt}"
 
                         try:
                             response = model.generate_content(full_prop, generation_config=generation_config)
                             if response and response.text:
-                                st.session_state["ngan_hang_y_van"] += f"\n\n{response.text}"
-                                st.session_state["last_error"] = None
-                                st.session_state["last_success"] = f"✅ Đã rút trích và ghi thêm dữ liệu ({len(response.text)} ký tự)."
+                                ket_qua_gop += f"\n\n--- Nguồn: {uploaded_file.name} ---\n{response.text}"
                             else:
-                                st.session_state["last_error"] = "AI trả về phản hồi rỗng (có thể do bộ lọc an toàn chặn nội dung)."
+                                loi_gop.append(f"{uploaded_file.name}: AI trả về phản hồi rỗng (có thể do bộ lọc an toàn chặn nội dung)")
+                        except ResourceExhausted:
+                            loi_gop.append(f"{uploaded_file.name}: quá tải API, bỏ qua file này (thử lại sau)")
                         except Exception as e:
-                            st.session_state["last_error"] = f"Lỗi gọi API Gemini: {e}"
+                            loi_gop.append(f"{uploaded_file.name}: lỗi gọi API Gemini ({e})")
+
+                        # Nghỉ giữa các file để tránh dồn request liên tiếp gây quá tải
+                        time.sleep(4)
+
+                    progress_bar.empty()
+
+                    if ket_qua_gop:
+                        st.session_state["ngan_hang_y_van"] += ket_qua_gop
+                        st.session_state["last_success"] = f"✅ Đã rút trích xong {total_files - len(loi_gop)}/{total_files} file thành công."
+                    else:
+                        st.session_state["last_success"] = None
+
+                    if loi_gop:
+                        st.session_state["last_error"] = "⚠️ Một số file gặp lỗi:\n" + "\n".join(loi_gop)
+                    else:
+                        st.session_state["last_error"] = None
 
                 st.rerun()
 
