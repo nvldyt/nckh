@@ -378,10 +378,10 @@ with tab2:
                         st.write("---") # Đường kẻ ngang phân cách giữa các bảng
         st.write("---")
         
-        st.markdown("### 3. Trợ lý AI tự do")
-        analysis_prompt = st.text_area("Nhập yêu cầu (VD: Nhận xét tổng quan):")
+        st.markdown("### 3. Phân tích thêm số liệu khác nếu cần")
+        analysis_prompt = st.text_area("Nhập yêu cầu:")
         
-        if st.button("Chạy lệnh tùy chỉnh Excel"):
+        if st.button("Chạy lệnh"):
             if analysis_prompt:
                 with st.spinner("AI đang xử lý..."):
                     desc_stats = df.describe(include='all').to_string()
