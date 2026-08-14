@@ -136,68 +136,80 @@ with tab1:
         st.success(f"Đã đọc thành công {len(uploaded_files)} tài liệu PDF!")
         
         st.write("---")
+        
+        # --- TRẠM TRUNG CHUYỂN DỮ LIỆU TỪ TAB 2 SANG TAB 1 ---
+        st.markdown("### 🌉 Bộ nhớ Số liệu (Dành riêng cho phần Bàn luận)")
+        my_research_data = st.text_area(
+            "Copy các bảng tần số, tỷ lệ % hoặc p-value từ Tab 2 và dán vào đây. AI sẽ dùng số liệu này để so sánh với các tài liệu PDF bên trên:", 
+            placeholder="VD: Nhập 'Tỷ lệ nam/nữ là 1.42:1' hoặc dán nguyên cái bảng Crosstabs vào đây...",
+            height=150
+        )
+        
         st.subheader("📝 Lệnh viết nhanh cho luận văn (Bấm là chạy):")
         
         citation_rules = """
         QUY TẮC TRÍCH DẪN, HÀN LÂM & CHỐNG BỊA ĐẶT BẮT BUỘC:
         1. Bất kỳ câu khẳng định số liệu, dịch tễ nào cũng PHẢI có trích dẫn số trong ngoặc vuông (VD: [1], [2, 3]) ở cuối câu.
         2. Các số trích dẫn phải theo thứ tự xuất hiện liên tục.
-        3. KIỂM CHỨNG SỐ LIỆU: Khi trích dẫn các số liệu quan trọng (tỷ lệ %, p-value...), yêu cầu giữ nguyên văn ý nghĩa của bản gốc. Nếu không có số liệu, ghi rõ "Các tài liệu cung cấp không đề cập".
-        4. Cuối đoạn văn bản, BẮT BUỘC liệt kê "Tài liệu tham khảo" chi tiết tương ứng với các số đã dùng.
+        3. KIỂM CHỨNG SỐ LIỆU: Không tự bịa thông tin. Nếu tài liệu không có, ghi rõ "Tài liệu không đề cập".
+        4. Cuối đoạn văn, BẮT BUỘC liệt kê "Tài liệu tham khảo" tương ứng.
         """
 
-       # Tạo 5 cột cho 5 nút bấm đúng theo tiến trình luận văn
         col1, col2, col3, col4, col5 = st.columns(5)
         
         with col1:
             if st.button("Viết Đặt vấn đề"):
                 with st.spinner("AI đang viết phần Đặt vấn đề..."):
-                    prompt = f"Dựa trên các tài liệu PDF, hãy viết phần 'Đặt vấn đề' cho luận văn CKI Dược lâm sàng, tập trung vào số liệu dịch tễ, tính cấp thiết lâm sàng và khoảng trống nghiên cứu. {citation_rules}"
-                    full_prop = f"Cơ sở dữ liệu:\n{combined_text}\n\nYêu cầu: {prompt}"
+                    prompt = f"Dựa trên tài liệu PDF, viết phần 'Đặt vấn đề' luận văn CKI Dược lâm sàng (dịch tễ, tính cấp thiết, khoảng trống nghiên cứu). {citation_rules}"
+                    full_prop = f"Y văn:\n{combined_text}\n\nYêu cầu: {prompt}"
                     response = model.generate_content(full_prop, generation_config=generation_config)
                     st.markdown(response.text)
                     
         with col2:
             if st.button("Viết Tổng quan"):
                 with st.spinner("AI đang viết phần Tổng quan..."):
-                    prompt = f"Viết phần tổng quan y văn chuyên sâu, phân tích cơ chế sinh lý bệnh, dược lý và phác đồ điều trị dựa trên các file PDF. {citation_rules}"
-                    full_prop = f"Cơ sở dữ liệu:\n{combined_text}\n\nYêu cầu: {prompt}"
+                    prompt = f"Viết phần tổng quan y văn chuyên sâu, phân tích cơ chế sinh lý bệnh, dược lý và phác đồ điều trị dựa trên file PDF. {citation_rules}"
+                    full_prop = f"Y văn:\n{combined_text}\n\nYêu cầu: {prompt}"
                     response = model.generate_content(full_prop, generation_config=generation_config)
                     st.markdown(response.text)
                     
         with col3:
             if st.button("Viết Phương pháp NC"):
-                with st.spinner("AI đang thiết kế Chương 2: Phương pháp nghiên cứu..."):
+                with st.spinner("AI đang thiết kế Chương 2..."):
                     prompt = f"""
-                    Dựa trên phương pháp luận của các tài liệu PDF, hãy viết "Chương 2. ĐỐI TƯỢNG VÀ PHƯƠNG PHÁP NGHIÊN CỨU" cho luận văn.
-                    BẮT BUỘC tuân thủ NGHIÊM NGẶT cấu trúc sau:
-                    2.1. Đối tượng, thời gian, địa điểm nghiên cứu (Nêu rõ tiêu chuẩn lựa chọn, loại trừ).
-                    2.2. Phương pháp nghiên cứu
-                    2.2.1. Thiết kế nghiên cứu.
-                    2.2.2. Cỡ mẫu và phương pháp chọn mẫu.
-                    2.2.3. Chỉ tiêu nghiên cứu (BẮT BUỘC trình bày dưới dạng Bảng Markdown gồm 5 cột: TT | Tên chỉ tiêu/Biến số | Định nghĩa/Giải thích | Phân loại biến | Kỹ thuật thu thập).
-                    2.2.4. Phương pháp thu thập số liệu.
-                    2.2.5. Xử lý và phân tích số liệu (Chia làm 2 tiểu mục: 2.2.5.1. Xử lý số liệu; 2.2.5.2. Phân tích số liệu - Nêu rõ phần mềm và các test thống kê).
-                    
-                    Văn phong khô khan, chuyên sâu. {citation_rules}
+                    Dựa trên phương pháp của các tài liệu PDF, viết "Chương 2. ĐỐI TƯỢNG VÀ PHƯƠNG PHÁP NGHIÊN CỨU" gồm: 2.1, 2.2.1, 2.2.2. 
+                    Mục 2.2.3 BẮT BUỘC kẻ Bảng Markdown 5 cột (TT | Tên chỉ tiêu | Định nghĩa | Phân loại | Kỹ thuật thu thập). 
+                    Mục 2.2.4 và 2.2.5. {citation_rules}
                     """
-                    full_prop = f"Cơ sở dữ liệu:\n{combined_text}\n\nYêu cầu: {prompt}"
+                    full_prop = f"Y văn:\n{combined_text}\n\nYêu cầu: {prompt}"
                     response = model.generate_content(full_prop, generation_config=generation_config)
                     st.markdown(response.text)
                     
         with col4:
-            if st.button("Viết Bàn luận"):
-                with st.spinner("AI đang viết phần Bàn luận..."):
-                    prompt = f"Viết phần bàn luận y khoa chuyên sâu: so sánh kết quả (p-value, tỷ lệ), giải thích nguyên nhân khác biệt dựa trên dược động học/dược lực học, và nêu hạn chế nghiên cứu. {citation_rules}"
-                    full_prop = f"Cơ sở dữ liệu:\n{combined_text}\n\nYêu cầu: {prompt}"
+            if st.button("Viết Bàn luận (Có so sánh)"):
+                with st.spinner("AI đang phân tích chéo số liệu của anh với Y văn..."):
+                    prompt = f"""
+                    Tôi đang viết phần Bàn luận cho luận văn CKI Dược lâm sàng.
+                    
+                    ĐÂY LÀ KẾT QUẢ NGHIÊN CỨU THỰC TẾ CỦA TÔI:
+                    {my_research_data if my_research_data else "[Chưa cung cấp số liệu]"}
+                    
+                    YÊU CẦU BÀN LUẬN:
+                    1. Lấy số liệu của TÔI làm trung tâm. 
+                    2. Hãy rà soát trong các tài liệu PDF để tìm các nghiên cứu tương đồng. BẮT BUỘC so sánh đối chiếu trực tiếp (cao hơn, thấp hơn hay tương đương).
+                    3. Giải thích nguyên nhân của sự khác biệt đó bằng kiến thức y khoa chuyên sâu (cơ chế dược lý, phác đồ, đặc điểm dịch tễ).
+                    4. Trình bày dưới dạng các đoạn văn phân tích sâu sắc, khô khan, không bay bổng. 
+                    {citation_rules}
+                    """
+                    full_prop = f"Tài liệu Y văn (PDF):\n{combined_text}\n\nYêu cầu: {prompt}"
                     response = model.generate_content(full_prop, generation_config=generation_config)
                     st.markdown(response.text)
                     
         with col5:
             if st.button("Trích dẫn Vancouver"):
                 with st.spinner("AI đang lập danh mục tài liệu..."):
-                    prompt = "Lập danh mục tài liệu tham khảo định dạng Vancouver chuẩn xác từ các tài liệu trên."
-                    full_prop = f"Cơ sở dữ liệu:\n{combined_text}\n\nYêu cầu: {prompt}"
+                    prompt = f"Lập danh mục tài liệu tham khảo định dạng Vancouver chuẩn xác từ các tài liệu PDF."
+                    full_prop = f"Y văn:\n{combined_text}\n\nYêu cầu: {prompt}"
                     response = model.generate_content(full_prop, generation_config=generation_config)
                     st.markdown(response.text)
         st.write("---")
