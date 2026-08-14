@@ -229,24 +229,33 @@ with tab2:
 
         st.write("---")
         
-        st.markdown("### 2. Bảng chéo & Phân tích mối liên quan (Crosstabs)")
-        col_a, col_b = st.columns(2)
-        with col_a:
-            var_row = st.selectbox("Biến Độc lập / Hàng:", columns, key="var_row")
-        with col_b:
-            var_col = st.selectbox("Biến Phụ thuộc / Cột:", columns, key="var_col")
+        st.markdown("### 2. Bảng chéo & Phân tích mối liên quan (Auto Crosstabs)")
+        st.info("💡 Mẹo: Chọn 1 Biến phụ thuộc (Cột) làm gốc. Sau đó chọn nhiều Biến độc lập (Hàng) để AI tự động chạy hàng loạt các bảng. KHÔNG chọn biến định danh (Họ tên, Số bệnh án...).")
+        
+        target_col = st.selectbox("🎯 Chọn Biến Phụ thuộc / Cột (VD: Mức độ bệnh, Kết quả điều trị):", columns, key="auto_target")
+        indep_cols = st.multiselect("🏷️ Chọn TẤT CẢ các Biến Độc lập / Hàng (VD: Giới tính, Nhóm tuổi, Tiền sử...):", columns, key="auto_indep")
             
-        if st.button("Chạy Crosstabs & Nhận xét"):
-            with st.spinner("AI đang xử lý bảng chéo..."):
-                crosstab_df = pd.crosstab(df[var_row], df[var_col])
-                
-                prompt = f"""
-                Bảng Crosstabs thực tế giữa '{var_row}' và '{var_col}':\n{crosstab_df.to_string()}\n
-                Yêu cầu: 1. Trình bày bảng khoa học (% hàng/cột). 2. Nhận xét cực kỳ chuyên sâu về y học, tuyệt đối không dùng từ ngữ cảm xúc.
-                """
-                response = model.generate_content(prompt, generation_config=generation_config)
-                st.markdown(response.text)
-
+        if st.button("🚀 Chạy toàn bộ Bảng chéo & Nhận xét"):
+            if not indep_cols:
+                st.warning("Vui lòng chọn ít nhất 1 biến độc lập (hàng) ở ô phía trên!")
+            else:
+                for var in indep_cols:
+                    if var == target_col:
+                        continue # Bỏ qua nếu anh lỡ chọn trùng 2 biến giống nhau
+                        
+                    with st.spinner(f"AI đang xử lý bảng chéo giữa '{var}' và '{target_col}'..."):
+                        crosstab_df = pd.crosstab(df[var], df[target_col])
+                        
+                        prompt = f"""
+                        Bảng Crosstabs thực tế giữa '{var}' và '{target_col}':\n{crosstab_df.to_string()}\n
+                        Yêu cầu: 1. Trình bày bảng khoa học (% hàng/cột). 2. Nhận xét cực kỳ chuyên sâu về y học, tuyệt đối không dùng từ ngữ cảm xúc.
+                        """
+                        response = model.generate_content(prompt, generation_config=generation_config)
+                        
+                        # In ra màn hình từng phần rõ ràng
+                        st.subheader(f"► Mối liên quan giữa {var} và {target_col}")
+                        st.markdown(response.text)
+                        st.write("---") # Đường kẻ ngang phân cách giữa các bảng
         st.write("---")
         
         st.markdown("### 3. Trợ lý AI tự do")
