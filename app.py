@@ -235,11 +235,11 @@ with tab1:
                     {my_research_data}
                     
                     YÊU CẦU ĐẦU RA BẮT BUỘC (Trình bày đúng các cấu trúc tiểu mục sau, không dùng Heading 1 hoặc 2):
-                    ### 4.1. Đặc điểm bệnh nhân và phẫu thuật trong mẫu nghiên cứu
-                    (Phân tích các số liệu của TÔI về tuổi, giới tính, ASA, bệnh lý mắc kèm, đặc điểm phẫu thuật. Giải thích nguyên nhân mang tính đặc thù tại cơ sở y tế của tôi, không cần so sánh với tác giả khác ở đây).
+                    ### 4.1. Đặc điểm mẫu bệnh nhân trong mẫu nghiên cứu
+                    (Phân tích các số liệu của TÔI về tuổi, giới tính, bệnh lý mắc kèm, và các yếu tố liên quan khác. Giải thích nguyên nhân mang tính đặc thù tại cơ sở y tế của tôi, không cần so sánh với tác giả khác ở đây).
                     
-                    ### 4.2. Thực trạng tình hình can thiệp / sử dụng thuốc
-                    (Chỉ phân tích số liệu của TÔI: Tỷ lệ sử dụng, lựa chọn phác đồ, thời điểm, thời gian duy trì. Nhận định khách quan những điểm đã làm tốt và những điểm còn tồn tại do thói quen lâm sàng hoặc rào cản khách quan).
+                    ### 4.2. Thực trạng tình hình sử dụng thuốc
+                    (Chỉ phân tích số liệu của TÔI: Tỷ lệ sử dụng, lựa chọn phác đồ, liều dùng, đường dùng, thời gian sử dụng, và các yếu tố liên quan khác. Nhận định khách quan những điểm đã làm tốt và những điểm còn tồn tại do thói quen lâm sàng hoặc rào cản khách quan).
                     
                     LƯU Ý: Văn phong hàn lâm, logic, khô khan. Tuyệt đối KHÔNG tự bịa số liệu.
                     """
