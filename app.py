@@ -201,8 +201,6 @@ with tab1:
                     response = model.generate_content(full_prop, generation_config=generation_config)
                     st.markdown(response.text)
         
-        st.write("---")
-        custom_prompt = st.text_area("Hoặc tự nhập yêu cầu riêng của anh cho toàn bộ tập tài liệu:")
        st.write("---")
         custom_prompt = st.text_area("Hoặc tự nhập yêu cầu riêng của anh cho toàn bộ tập tài liệu:")
         
