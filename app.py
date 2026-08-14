@@ -127,11 +127,6 @@ except Exception as e:
 # ==========================================
 tab1, tab2 = st.tabs(["📄 Đọc Tài liệu & Viết Luận văn (PDF)", "📊 Phân tích Số liệu Bệnh án (Excel)"])
 
-# ==========================================
-# CÁC TAB CHỨC NĂNG
-# ==========================================
-tab1, tab2 = st.tabs(["📄 Đọc Tài liệu & Viết Luận văn (PDF)", "📊 Phân tích Số liệu Bệnh án (Excel)"])
-
 # ----------------------------------------------------
 # TAB 1: PHÂN TÍCH TÀI LIỆU Y VĂN & NGÂN HÀNG DỮ LIỆU
 # ----------------------------------------------------
