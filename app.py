@@ -231,6 +231,10 @@ with tab1:
         st.session_state["vector_store"] = None
     if "ngan_hang_y_van" not in st.session_state:
         st.session_state["ngan_hang_y_van"] = ""
+    if "last_error" not in st.session_state:
+        st.session_state["last_error"] = None
+    if "last_success" not in st.session_state:
+        st.session_state["last_success"] = None
         
     st.markdown("### 🏦 Ngân hàng Y văn (Cơ sở dữ liệu Vector SKLearn)")
     st.info("💡 Tải file PDF lên và bấm 'Xử lý & Mã hóa Vector'. Hệ thống sẽ tự động băm nhỏ tài liệu để tìm kiếm siêu tốc, chống quá tải API.")
