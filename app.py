@@ -112,13 +112,29 @@ except Exception as e:
 tab1, tab2 = st.tabs(["📄 Đọc Tài liệu & Viết Luận văn (PDF)", "📊 Phân tích Số liệu Bệnh án (Excel)"])
 
 # ----------------------------------------------------
-# TAB 1: PHÂN TÍCH TÀI LIỆU THAM KHẢO
+# TAB 1: PHÂN TÍCH TÀI LIỆU Y VĂN & NGÂN HÀNG DỮ LIỆU
 # ----------------------------------------------------
 with tab1:
     st.header("Phân tích tài liệu và Viết bài")
     
+    # Khởi tạo Bộ nhớ vĩnh cửu cho ứng dụng
+    if "ngan_hang_y_van" not in st.session_state:
+        st.session_state["ngan_hang_y_van"] = ""
+        
+    st.markdown("### 🏦 Ngân hàng Y văn Tổng hợp (Memory)")
+    st.info("💡 Mẹo: Tải từng đợt 2-3 bài báo, bấm nút 'Rút trích' để AI hút số liệu lưu vào đây. Sau đó xóa bài cũ, tải bài mới lên rút trích tiếp cho đến khi đủ tài liệu.")
+    
+    # Ô chứa dữ liệu cộng dồn
+    st.session_state["ngan_hang_y_van"] = st.text_area(
+        "Dữ liệu tinh túy đã được rút trích từ các bài báo (Có thể tự chỉnh sửa):", 
+        st.session_state["ngan_hang_y_van"], 
+        height=200
+    )
+    
+    st.write("---")
+    
     uploaded_files = st.file_uploader(
-        "Tải lên nhiều tài liệu nghiên cứu (PDF)", 
+        "Tải lên tài liệu nghiên cứu (PDF) để rút trích:", 
         type="pdf", 
         accept_multiple_files=True, 
         key="pdf_uploader"
@@ -135,98 +151,109 @@ with tab1:
         
         st.success(f"Đã đọc thành công {len(uploaded_files)} tài liệu PDF!")
         
-        st.write("---")
-        
-        # --- TRẠM TRUNG CHUYỂN DỮ LIỆU TỪ TAB 2 SANG TAB 1 ---
-        st.markdown("### 🌉 Bộ nhớ Số liệu (Dành riêng cho phần Bàn luận)")
-        my_research_data = st.text_area(
-            "Copy các bảng tần số, tỷ lệ % hoặc p-value từ Tab 2 và dán vào đây. AI sẽ dùng số liệu này để so sánh với các tài liệu PDF bên trên:", 
-            placeholder="VD: Nhập 'Tỷ lệ nam/nữ là 1.42:1' hoặc dán nguyên cái bảng Crosstabs vào đây...",
-            height=150
-        )
-        
-        st.subheader("📝 Lệnh viết nhanh cho luận văn (Bấm là chạy):")
-        
-        citation_rules = """
-        QUY TẮC TRÍCH DẪN, HÀN LÂM & CHỐNG BỊA ĐẶT BẮT BUỘC:
-        1. Bất kỳ câu khẳng định số liệu, dịch tễ nào cũng PHẢI có trích dẫn số trong ngoặc vuông (VD: [1], [2, 3]) ở cuối câu.
-        2. Các số trích dẫn phải theo thứ tự xuất hiện liên tục.
-        3. KIỂM CHỨNG SỐ LIỆU: Không tự bịa thông tin. Nếu tài liệu không có, ghi rõ "Tài liệu không đề cập".
-        4. Cuối đoạn văn, BẮT BUỘC liệt kê "Tài liệu tham khảo" tương ứng.
-        """
-
-        col1, col2, col3, col4, col5 = st.columns(5)
-        
-        with col1:
-            if st.button("Viết Đặt vấn đề"):
-                with st.spinner("AI đang viết phần Đặt vấn đề..."):
-                    prompt = f"Dựa trên tài liệu PDF, viết phần 'Đặt vấn đề' luận văn CKI Dược lâm sàng (dịch tễ, tính cấp thiết, khoảng trống nghiên cứu). {citation_rules}"
-                    full_prop = f"Y văn:\n{combined_text}\n\nYêu cầu: {prompt}"
-                    response = model.generate_content(full_prop, generation_config=generation_config)
-                    st.markdown(response.text)
-                    
-        with col2:
-            if st.button("Viết Tổng quan"):
-                with st.spinner("AI đang viết phần Tổng quan..."):
-                    prompt = f"Viết phần tổng quan y văn chuyên sâu, phân tích cơ chế sinh lý bệnh, dược lý và phác đồ điều trị dựa trên file PDF. {citation_rules}"
-                    full_prop = f"Y văn:\n{combined_text}\n\nYêu cầu: {prompt}"
-                    response = model.generate_content(full_prop, generation_config=generation_config)
-                    st.markdown(response.text)
-                    
-        with col3:
-            if st.button("Viết Phương pháp NC"):
-                with st.spinner("AI đang thiết kế Chương 2..."):
-                    prompt = f"""
-                    Dựa trên phương pháp của các tài liệu PDF, viết "Chương 2. ĐỐI TƯỢNG VÀ PHƯƠNG PHÁP NGHIÊN CỨU" gồm: 2.1, 2.2.1, 2.2.2. 
-                    Mục 2.2.3 BẮT BUỘC kẻ Bảng Markdown 5 cột (TT | Tên chỉ tiêu | Định nghĩa | Phân loại | Kỹ thuật thu thập). 
-                    Mục 2.2.4 và 2.2.5. {citation_rules}
-                    """
-                    full_prop = f"Y văn:\n{combined_text}\n\nYêu cầu: {prompt}"
-                    response = model.generate_content(full_prop, generation_config=generation_config)
-                    st.markdown(response.text)
-                    
-        with col4:
-            if st.button("Viết Bàn luận (Có so sánh)"):
-                with st.spinner("AI đang phân tích chéo số liệu của anh với Y văn..."):
-                    prompt = f"""
-                    Tôi đang viết phần Bàn luận cho luận văn CKI Dược lâm sàng.
-                    
-                    ĐÂY LÀ KẾT QUẢ NGHIÊN CỨU THỰC TẾ CỦA TÔI:
-                    {my_research_data if my_research_data else "[Chưa cung cấp số liệu]"}
-                    
-                    YÊU CẦU BÀN LUẬN:
-                    1. Lấy số liệu của TÔI làm trung tâm. 
-                    2. Hãy rà soát trong các tài liệu PDF để tìm các nghiên cứu tương đồng. BẮT BUỘC so sánh đối chiếu trực tiếp (cao hơn, thấp hơn hay tương đương).
-                    3. Giải thích nguyên nhân của sự khác biệt đó bằng kiến thức y khoa chuyên sâu (cơ chế dược lý, phác đồ, đặc điểm dịch tễ).
-                    4. Trình bày dưới dạng các đoạn văn phân tích sâu sắc, khô khan, không bay bổng. 
-                    {citation_rules}
-                    """
-                    full_prop = f"Tài liệu Y văn (PDF):\n{combined_text}\n\nYêu cầu: {prompt}"
-                    response = model.generate_content(full_prop, generation_config=generation_config)
-                    st.markdown(response.text)
-                    
-        with col5:
-            if st.button("Trích dẫn Vancouver"):
-                with st.spinner("AI đang lập danh mục tài liệu..."):
-                    prompt = f"Lập danh mục tài liệu tham khảo định dạng Vancouver chuẩn xác từ các tài liệu PDF."
-                    full_prop = f"Y văn:\n{combined_text}\n\nYêu cầu: {prompt}"
-                    response = model.generate_content(full_prop, generation_config=generation_config)
-                    st.markdown(response.text)
-        st.write("---")
-        custom_prompt = st.text_area("Hoặc tự nhập yêu cầu riêng của anh cho toàn bộ tập tài liệu:")
-        
-        if st.button("Chạy lệnh tùy chỉnh"):
-            if custom_prompt:
-                with st.spinner("AI đang xử lý yêu cầu..."):
-                    anti_hallucination_spell = """
-                    \nLƯU Ý NGHIÊM NGẶT: Tuyệt đối không tự bịa thông tin. Nếu trong tài liệu PDF KHÔNG có số liệu hoặc thông tin tôi hỏi, bắt buộc phải trả lời: 'Tài liệu không đề cập'. Yêu cầu BẮT BUỘC trích dẫn lại NGUYÊN VĂN (Copy - Paste) câu văn chứa số liệu đó trong tài liệu PDF gốc và đặt trong dấu ngoặc kép ("...") để tôi kiểm chứng.
-                    """
-                    full_prop = f"Cơ sở dữ liệu:\n{combined_text}\n\nYêu cầu: {custom_prompt}\n{anti_hallucination_spell}\n{citation_rules}"
-                    response = model.generate_content(full_prop, generation_config=generation_config)
-                    st.markdown(response.text)
-            else:
-                st.warning("Vui lòng nhập yêu cầu vào ô trống!")
+        if st.button("📥 Rút trích số liệu & Ghi vào Ngân hàng", type="primary"):
+            with st.spinner("AI đang vắt kiệt thông tin từ các file PDF và lưu vào bộ nhớ..."):
+                extract_prompt = """
+                Hãy đọc các tài liệu PDF trên và TÓM TẮT CÔ ĐẶC lại những thông tin sau:
+                1. Tên tác giả, năm nghiên cứu, tên bài báo.
+                2. Mục tiêu nghiên cứu và đối tượng nghiên cứu.
+                3. Các kết quả, số liệu quan trọng nhất (tỷ lệ %, p-value, OR, RR...).
+                4. Kết luận chính của tác giả.
+                Tuyệt đối không bịa số liệu. Trình bày dưới dạng gạch đầu dòng ngắn gọn.
+                """
+                full_prop = f"Tài liệu gốc:\n{combined_text}\n\nYêu cầu: {extract_prompt}"
+                response = model.generate_content(full_prop, generation_config=generation_config)
                 
+                # Cộng dồn dữ liệu mới vào dữ liệu cũ
+                st.session_state["ngan_hang_y_van"] += f"\n\n{response.text}"
+                st.rerun() # Tải lại trang để cập nhật ô Text Area
+                
+    st.write("---")
+    
+    # --- TRẠM TRUNG CHUYỂN DỮ LIỆU TỪ TAB 2 SANG TAB 1 ---
+    st.markdown("### 🌉 Bộ nhớ Số liệu của riêng bạn (Dành cho phần Bàn luận)")
+    my_research_data = st.text_area(
+        "Copy các bảng tần số, tỷ lệ % hoặc p-value của anh từ Tab 2 và dán vào đây:", 
+        placeholder="VD: Nhập 'Tỷ lệ nam/nữ là 1.42:1' hoặc dán nguyên cái bảng Crosstabs vào đây...",
+        height=150
+    )
+    
+    st.subheader("📝 Lệnh viết nhanh cho luận văn (Bấm là chạy):")
+    
+    citation_rules = """
+    QUY TẮC TRÍCH DẪN & HÀN LÂM BẮT BUỘC:
+    1. Mọi khẳng định số liệu phải có trích dẫn số trong ngoặc vuông (VD: [1]).
+    2. Chỉ sử dụng dữ liệu từ 'NGÂN HÀNG Y VĂN' để phân tích, không tự bịa.
+    3. Cuối đoạn, BẮT BUỘC liệt kê "Tài liệu tham khảo".
+    """
+
+    col1, col2, col3, col4, col5 = st.columns(5)
+    
+    # LƯU Ý QUAN TRỌNG: Nguồn dữ liệu giờ đây là st.session_state["ngan_hang_y_van"] chứ không phải file PDF nữa!
+    
+    with col1:
+        if st.button("Viết Đặt vấn đề"):
+            with st.spinner("AI đang viết..."):
+                prompt = f"Dựa trên Ngân hàng y văn, viết 'Đặt vấn đề' luận văn CKI Dược lâm sàng. {citation_rules}"
+                full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
+                response = model.generate_content(full_prop, generation_config=generation_config)
+                st.markdown(response.text)
+                
+    with col2:
+        if st.button("Viết Tổng quan"):
+            with st.spinner("AI đang viết..."):
+                prompt = f"Viết phần tổng quan y văn chuyên sâu, tổng hợp các kết quả từ Ngân hàng y văn. {citation_rules}"
+                full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
+                response = model.generate_content(full_prop, generation_config=generation_config)
+                st.markdown(response.text)
+                
+    with col3:
+        if st.button("Viết Phương pháp NC"):
+            with st.spinner("AI đang thiết kế Chương 2..."):
+                prompt = f"""
+                Viết "Chương 2. ĐỐI TƯỢNG VÀ PHƯƠNG PHÁP NGHIÊN CỨU".
+                Mục 2.2.3 BẮT BUỘC kẻ Bảng Markdown 5 cột (TT | Tên chỉ tiêu | Định nghĩa | Phân loại | Kỹ thuật thu thập). 
+                {citation_rules}
+                """
+                full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
+                response = model.generate_content(full_prop, generation_config=generation_config)
+                st.markdown(response.text)
+                
+    with col4:
+        if st.button("Viết Bàn luận (Có so sánh)"):
+            if not my_research_data:
+                st.warning("Anh cần nhập số liệu của mình vào ô 'Bộ nhớ Số liệu của riêng bạn' trước khi chạy Bàn luận!")
+            else:
+                with st.spinner("AI đang phân tích chéo số liệu của anh với Ngân hàng Y văn..."):
+                    prompt = f"""
+                    KẾT QUẢ NGHIÊN CỨU THỰC TẾ CỦA TÔI:
+                    {my_research_data}
+                    
+                    YÊU CẦU: Lấy số liệu của TÔI làm trung tâm. Đối chiếu (cao hơn, thấp hơn) với các tác giả trong NGÂN HÀNG Y VĂN. Giải thích nguyên nhân y khoa. {citation_rules}
+                    """
+                    full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
+                    response = model.generate_content(full_prop, generation_config=generation_config)
+                    st.markdown(response.text)
+                
+    with col5:
+        if st.button("Trích dẫn Vancouver"):
+            with st.spinner("AI đang lập danh mục..."):
+                prompt = f"Lập danh mục tài liệu tham khảo Vancouver từ các tác giả trong Ngân hàng y văn."
+                full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
+                response = model.generate_content(full_prop, generation_config=generation_config)
+                st.markdown(response.text)
+    
+    st.write("---")
+    custom_prompt = st.text_area("Hoặc tự nhập yêu cầu riêng của anh cho Ngân hàng Y văn:")
+    if st.button("Chạy lệnh tùy chỉnh"):
+        if custom_prompt:
+            with st.spinner("AI đang xử lý..."):
+                anti_hallucination = "\nLƯU Ý NGHIÊM NGẶT: Không tự bịa thông tin. Trích dẫn số liệu cụ thể."
+                full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {custom_prompt}\n{anti_hallucination}\n{citation_rules}"
+                response = model.generate_content(full_prop, generation_config=generation_config)
+                st.markdown(response.text)
+        else:
+            st.warning("Vui lòng nhập yêu cầu!")                
         with st.expander("📂 Xem danh sách các file PDF đã tải lên"):
             for f in uploaded_files:
                 st.text(f"- {f.name} ({round(f.size / 1024, 1)} KB)")
