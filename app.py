@@ -103,23 +103,26 @@ try:
         temperature=0.1,
     )
     
-    # 3. HÀM BỌC AN TOÀN: CHỐNG QUÁ TẢI API MIỄN PHÍ
-    def safe_generate_content(prompt, config=generation_config, max_retries=3):
+    # 3. HÀM BỌC AN TOÀN: CHỐNG QUÁ TẢI API TỰ ĐỘNG (GIAO DIỆN CHUYÊN NGHIỆP)
+    def safe_generate_content(prompt, config=generation_config, max_retries=10):
         for attempt in range(max_retries):
             try:
                 return model.generate_content(prompt, generation_config=config)
             except ResourceExhausted:
                 if attempt < max_retries - 1:
-                    wait_time = 8 * (attempt + 1)
-                    st.warning(f"⚠️ API đang bận (Chạm ngưỡng giới hạn free tier). Hệ thống đang tự động nghỉ {wait_time} giây rồi thử lại lần {attempt + 2}...")
-                    time.sleep(wait_time)
-                else:
-                    st.error("❌ Đã quá tải giới hạn của Google API. Anh vui lòng đợi 1-2 phút rồi hãy bấm lại nhé!")
-                    raise
+                    wait_time = 15 # Nghỉ 15 giây mỗi lần nghẽn
+                    # Hiện thông báo màu vàng lịch sự
+                    status_msg = st.warning(f"⏳ Trạm máy chủ Google đang bận. Ứng dụng tự động nghỉ {wait_time} giây và chạy lại (Lần thử {attempt + 2}/10)...")
                     
-except Exception as e:
-    st.error("Chưa cấu hình API Key trong Streamlit Secrets. Vui lòng thêm khóa vào mục cài đặt của ứng dụng.")
-    st.stop()
+                    time.sleep(wait_time)
+                    status_msg.empty() # Tự động xóa dòng thông báo này đi để giao diện luôn sạch đẹp
+                else:
+                    # Đợi 10 lần (~3 phút) không được thì báo nhẹ nhàng, không văng lỗi đỏ
+                    st.info("⏱️ Dữ liệu đầu vào đợt này quá lớn nên máy chủ chưa kịp xử lý. Anh vui lòng tải lại trang (F5) và chia nhỏ số file ra nhé!")
+                    return None
+            except Exception as e:
+                st.warning(f"⚠️ Có gián đoạn kết nối: {e}")
+                return None
 
 # ==========================================
 # CÁC TAB CHỨC NĂNG
