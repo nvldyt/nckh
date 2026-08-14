@@ -85,7 +85,6 @@ try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
     
-    # 1. NÂNG CẤP SYSTEM PROMPT: ÉP VĂN PHONG KHÔ KHAN, CHUYÊN SÂU
     system_prompt = """
     Bạn là một chuyên gia dược lâm sàng, thống kê y học và biên tập viên luận văn y khoa cấp cao. 
     Quy tắc làm việc của bạn:
@@ -97,13 +96,9 @@ try:
     """
     
     model = genai.GenerativeModel("gemini-3.6-flash", system_instruction=system_prompt)
+    generation_config = genai.types.GenerationConfig(temperature=0.1)
     
-    # 2. THIẾT LẬP NHIỆT ĐỘ (TEMPERATURE) = 0.1 ĐỂ DIỆT SỰ SÁNG TẠO/BAY BỔNG
-    generation_config = genai.types.GenerationConfig(
-        temperature=0.1,
-    )
-    
-    # 3. HÀM BỌC AN TOÀN: CHỐNG QUÁ TẢI API TỰ ĐỘNG (GIAO DIỆN CHUYÊN NGHIỆP)
+    # HÀM BỌC AN TOÀN: Tự động né lỗi quá tải API (Phiên bản chuyên nghiệp, không văng lỗi đỏ)
     def safe_generate_content(prompt, config=generation_config, max_retries=10):
         for attempt in range(max_retries):
             try:
@@ -111,18 +106,26 @@ try:
             except ResourceExhausted:
                 if attempt < max_retries - 1:
                     wait_time = 15 # Nghỉ 15 giây mỗi lần nghẽn
-                    # Hiện thông báo màu vàng lịch sự
                     status_msg = st.warning(f"⏳ Trạm máy chủ Google đang bận. Ứng dụng tự động nghỉ {wait_time} giây và chạy lại (Lần thử {attempt + 2}/10)...")
                     
                     time.sleep(wait_time)
-                    status_msg.empty() # Tự động xóa dòng thông báo này đi để giao diện luôn sạch đẹp
+                    status_msg.empty() # Tự động xóa thông báo để giao diện sạch sẽ
                 else:
-                    # Đợi 10 lần (~3 phút) không được thì báo nhẹ nhàng, không văng lỗi đỏ
                     st.info("⏱️ Dữ liệu đầu vào đợt này quá lớn nên máy chủ chưa kịp xử lý. Anh vui lòng tải lại trang (F5) và chia nhỏ số file ra nhé!")
                     return None
             except Exception as e:
                 st.warning(f"⚠️ Có gián đoạn kết nối: {e}")
                 return None
+
+# 👇 ĐÂY LÀ ĐOẠN LÚC NÃY BỊ MẤT KHIẾN CODE BÁO LỖI 👇
+except Exception as e:
+    st.error("Chưa cấu hình API Key trong Streamlit Secrets. Vui lòng thêm khóa vào mục cài đặt của ứng dụng.")
+    st.stop()
+
+# ==========================================
+# CÁC TAB CHỨC NĂNG
+# ==========================================
+tab1, tab2 = st.tabs(["📄 Đọc Tài liệu & Viết Luận văn (PDF)", "📊 Phân tích Số liệu Bệnh án (Excel)"])
 
 # ==========================================
 # CÁC TAB CHỨC NĂNG
