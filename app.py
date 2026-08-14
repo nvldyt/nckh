@@ -576,22 +576,33 @@ with tab2:
             if not vars_desc:
                 st.warning("Vui lòng chọn ít nhất 1 biến để phân tích!")
             else:
-                for var in vars_desc:
-                    with st.spinner(f"AI đang tính toán tần số cho biến '{var}'..."):
-                        freq_table = df[var].value_counts().to_string()
-                        total = len(df[var].dropna())
-                        
-                        prompt = f"""
-                        Dữ liệu đếm thực tế của biến '{var}': {freq_table} (Tổng: {total}).
-                        Yêu cầu: 1. Vẽ bảng SPSS (Phân loại, n, %). 2. Viết nhận xét y khoa chuyên sâu, khô khan.
-                        """
-                        response = safe_generate_content(prompt)
-                        
-                        if response:
-                            st.subheader(f"► Phân tích biến: {var}")
-                            st.markdown(response.text)
-                            st.write("---")
-                        time.sleep(3)
+                progress_bar = st.progress(0, text="Chuẩn bị...")
+                total = len(vars_desc)
+                for i, var in enumerate(vars_desc, start=1):
+                    progress_bar.progress(i / total, text=f"Đang xử lý biến {i}/{total}: {var}")
+                    
+                    freq_table = df[var].value_counts().to_string()
+                    total_n = len(df[var].dropna())
+                    
+                    prompt = f"""
+                    Dữ liệu đếm thực tế của biến '{var}': {freq_table} (Tổng: {total_n}).
+                    Yêu cầu: 1. Vẽ bảng SPSS (Phân loại, n, %). 2. Viết nhận xét y khoa chuyên sâu, khô khan.
+                    """
+                    response = safe_generate_content(
+                        prompt,
+                        config=generation_config_extract,
+                        max_retries=3,
+                        use_model=model_extract
+                    )
+                    
+                    if response:
+                        st.subheader(f"► Phân tích biến: {var}")
+                        st.markdown(response.text)
+                        st.write("---")
+                    else:
+                        st.error(f"⚠️ Không lấy được kết quả cho biến '{var}' (quá tải API sau 3 lần thử).")
+                
+                progress_bar.empty()
         st.write("---")
         
         # --- BẢNG CHÉO ---
@@ -605,24 +616,34 @@ with tab2:
             if not indep_cols:
                 st.warning("Vui lòng chọn ít nhất 1 biến độc lập (hàng) ở ô phía trên!")
             else:
-                for var in indep_cols:
-                    if var == target_col:
-                        continue
-                        
-                    with st.spinner(f"AI đang xử lý bảng chéo giữa '{var}' và '{target_col}'..."):
-                        crosstab_df = pd.crosstab(df[var], df[target_col])
-                        
-                        prompt = f"""
-                        Bảng Crosstabs thực tế giữa '{var}' và '{target_col}':\n{crosstab_df.to_string()}\n
-                        Yêu cầu: 1. Trình bày bảng khoa học (% hàng/cột). 2. Nhận xét chuyên sâu.
-                        """
-                        response = safe_generate_content(prompt)
-                        
-                        if response:
-                            st.subheader(f"► Mối liên quan giữa {var} và {target_col}")
-                            st.markdown(response.text)
-                            st.write("---")
-                        time.sleep(3)
+                bien_hop_le = [v for v in indep_cols if v != target_col]
+                progress_bar = st.progress(0, text="Chuẩn bị...")
+                total = len(bien_hop_le)
+                
+                for i, var in enumerate(bien_hop_le, start=1):
+                    progress_bar.progress(i / total, text=f"Đang xử lý bảng chéo {i}/{total}: {var} × {target_col}")
+                    
+                    crosstab_df = pd.crosstab(df[var], df[target_col])
+                    
+                    prompt = f"""
+                    Bảng Crosstabs thực tế giữa '{var}' và '{target_col}':\n{crosstab_df.to_string()}\n
+                    Yêu cầu: 1. Trình bày bảng khoa học (% hàng/cột). 2. Nhận xét chuyên sâu.
+                    """
+                    response = safe_generate_content(
+                        prompt,
+                        config=generation_config_extract,
+                        max_retries=3,
+                        use_model=model_extract
+                    )
+                    
+                    if response:
+                        st.subheader(f"► Mối liên quan giữa {var} và {target_col}")
+                        st.markdown(response.text)
+                        st.write("---")
+                    else:
+                        st.error(f"⚠️ Không lấy được kết quả cho '{var} × {target_col}' (quá tải API sau 3 lần thử).")
+                
+                progress_bar.empty()
         st.write("---")
         
         # --- PHÂN TÍCH KHÁC ---
