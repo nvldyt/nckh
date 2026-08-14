@@ -86,11 +86,13 @@ try:
     system_prompt = """
     Bạn là một chuyên gia dược lâm sàng, thống kê y học và biên tập viên luận văn y khoa cấp cao. 
     Quy tắc làm việc của bạn:
-    1. VĂN PHONG (QUAN TRỌNG NHẤT): Tuyệt đối KHÔNG sử dụng từ ngữ hoa mỹ, bay bổng, sáo rỗng, hoặc mang tính cảm xúc. Văn phong phải cực kỳ khô khan, trực diện, logic chặt chẽ và đậm chất khoa học.
-    2. TÍNH CHUYÊN SÂU: Sử dụng chính xác 100% các thuật ngữ chuyên ngành. Tập trung vào bằng chứng (Evidence-based), cơ sở sinh lý bệnh, cơ chế dược lý, số liệu dịch tễ và ý nghĩa lâm sàng lâm sàng (p-value, OR, RR...). Không viết chung chung.
-    3. Viết nhận xét: Phải so sánh kết quả của bệnh nhân với các nghiên cứu trong tài liệu PDF (nếu có) hoặc với các hướng dẫn điều trị chuẩn.
-    4. Trích dẫn: Mỗi khi đưa ra khẳng định, bắt buộc phải kèm theo [Tên tác giả, Năm]. 
-    5. Bảng biểu: Kết quả phải được trình bày dưới dạng bảng Markdown chuẩn.
+   Bạn là một chuyên gia dược lâm sàng, thống kê y học và biên tập viên luận văn y khoa cấp cao. 
+    Quy tắc làm việc của bạn:
+    1. VĂN PHONG (QUAN TRỌNG NHẤT): Tuyệt đối KHÔNG sử dụng từ ngữ hoa mỹ, bay bổng, sáo rỗng. Văn phong phải cực kỳ khô khan, trực diện, logic chặt chẽ.
+    2. TÍNH CHUYÊN SÂU: Sử dụng chính xác 100% thuật ngữ chuyên ngành. Tập trung vào bằng chứng (Evidence-based), cơ sở sinh lý bệnh, cơ chế dược lý, số liệu dịch tễ.
+    3. CHỐNG BỊA ĐẶT TUYỆT ĐỐI (ANTI-HALLUCINATION): TUYỆT ĐỐI KHÔNG tự bịa số liệu, kết quả hay bất kỳ thông tin nào. Nếu tài liệu đầu vào KHÔNG có thông tin, BẮT BUỘC phải trả lời: 'Tài liệu không đề cập'. KHÔNG ĐƯỢC lấy dữ liệu bên ngoài Internet để đắp vào.
+    4. Trích dẫn: Mỗi khẳng định bắt buộc kèm theo [Tên tác giả, Năm]. 
+    5. Bảng biểu: Trình bày dưới dạng bảng Markdown chuẩn.
     """
     
     model = genai.GenerativeModel("gemini-3.6-flash", system_instruction=system_prompt)
@@ -137,10 +139,10 @@ with tab1:
         st.subheader("📝 Lệnh viết nhanh cho luận văn (Bấm là chạy):")
         
         citation_rules = """
-        QUY TẮC TRÍCH DẪN & HÀN LÂM BẮT BUỘC:
-        1. Bất kỳ câu khẳng định số liệu, dịch tễ, hay kết luận y khoa nào cũng PHẢI có trích dẫn số trong ngoặc vuông (VD: [1], [2, 3]) ở cuối câu.
-        2. Các số trích dẫn phải theo đúng thứ tự xuất hiện liên tục trong đoạn văn bản. Không nhảy cóc số.
-        3. Văn phong tuyệt đối không bay bổng. Đi thẳng vào phân tích cơ chế, số liệu và ý nghĩa lâm sàng.
+        QUY TẮC TRÍCH DẪN, HÀN LÂM & CHỐNG BỊA ĐẶT BẮT BUỘC:
+        1. Bất kỳ câu khẳng định số liệu, dịch tễ nào cũng PHẢI có trích dẫn số trong ngoặc vuông (VD: [1], [2, 3]) ở cuối câu.
+        2. Các số trích dẫn phải theo thứ tự xuất hiện liên tục.
+        3. KIỂM CHỨNG SỐ LIỆU: Khi trích dẫn các số liệu quan trọng (tỷ lệ %, p-value...), yêu cầu giữ nguyên văn ý nghĩa của bản gốc. Nếu không có số liệu, ghi rõ "Các tài liệu cung cấp không đề cập".
         4. Cuối đoạn văn bản, BẮT BUỘC liệt kê "Tài liệu tham khảo" chi tiết tương ứng với các số đã dùng.
         """
 
@@ -201,10 +203,14 @@ with tab1:
         
         st.write("---")
         custom_prompt = st.text_area("Hoặc tự nhập yêu cầu riêng của anh cho toàn bộ tập tài liệu:")
-        if st.button("Chạy lệnh tùy chỉnh"):
+       if st.button("Chạy lệnh tùy chỉnh"):
             if custom_prompt:
                 with st.spinner("AI đang xử lý yêu cầu..."):
-                    full_prop = f"Cơ sở dữ liệu:\n{combined_text}\n\nYêu cầu: {custom_prompt}\n{citation_rules}"
+                    # Tự động nhúng Lớp 3 và Lớp 4 vào mọi yêu cầu tự do của anh
+                    anti_hallucination_spell = """
+                    \nLƯU Ý NGHIÊM NGẶT: Tuyệt đối không tự bịa thông tin. Nếu trong tài liệu PDF KHÔNG có số liệu hoặc thông tin tôi hỏi, bắt buộc phải trả lời: 'Tài liệu không đề cập'. Yêu cầu BẮT BUỘC trích dẫn lại NGUYÊN VĂN (Copy - Paste) câu văn chứa số liệu đó trong tài liệu PDF gốc và đặt trong dấu ngoặc kép ("...") để tôi kiểm chứng.
+                    """
+                    full_prop = f"Cơ sở dữ liệu:\n{combined_text}\n\nYêu cầu: {custom_prompt}\n{anti_hallucination_spell}\n{citation_rules}"
                     response = model.generate_content(full_prop, generation_config=generation_config)
                     st.markdown(response.text)
             else:
