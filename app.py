@@ -75,6 +75,9 @@ st.markdown(custom_css, unsafe_allow_html=True)
 
 st.title("HỖ TRỢ NGHIÊN CỨU KHOA HỌC")
 
+import time
+from google.api_core.exceptions import ResourceExhausted
+
 # ==========================================
 # CẤU HÌNH API GEMINI 3.6 FLASH
 # ==========================================
@@ -86,12 +89,10 @@ try:
     system_prompt = """
     Bạn là một chuyên gia dược lâm sàng, thống kê y học và biên tập viên luận văn y khoa cấp cao. 
     Quy tắc làm việc của bạn:
-   Bạn là một chuyên gia dược lâm sàng, thống kê y học và biên tập viên luận văn y khoa cấp cao. 
-    Quy tắc làm việc của bạn:
     1. VĂN PHONG (QUAN TRỌNG NHẤT): Tuyệt đối KHÔNG sử dụng từ ngữ hoa mỹ, bay bổng, sáo rỗng. Văn phong phải cực kỳ khô khan, trực diện, logic chặt chẽ.
     2. TÍNH CHUYÊN SÂU: Sử dụng chính xác 100% thuật ngữ chuyên ngành. Tập trung vào bằng chứng (Evidence-based), cơ sở sinh lý bệnh, cơ chế dược lý, số liệu dịch tễ.
     3. CHỐNG BỊA ĐẶT TUYỆT ĐỐI (ANTI-HALLUCINATION): TUYỆT ĐỐI KHÔNG tự bịa số liệu, kết quả hay bất kỳ thông tin nào. Nếu tài liệu đầu vào KHÔNG có thông tin, BẮT BUỘC phải trả lời: 'Tài liệu không đề cập'. KHÔNG ĐƯỢC lấy dữ liệu bên ngoài Internet để đắp vào.
-    4. Trích dẫn: Mỗi khẳng định bắt buộc kèm theo [Tên tác giả, Năm]. 
+    4. Trích dẫn: Mỗi khẳng định bắt buộc kèm theo trích dẫn số [1], [2]. Tuyệt đối KHÔNG dùng [Tên tác giả, Năm].
     5. Bảng biểu: Trình bày dưới dạng bảng Markdown chuẩn.
     """
     
@@ -102,6 +103,20 @@ try:
         temperature=0.1,
     )
     
+    # 3. HÀM BỌC AN TOÀN: CHỐNG QUÁ TẢI API MIỄN PHÍ
+    def safe_generate_content(prompt, config=generation_config, max_retries=3):
+        for attempt in range(max_retries):
+            try:
+                return model.generate_content(prompt, generation_config=config)
+            except ResourceExhausted:
+                if attempt < max_retries - 1:
+                    wait_time = 8 * (attempt + 1)
+                    st.warning(f"⚠️ API đang bận (Chạm ngưỡng giới hạn free tier). Hệ thống đang tự động nghỉ {wait_time} giây rồi thử lại lần {attempt + 2}...")
+                    time.sleep(wait_time)
+                else:
+                    st.error("❌ Đã quá tải giới hạn của Google API. Anh vui lòng đợi 1-2 phút rồi hãy bấm lại nhé!")
+                    raise
+                    
 except Exception as e:
     st.error("Chưa cấu hình API Key trong Streamlit Secrets. Vui lòng thêm khóa vào mục cài đặt của ứng dụng.")
     st.stop()
