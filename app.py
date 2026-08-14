@@ -203,7 +203,10 @@ with tab1:
         
         st.write("---")
         custom_prompt = st.text_area("Hoặc tự nhập yêu cầu riêng của anh cho toàn bộ tập tài liệu:")
-       if st.button("Chạy lệnh tùy chỉnh"):
+       st.write("---")
+        custom_prompt = st.text_area("Hoặc tự nhập yêu cầu riêng của anh cho toàn bộ tập tài liệu:")
+        
+        if st.button("Chạy lệnh tùy chỉnh"):
             if custom_prompt:
                 with st.spinner("AI đang xử lý yêu cầu..."):
                     # Tự động nhúng Lớp 3 và Lớp 4 vào mọi yêu cầu tự do của anh
@@ -219,7 +222,6 @@ with tab1:
         with st.expander("📂 Xem danh sách các file PDF đã tải lên"):
             for f in uploaded_files:
                 st.text(f"- {f.name} ({round(f.size / 1024, 1)} KB)")
-
 # ----------------------------------------------------
 # TAB 2: PHÂN TÍCH SỐ LIỆU TỪ EXCEL (MÔ PHỎNG SPSS)
 # ----------------------------------------------------
