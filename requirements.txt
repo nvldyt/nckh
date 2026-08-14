@@ -8,3 +8,4 @@ langchain-google-genai
 langchain-community
 langchain-text-splitters
 scikit-learn
+langchain-text-splitters
