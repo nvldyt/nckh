@@ -121,12 +121,12 @@ with tab1:
     if "ngan_hang_y_van" not in st.session_state:
         st.session_state["ngan_hang_y_van"] = ""
         
-    st.markdown("### 🏦 Ngân hàng Y văn Tổng hợp (Memory)")
+    st.markdown("### 🏦 Tổng hợp tóm tắt các nghiên cứu")
     st.info("💡 Mẹo: Tải từng đợt 2-3 bài báo, bấm nút 'Rút trích' để AI hút số liệu lưu vào đây. Sau đó xóa bài cũ, tải bài mới lên rút trích tiếp cho đến khi đủ tài liệu.")
     
     # Ô chứa dữ liệu cộng dồn
     st.session_state["ngan_hang_y_van"] = st.text_area(
-        "Dữ liệu tinh túy đã được rút trích từ các bài báo (Có thể tự chỉnh sửa):", 
+        "Dữ liệu trích xuất từ các nghiên cứu (Có thể tự bổ sung):", 
         st.session_state["ngan_hang_y_van"], 
         height=200
     )
@@ -134,7 +134,7 @@ with tab1:
     st.write("---")
     
     uploaded_files = st.file_uploader(
-        "Tải lên tài liệu nghiên cứu (PDF) để rút trích:", 
+        "Tải lên tài liệu nghiên cứu (PDF) để AI đọc:", 
         type="pdf", 
         accept_multiple_files=True, 
         key="pdf_uploader"
@@ -173,7 +173,7 @@ with tab1:
     # --- TRẠM TRUNG CHUYỂN DỮ LIỆU TỪ TAB 2 SANG TAB 1 ---
     st.markdown("### 🌉 Bộ nhớ Số liệu của riêng bạn (Dành cho phần Bàn luận)")
     my_research_data = st.text_area(
-        "Copy các bảng tần số, tỷ lệ % hoặc p-value của anh từ Tab 2 và dán vào đây:", 
+        "Copy các bảng tần số, tỷ lệ % hoặc p-value của anh từ Tab 2 vào để viết bàn luận:", 
         placeholder="VD: Nhập 'Tỷ lệ nam/nữ là 1.42:1' hoặc dán nguyên cái bảng Crosstabs vào đây...",
         height=150
     )
@@ -226,7 +226,7 @@ with tab1:
                     st.markdown(response.text)
                 
     with col4:
-        if st.button("Viết Bàn luận toàn diện (Có tiêu đề)"):
+        if st.button("Viết Bàn luận toàn diện"):
             if not my_research_data:
                 st.warning("Anh cần nhập số liệu của mình vào ô 'Bộ nhớ Số liệu' trước!")
             else:
@@ -288,8 +288,8 @@ with tab1:
                     st.markdown(response.text)
     
     st.write("---")
-    custom_prompt = st.text_area("Hoặc tự nhập yêu cầu riêng của anh cho Ngân hàng Y văn:")
-    if st.button("Chạy lệnh tùy chỉnh Y văn"):
+    custom_prompt = st.text_area("Nhập câu lệnh khác ở đây:")
+    if st.button("Chạy lệnh"):
         if custom_prompt:
             with st.spinner("AI đang xử lý..."):
                 anti_hallucination = "\nLƯU Ý NGHIÊM NGẶT: Không tự bịa thông tin. Trích dẫn số liệu cụ thể."
@@ -305,7 +305,7 @@ with tab1:
 # TAB 2: PHÂN TÍCH SỐ LIỆU TỪ EXCEL (MÔ PHỎNG SPSS)
 # ----------------------------------------------------
 with tab2:
-    st.header("📊 Phân tích thống kê & Kiểm định (Chuẩn SPSS từ Excel)")
+    st.header("📊 Phân tích thống kê & Kiểm định")
     
     excel_file = st.file_uploader("Tải lên file số liệu bệnh án (Excel .xlsx)", type=["xlsx", "xls"], key="excel_uploader")
     
@@ -321,8 +321,8 @@ with tab2:
         st.write("---")
         st.subheader("🛠️ CÔNG CỤ PHÂN TÍCH CHUYÊN SÂU")
         
-        # --- TÍNH NĂNG 1: THỐNG KÊ TẦN SỐ (AUTO FREQUENCIES) ---
-        st.markdown("### 1. Thống kê mô tả (Auto Frequencies)")
+        # --- TÍNH NĂNG 1: THỐNG KÊ TẦN SỐ ---
+        st.markdown("### 1. Thống kê mô tả")
         st.info("💡 Mẹo: Chọn nhiều biến cùng lúc để AI tự động đếm tần số và nhận xét hàng loạt. KHÔNG chọn biến định danh (Họ tên, Số bệnh án...).")
         
         vars_desc = st.multiselect("🏷️ Chọn TẤT CẢ các biến cần thống kê (VD: Giới tính, Nhóm tuổi, Mức độ bệnh...):", columns, key="auto_var_desc")
@@ -349,7 +349,7 @@ with tab2:
                         st.write("---") # Đường kẻ ngang phân cách
         st.write("---")
         
-        st.markdown("### 2. Bảng chéo & Phân tích mối liên quan (Auto Crosstabs)")
+        st.markdown("### 2. Bảng chéo & Phân tích mối liên quan")
         st.info("💡 Mẹo: Chọn 1 Biến phụ thuộc (Cột) làm gốc. Sau đó chọn nhiều Biến độc lập (Hàng) để AI tự động chạy hàng loạt các bảng. KHÔNG chọn biến định danh (Họ tên, Số bệnh án...).")
         
         target_col = st.selectbox("🎯 Chọn Biến Phụ thuộc / Cột (VD: Mức độ bệnh, Kết quả điều trị):", columns, key="auto_target")
