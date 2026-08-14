@@ -200,10 +200,8 @@ with tab1:
                     full_prop = f"Cơ sở dữ liệu:\n{combined_text}\n\nYêu cầu: {prompt}"
                     response = model.generate_content(full_prop, generation_config=generation_config)
                     st.markdown(response.text)
-        
        st.write("---")
-        custom_prompt = st.text_area("Hoặc tự nhập yêu cầu riêng của anh cho toàn bộ tập tài liệu:")
-        
+        custom_prompt = st.text_area("Hoặc tự nhập yêu cầu riêng của anh cho toàn bộ tập tài liệu:")      
         if st.button("Chạy lệnh tùy chỉnh"):
             if custom_prompt:
                 with st.spinner("AI đang xử lý yêu cầu..."):
