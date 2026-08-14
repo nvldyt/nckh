@@ -177,7 +177,7 @@ with tab1:
                 Tuyệt đối không bịa số liệu. Trình bày dưới dạng gạch đầu dòng ngắn gọn.
                 """
                 full_prop = f"Tài liệu gốc:\n{combined_text}\n\nYêu cầu: {extract_prompt}"
-                response = model.generate_content(full_prop, generation_config=generation_config)
+                response = safe_generate_content(full_prop)
                 
                 # Cộng dồn dữ liệu mới vào dữ liệu cũ
                 st.session_state["ngan_hang_y_van"] += f"\n\n{response.text}"
@@ -214,7 +214,7 @@ with tab1:
             with st.spinner("AI đang viết..."):
                 prompt = f"Dựa trên Ngân hàng y văn, viết 'Đặt vấn đề' luận văn CKI Dược lâm sàng. Không dùng Heading 1 (#) để tránh chữ quá to, chỉ dùng Heading 3 (###). {citation_rules}"
                 full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
-                response = model.generate_content(full_prop, generation_config=generation_config)
+                response = safe_generate_content(full_prop)
                 with ket_qua_container:
                     st.markdown(response.text)
                 
@@ -223,7 +223,7 @@ with tab1:
             with st.spinner("AI đang viết..."):
                 prompt = f"Viết phần tổng quan y văn chuyên sâu, tổng hợp các kết quả từ Ngân hàng y văn. Không dùng Heading 1 (#). {citation_rules}"
                 full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
-                response = model.generate_content(full_prop, generation_config=generation_config)
+                response = safe_generate_content(full_prop)
                 with ket_qua_container:
                     st.markdown(response.text)
                 
@@ -236,7 +236,7 @@ with tab1:
                 {citation_rules}
                 """
                 full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
-                response = model.generate_content(full_prop, generation_config=generation_config)
+                response = safe_generate_content(full_prop)
                 with ket_qua_container:
                     st.markdown(response.text)
                 
@@ -262,7 +262,7 @@ with tab1:
                     {citation_rules}
                     """
                     full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
-                    response = model.generate_content(full_prop, generation_config=generation_config)
+                    response = safe_generate_content(full_prop)
                     with ket_qua_container:
                         st.markdown(response.text) 
                         
@@ -289,7 +289,7 @@ with tab1:
                     {citation_rules}
                     """
                     full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
-                    response = model.generate_content(full_prop, generation_config=generation_config)
+                    response = safe_generate_content(full_prop)
                     with ket_qua_container:
                         st.markdown(response.text)
                 
@@ -298,7 +298,7 @@ with tab1:
             with st.spinner("AI đang lập danh mục..."):
                 prompt = f"Lập danh mục tài liệu tham khảo Vancouver từ các tác giả trong Ngân hàng y văn. Không dùng Heading 1 (#)."
                 full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
-                response = model.generate_content(full_prop, generation_config=generation_config)
+                response = safe_generate_content(full_prop)
                 with ket_qua_container:
                     st.markdown(response.text)
     
@@ -309,7 +309,7 @@ with tab1:
             with st.spinner("AI đang xử lý..."):
                 anti_hallucination = "\nLƯU Ý NGHIÊM NGẶT: Không tự bịa thông tin. Trích dẫn số liệu cụ thể."
                 full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {custom_prompt}\n{anti_hallucination}\n{citation_rules}"
-                response = model.generate_content(full_prop, generation_config=generation_config)
+                response = safe_generate_content(full_prop)
                 st.markdown(response.text)
         else:
             st.warning("Vui lòng nhập yêu cầu!")                
