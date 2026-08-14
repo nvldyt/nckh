@@ -186,36 +186,43 @@ with tab1:
     2. Chỉ sử dụng dữ liệu từ 'NGÂN HÀNG Y VĂN' để phân tích, không tự bịa.
     3. Cuối đoạn, BẮT BUỘC liệt kê "Tài liệu tham khảo".
     """
-    # Chia làm 6 cột để tách biệt 2 tính năng Bàn luận
+    # Chia làm 6 cột để hiển thị nút bấm
     col1, col2, col3, col4, col5, col6 = st.columns(6)
+    
+    # TẠO MÀN HÌNH HIỂN THỊ KẾT QUẢ FULL TRANG BÊN DƯỚI NÚT BẤM
+    st.write("---")
+    ket_qua_container = st.container()
     
     with col1:
         if st.button("Viết Đặt vấn đề"):
             with st.spinner("AI đang viết..."):
-                prompt = f"Dựa trên Ngân hàng y văn, viết 'Đặt vấn đề' luận văn CKI Dược lâm sàng. {citation_rules}"
+                prompt = f"Dựa trên Ngân hàng y văn, viết 'Đặt vấn đề' luận văn CKI Dược lâm sàng. Không dùng Heading 1 (#) để tránh chữ quá to, chỉ dùng Heading 3 (###). {citation_rules}"
                 full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
                 response = model.generate_content(full_prop, generation_config=generation_config)
-                st.markdown(response.text)
+                with ket_qua_container:
+                    st.markdown(response.text)
                 
     with col2:
         if st.button("Viết Tổng quan"):
             with st.spinner("AI đang viết..."):
-                prompt = f"Viết phần tổng quan y văn chuyên sâu, tổng hợp các kết quả từ Ngân hàng y văn. {citation_rules}"
+                prompt = f"Viết phần tổng quan y văn chuyên sâu, tổng hợp các kết quả từ Ngân hàng y văn. Không dùng Heading 1 (#). {citation_rules}"
                 full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
                 response = model.generate_content(full_prop, generation_config=generation_config)
-                st.markdown(response.text)
+                with ket_qua_container:
+                    st.markdown(response.text)
                 
     with col3:
         if st.button("Phương pháp NC"):
             with st.spinner("AI đang thiết kế Chương 2..."):
                 prompt = f"""
-                Viết "Chương 2. ĐỐI TƯỢNG VÀ PHƯƠNG PHÁP NGHIÊN CỨU".
+                Viết "Chương 2. ĐỐI TƯỢNG VÀ PHƯƠNG PHÁP NGHIÊN CỨU". Không dùng Heading 1 (#).
                 Mục 2.2.3 BẮT BUỘC kẻ Bảng Markdown 5 cột (TT | Tên chỉ tiêu | Định nghĩa | Phân loại | Kỹ thuật thu thập). 
                 {citation_rules}
                 """
                 full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
                 response = model.generate_content(full_prop, generation_config=generation_config)
-                st.markdown(response.text)
+                with ket_qua_container:
+                    st.markdown(response.text)
                 
     with col4:
         if st.button("Viết Bàn luận"):
@@ -228,14 +235,15 @@ with tab1:
                     {my_research_data}
                     
                     YÊU CẦU: 
-                    1. CHỈ tập trung phân tích và bàn luận về số liệu của TÔI. 
+                    1. CHỈ tập trung phân tích và bàn luận về số liệu của TÔI. Không dùng Heading 1 (#).
                     2. Giải thích cơ chế sinh lý bệnh, dược lý, đặc điểm lâm sàng và nguyên nhân tại sao lại có những con số này.
                     3. KHÔNG cần so sánh với các tác giả khác ở phần này.
                     4. Văn phong hàn lâm, logic.
                     """
                     full_prop = f"Yêu cầu: {prompt}"
                     response = model.generate_content(full_prop, generation_config=generation_config)
-                    st.markdown(response.text)
+                    with ket_qua_container:
+                        st.markdown(response.text)
                     
     with col5:
         if st.button("So sánh NC liên quan"):
@@ -248,21 +256,23 @@ with tab1:
                     {my_research_data}
                     
                     YÊU CẦU: 
-                    1. Lấy số liệu của TÔI làm trung tâm. Đối chiếu trực tiếp (cao hơn, thấp hơn, tương đương) với số liệu của các tác giả trong NGÂN HÀNG Y VĂN.
+                    1. Lấy số liệu của TÔI làm trung tâm. Đối chiếu trực tiếp (cao hơn, thấp hơn, tương đương) với số liệu của các tác giả trong NGÂN HÀNG Y VĂN. Không dùng Heading 1 (#).
                     2. Giải thích sự khác biệt giữa nghiên cứu của tôi và của họ (do cỡ mẫu, tiêu chuẩn lựa chọn, phác đồ, thời gian...).
                     {citation_rules}
                     """
                     full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
                     response = model.generate_content(full_prop, generation_config=generation_config)
-                    st.markdown(response.text)
+                    with ket_qua_container:
+                        st.markdown(response.text)
                 
     with col6:
         if st.button("Trích dẫn TLTK"):
             with st.spinner("AI đang lập danh mục..."):
-                prompt = f"Lập danh mục tài liệu tham khảo Vancouver từ các tác giả trong Ngân hàng y văn."
+                prompt = f"Lập danh mục tài liệu tham khảo Vancouver từ các tác giả trong Ngân hàng y văn. Không dùng Heading 1 (#)."
                 full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
                 response = model.generate_content(full_prop, generation_config=generation_config)
-                st.markdown(response.text)
+                with ket_qua_container:
+                    st.markdown(response.text)
     
     st.write("---")
     custom_prompt = st.text_area("Hoặc tự nhập yêu cầu riêng của anh cho Ngân hàng Y văn:")
