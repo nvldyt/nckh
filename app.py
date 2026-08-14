@@ -249,7 +249,8 @@ with tab1:
                     full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
                     response = model.generate_content(full_prop, generation_config=generation_config)
                     with ket_qua_container:
-                        st.markdown(response.text)                    
+                        st.markdown(response.text) 
+                        
     with col5:
         if st.button("So sánh NC liên quan"):
             if not my_research_data:
