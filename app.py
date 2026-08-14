@@ -237,17 +237,19 @@ with tab1:
                     
                     YÊU CẦU TRÌNH BÀY (BẮT BUỘC TUÂN THỦ):
                     1. CHỈ SỬ DỤNG TRÍCH DẪN SỐ [1], [2]. TUYỆT ĐỐI KHÔNG DÙNG [Tên, Năm].
-                    2. CHIA BÀN LUẬN THÀNH CÁC TIỂU MỤC (Sử dụng ###). Không dùng Heading 1 hoặc 2.
-                    3. BẮT BUỘC viết thành các ĐOẠN VĂN HOÀN CHỈNH, mạch lạc. KHÔNG dùng gạch đầu dòng liệt kê số liệu.
-                    4. TRONG MỖI ĐOẠN VĂN: Nêu số liệu của tôi -> Giải thích cơ chế y khoa -> So sánh với y văn (dùng số trích dẫn).
-                    5. Văn phong hàn lâm, logic.
+                    2. CHIA BÀN LUẬN THÀNH CÁC TIÊU ĐỀ PHỤ (TIỂU MỤC) CHUẨN XÁC DỰA TRÊN SỐ LIỆU ĐÃ CUNG CẤP. Sử dụng định dạng Heading 3 (ví dụ: ### 4.1. Đặc điểm bệnh nhân và phẫu thuật, ### 4.2. Thực trạng sử dụng kháng sinh, ### 4.3. Kết quả điều trị và so sánh...). Tuyệt đối không dùng Heading 1 hoặc 2.
+                    3. Dưới mỗi tiêu đề, BẮT BUỘC viết thành các ĐOẠN VĂN HOÀN CHỈNH, mạch lạc, liên tục. TUYỆT ĐỐI KHÔNG dùng dạng liệt kê gạch đầu dòng (bullet points) để mô tả số liệu.
+                    4. TRONG MỖI ĐOẠN VĂN BÀN LUẬN, phải kết hợp nhịp nhàng theo đúng cấu trúc:
+                       - Nêu số liệu thực tế của tôi.
+                       - Bàn luận và giải thích nguyên nhân y khoa (cơ chế, đặc thù tại viện).
+                       - Lồng ghép so sánh, đối chiếu trực tiếp (cao hơn, thấp hơn, tương đồng) với số liệu của các tác giả trong NGÂN HÀNG Y VĂN ngay trong cùng đoạn văn đó.
+                    5. Văn phong chuyên khảo y khoa hàn lâm, logic, không dùng từ ngữ cảm xúc.
                     {citation_rules}
                     """
                     full_prop = f"NGÂN HÀNG Y VĂN:\n{st.session_state['ngan_hang_y_van']}\n\nYêu cầu: {prompt}"
                     response = model.generate_content(full_prop, generation_config=generation_config)
                     with ket_qua_container:
-                        st.markdown(response.text)
-                    
+                        st.markdown(response.text)                    
     with col5:
         if st.button("So sánh NC liên quan"):
             if not my_research_data:
