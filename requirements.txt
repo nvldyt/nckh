@@ -8,3 +8,4 @@ langchain-community
 langchain-huggingface
 langchain-text-splitters
 scikit-learn
+sentence-transformers
