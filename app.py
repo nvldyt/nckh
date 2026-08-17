@@ -1838,10 +1838,18 @@ with tabs[3]:
                 st.write("### 🖨️ XEM & COPY CÁC BẢNG ĐÃ ĐƯỢC CHỌN (Sẵn sàng đưa vào Word)")
                 st.info("Bôi đen các bảng dưới đây và bấm Ctrl+C để copy, sau đó sang Word bấm Ctrl+V để dán.")
                 
+                # Xuất toàn bộ bảng (kể cả OPTIONAL) ra định dạng HTML để copy sang Word giữ nguyên ô cột
                 for d in st.session_state["selection_decisions"]:
-                    if d.priority.value in ["CORE", "SUPPORTING"] and d.result_id in st.session_state["saved_tables"]:
-                        st.markdown(f"**Bảng {d.recommended_order or '*'}. {d.title}**")
-                        st.dataframe(st.session_state["saved_tables"][d.result_id], use_container_width=True)
+                    if d.result_id in st.session_state["saved_tables"]:
+                        st.markdown(f"**Bảng {d.recommended_order or '*'}. {d.title}** *(Xếp loại: {d.priority.value})*")
+                        
+                        # Lấy dataframe từ bộ nhớ
+                        df_table = st.session_state["saved_tables"][d.result_id]
+                        
+                        # Chuyển thành bảng HTML chuẩn để copy dán Word không bị vỡ khung
+                        html_table = df_table.to_html(index=False, justify='center', border=1)
+                        st.markdown(html_table, unsafe_allow_html=True)
+                        st.write("<br>", unsafe_allow_html=True)
 
                 st.write("### 📖 Mạch kể chuyện (Result Story / Narrative Plan)")
                 st.json(st.session_state["narrative_plan"])
