@@ -1810,22 +1810,31 @@ Yêu cầu:
 # ------------------------------------------------------------
 with tabs[4]:
     st.header("🔎 Audit luận văn")
-
+ 
+    st.markdown(
+        '<div class="warning-box">⚠️ <b>Giới hạn cần biết:</b> các công cụ ở '
+        "tab này chỉ đưa ra <b>chỉ báo nguy cơ / gợi ý kiểm tra thêm</b>. "
+        "Không có công cụ nào (kể cả phần mềm thương mại) khẳng định chắc "
+        "chắn 100% một đoạn văn <i>không đạo văn</i> hay <i>không do AI "
+        "viết</i>. Đạo văn chỉ được đối chiếu với các nguồn đã nạp trong "
+        "Evidence Database, không phải toàn bộ internet.</div>",
+        unsafe_allow_html=True,
+    )
+ 
     audit_text = st.text_area("Dán đoạn văn cần kiểm tra", height=280, key="audit_text")
-    a1, a2, a3 = st.columns(3)
-    
-    # TẠO CONTAINER FULL TRANG Ở DƯỚI CÙNG ĐỂ HỨNG KẾT QUẢ
+ 
     st.write("---")
     ket_qua_audit_container = st.container()
-
+ 
+    st.subheader("Nhóm 1: Đối chiếu với bằng chứng & citation")
+    a1, a2, a3 = st.columns(3)
+ 
     with a1:
-        # Thêm use_container_width=True để nút bấm dàn đều trong cột
         if st.button("🔢 Audit số liệu", key="audit_numbers", use_container_width=True):
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
                 result = audit_generated_text(audit_text)
-                # Đẩy kết quả xuống container full trang
                 with ket_qua_audit_container:
                     st.markdown("### 🔢 Kết quả Audit Số liệu")
                     st.write("**Số xuất hiện trong nguồn (bằng chứng đã truy xuất gần nhất):**")
@@ -1837,7 +1846,7 @@ with tabs[4]:
                         st.write(result["suspicious_generated_numbers"])
                     else:
                         st.success("Không phát hiện số mới ngoài tập bằng chứng đang truy xuất.")
-
+ 
     with a2:
         if st.button("📚 Audit citation", key="audit_citation", use_container_width=True):
             if not audit_text.strip():
@@ -1850,7 +1859,7 @@ with tabs[4]:
                         st.error("Có citation invalid.")
                     else:
                         st.success("Không phát hiện citation invalid theo bộ kiểm tra hiện tại.")
-
+ 
     with a3:
         if st.button("🔍 Tìm trùng lặp nội bộ", key="audit_overlap", use_container_width=True):
             if not audit_text.strip():
@@ -1866,16 +1875,105 @@ with tabs[4]:
                             st.markdown(
                                 f"""**{item['file']} – trang {item['page']}**
 Similarity nội bộ: **{item['similarity']}**
-
+ 
 > {item['text']}
 """
                             )
-
+ 
+    st.write("---")
+    st.subheader("Nhóm 2: Ngôn ngữ, đạo văn diện rộng & chỉ báo AI-viết")
+    b1, b2, b3 = st.columns(3)
+ 
+    with b1:
+        if st.button("🔤 Kiểm tra chính tả & thuật ngữ", key="audit_spelling", use_container_width=True):
+            if not audit_text.strip():
+                st.warning("Chưa có văn bản.")
+            else:
+                with st.spinner("AI đang rà soát chính tả & thuật ngữ..."):
+                    response = spelling_and_terminology_check(audit_text)
+                with ket_qua_audit_container:
+                    st.markdown("### 🔤 Kết quả kiểm tra Chính tả & Thuật ngữ")
+                    if response:
+                        st.markdown(response)
+                    else:
+                        st.error("Không nhận được kết quả từ AI.")
+ 
+    with b2:
+        if st.button("📄 Kiểm tra nguy cơ đạo văn (mở rộng)", key="audit_plagiarism", use_container_width=True):
+            if not audit_text.strip():
+                st.warning("Chưa có văn bản.")
+            else:
+                with st.spinner("Đang đối chiếu n-gram và phân tích diễn đạt..."):
+                    overlaps = internal_overlap_audit(audit_text, top_k=5)
+                    response = plagiarism_style_review(audit_text, overlaps)
+                with ket_qua_audit_container:
+                    st.markdown("### 📄 Kết quả kiểm tra Nguy cơ đạo văn")
+                    st.caption(
+                        "Phạm vi đối chiếu: chỉ các nguồn đã nạp trong Evidence "
+                        "Database (Tab 1 + Tab 2) của phiên hiện tại."
+                    )
+                    if overlaps:
+                        max_sim = max(o["similarity"] for o in overlaps)
+                        if max_sim >= 0.3:
+                            st.error(f"Tỷ lệ trùng n-gram cao nhất: {max_sim*100:.1f}% — cần xem lại diễn đạt.")
+                        elif max_sim >= 0.1:
+                            st.warning(f"Tỷ lệ trùng n-gram cao nhất: {max_sim*100:.1f}% — nên kiểm tra thêm.")
+                        else:
+                            st.info(f"Tỷ lệ trùng n-gram cao nhất: {max_sim*100:.1f}% — khá thấp.")
+                    else:
+                        st.info("Không phát hiện trùng cụm từ dài với nguồn đã nạp.")
+ 
+                    if response:
+                        st.markdown(response)
+                    else:
+                        st.error("Không nhận được nhận xét từ AI.")
+ 
+    with b3:
+        if st.button("🤖 Chỉ báo nguy cơ văn bản do AI viết", key="audit_ai_style", use_container_width=True):
+            if not audit_text.strip():
+                st.warning("Chưa có văn bản.")
+            else:
+                with st.spinner("Đang tính chỉ báo phong cách văn bản..."):
+                    heuristic = heuristic_ai_style_score(audit_text)
+                    style_note = ai_style_review_gemini(audit_text)
+ 
+                with ket_qua_audit_container:
+                    st.markdown("### 🤖 Chỉ báo nguy cơ văn bản do AI viết")
+                    st.caption(
+                        "Đây là chỉ báo thống kê phong cách văn bản, mang tính tham "
+                        "khảo — KHÔNG phải kết luận đoạn văn có do AI viết hay không."
+                    )
+ 
+                    risk_level = heuristic.get("risk_level", "Không đủ dữ liệu")
+                    if risk_level == "Cao":
+                        st.error(f"Mức chỉ báo: **{risk_level}**")
+                    elif risk_level == "Trung bình":
+                        st.warning(f"Mức chỉ báo: **{risk_level}**")
+                    elif risk_level == "Thấp":
+                        st.success(f"Mức chỉ báo: **{risk_level}**")
+                    else:
+                        st.info(heuristic.get("note", "Không đủ dữ liệu."))
+ 
+                    if heuristic.get("reasons"):
+                        st.write("**Cơ sở tính toán:**")
+                        for r in heuristic["reasons"]:
+                            st.write(f"- {r}")
+ 
+                    with st.expander("Xem chỉ số chi tiết"):
+                        st.json({
+                            k: v for k, v in heuristic.items()
+                            if k not in ("reasons", "note")
+                        })
+ 
+                    if style_note:
+                        st.write("**Nhận xét văn phong (AI hỗ trợ):**")
+                        st.markdown(style_note)
+ 
     st.write("---")
     st.subheader("Phản biện logic bằng AI")
-
+ 
     logic_request = st.text_area("Mô tả vấn đề hoặc dán đoạn văn", height=180, key="logic_request")
-
+ 
     if st.button("⚖️ Phản biện logic", key="logic_review"):
         if not logic_request.strip():
             st.warning("Nhập nội dung cần phản biện.")
@@ -1883,12 +1981,12 @@ Similarity nội bộ: **{item['similarity']}**
             with st.spinner("AI đang xử lý..."):
                 prompt = f"""
 {BASE_SYSTEM_RULES}
-
+ 
 Đóng vai phản biện luận văn CKI Dược lâm sàng.
-
+ 
 NỘI DUNG:
 {logic_request}
-
+ 
 Hãy kiểm tra:
 1. Có khẳng định nào không có bằng chứng?
 2. Có nhảy logic từ tương quan sang nhân quả không?
@@ -1897,14 +1995,12 @@ Hãy kiểm tra:
 5. Có khái niệm dược lý/lâm sàng nào bị dùng sai không?
 6. Có chỗ nào cần bổ sung bằng chứng?
 7. Có câu nào nên viết thận trọng hơn?
-
+ 
 Không được tự bổ sung tài liệu hoặc số liệu.
 """
                 response = call_gemini(prompt)
                 if response:
                     st.markdown(response)
-
-
 # ------------------------------------------------------------
 # TAB 6 – NGUỒN & CẤU HÌNH
 # ------------------------------------------------------------
