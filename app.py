@@ -2073,13 +2073,16 @@ Similarity nội bộ: **{item['similarity']}**
             else:
                 with st.spinner("Đang đối chiếu n-gram và phân tích diễn đạt..."):
                     overlaps = internal_overlap_audit(audit_text, top_k=5)
-                    response = plagiarism_style_review(audit_text, overlaps)
+                    # Đã sửa lỗi: Chỉ truyền 1 tham số audit_text vào hàm
+                    response = plagiarism_style_review(audit_text)
+                
                 with ket_qua_audit_container:
                     st.markdown("### 📄 Kết quả kiểm tra Nguy cơ đạo văn")
                     st.caption(
                         "Phạm vi đối chiếu: chỉ các nguồn đã nạp trong Evidence "
                         "Database (Tab 1 + Tab 2) của phiên hiện tại."
                     )
+                    
                     if overlaps:
                         max_sim = max(o["similarity"] for o in overlaps)
                         if max_sim >= 0.3:
@@ -2090,7 +2093,7 @@ Similarity nội bộ: **{item['similarity']}**
                             st.info(f"Tỷ lệ trùng n-gram cao nhất: {max_sim*100:.1f}% — khá thấp.")
                     else:
                         st.info("Không phát hiện trùng cụm từ dài với nguồn đã nạp.")
- 
+                    
                     if response:
                         st.markdown(response)
                     else:
