@@ -338,10 +338,11 @@ def generate_word_document(content_text, heading="Tổng hợp Tài liệu Y vă
 # ==========================================
 # CÁC TAB CHỨC NĂNG
 # ==========================================
-tab3, tab1, tab2 = st.tabs([
+tab3, tab1, tab2, tab4 = st.tabs([
     "🔬 Tra cứu Đa nguồn (PubMed + Tạp chí VN)",
     "📄 Đọc Tài liệu & Viết Luận văn (RAG)",
     "📊 Phân tích Số liệu Bệnh án (Excel)",
+    "🔍 Kiểm tra & Audit bài viết",
 ])
 
 # ----------------------------------------------------
@@ -935,3 +936,61 @@ with tab3:
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             key="t3_download_word",
         )
+
+# ----------------------------------------------------
+# TAB 4: KIỂM TRA & AUDIT BÀI VIẾT
+# ----------------------------------------------------
+with tab4:
+    st.header("🔍 Kiểm tra & Audit bài viết")
+    st.info("💡 Tab này dùng để AI đóng vai một 'Phản biện khó tính' kiểm tra lại nội dung bạn đã viết.")
+    
+    text_to_check = st.text_area("Dán đoạn văn bản cần kiểm tra (Luận văn/Bàn luận):", height=300, key="t4_text_to_check")
+    
+    col_a, col_b, col_c = st.columns(3)
+    
+    with col_a:
+        if st.button("✅ Kiểm tra Lỗi chính tả & Y khoa", key="t4_btn_check_spelling"):
+            if not text_to_check.strip():
+                st.warning("Vui lòng dán đoạn văn bản cần kiểm tra trước!")
+            else:
+                with st.spinner("Đang rà soát thuật ngữ..."):
+                    prompt = f"""
+                    Bạn là biên tập viên y khoa khó tính. Hãy kiểm tra đoạn văn sau:
+                    1. Phát hiện lỗi chính tả, lỗi dùng từ chuyên ngành.
+                    2. Kiểm tra tính nhất quán của các trích dẫn số [x].
+                    3. Đề xuất cách diễn đạt hàn lâm hơn cho các câu bị lủng củng.
+                    Đoạn văn: {text_to_check}
+                    """
+                    response = safe_generate_content(prompt)
+                    if response: st.markdown(response.text)
+    with col_b:
+        if st.button("⚖️ Kiểm tra Logic & Đạo văn (Audit)", key="t4_btn_check_logic"):
+            if not text_to_check.strip():
+                st.warning("Vui lòng dán đoạn văn bản cần kiểm tra trước!")
+            else:
+                with st.spinner("Đang phân tích cấu trúc..."):
+                    prompt = f"""
+                    Hãy đóng vai người phản biện luận văn. Kiểm tra đoạn văn sau:
+                    1. Độ logic: Các lập luận có bị vòng vo hay mâu thuẫn không?
+                    2. Độ tin cậy: Có câu nào nghe như 'bịa đặt' hoặc thiếu căn cứ không?
+                    3. Tính đạo văn tiềm ẩn: Đoạn văn này có bị lặp cấu trúc câu quá nhiều hay nghe giống văn phong 'AI tạo sinh' (robot) không?
+                    Đoạn văn: {text_to_check}
+                    """
+                    response = safe_generate_content(prompt)
+                    if response: st.markdown(response.text)
+    with col_c:
+        if st.button("🎓 Văn phong học thuật (Re-write)", key="t4_btn_rewrite"):
+            if not text_to_check.strip():
+                st.warning("Vui lòng dán đoạn văn bản cần kiểm tra trước!")
+            else:
+                with st.spinner("Đang nâng cấp văn phong..."):
+                    prompt = f"""
+                    Hãy viết lại đoạn văn sau theo văn phong của một bài báo khoa học y khoa (Academic Medical Journal):
+                    - Khô khan, trực diện, chính xác.
+                    - Loại bỏ các tính từ chỉ cảm xúc hoặc từ ngữ hoa mỹ.
+                    - Câu văn ngắn gọn, logic.
+                    - Đảm bảo giữ nguyên các số liệu (nếu có).
+                    Đoạn văn: {text_to_check}
+                    """
+                    response = safe_generate_content(prompt)
+                    if response: st.markdown(response.text)
