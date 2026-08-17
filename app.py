@@ -1757,7 +1757,7 @@ QUY TẮC TRÍCH DẪN & HÀN LÂM BẮT BUỘC:
             run_quick_task("Kết quả lệnh tùy chỉnh", custom_prompt, task, k=k_custom)
 
 # ------------------------------------------------------------
-# TAB 4 – PHÂN TÍCH SỐ LIỆU
+# TAB 4 – PHÂN TÍCH SỐ LIỆU & TUYỂN CHỌN BẢNG
 # ------------------------------------------------------------
 with tabs[3]:
     st.header("📊 Phân tích số liệu bệnh án")
@@ -1778,6 +1778,72 @@ with tabs[3]:
 
             with st.expander("Xem dữ liệu"):
                 st.dataframe(df, use_container_width=True)
+
+            st.write("---")
+            
+            # ==========================================
+            # 0. BỘ MÁY TUYỂN CHỌN BẢNG (ĐƯA LÊN ĐẦU TIÊN)
+            # ==========================================
+            st.subheader("📋 Bộ máy tuyển chọn & Sắp xếp bảng cho Chương Kết quả")
+            st.info(
+                "Hệ thống tự động tổng hợp các kết quả thống kê, đối chiếu với mục tiêu nghiên cứu, "
+                "chấm điểm giá trị lâm sàng/khoa học, loại bỏ trùng lặp và sắp xếp theo mạch kể chuyện (Narrative Story)."
+            )
+
+            with st.expander("🎯 Khai báo Mục tiêu nghiên cứu (Dùng để engine chấm điểm bám sát)"):
+                obj_input_1 = st.text_input("Mục tiêu 1", value="Khảo sát đặc điểm đối tượng nghiên cứu và bệnh mắc kèm", key="obj_1")
+                obj_input_2 = st.text_input("Mục tiêu 2", value="Phân tích tình hình sử dụng thuốc và tính phù hợp", key="obj_2")
+                
+                objectives = [
+                    StudyObjective(id="MT1", title=obj_input_1, keywords=["tuổi", "giới", "bệnh", "đặc điểm"]),
+                    StudyObjective(id="MT2", title=obj_input_2, keywords=["thuốc", "phù hợp", "liều", "chỉ định"]),
+                ]
+
+            if st.button("🚀 Chạy Table Selection Engine & Lập mạch kể chuyện", type="primary", key="run_engine"):
+                candidates = []
+                # Tự động quét các cột dữ liệu để đưa vào candidate pool làm mẫu
+                for idx, col in enumerate(df.columns[:15]):
+                    candidates.append(
+                        CandidateResult(
+                            id=f"VAR_{idx+1}",
+                            title=f"Phân tích phân bố của biến: {col}",
+                            result_type="demographic" if pd.api.types.is_numeric_dtype(df[col]) else "clinical",
+                            variables=[col],
+                            scientific_value=4.0,
+                            clinical_importance=4.5,
+                            discussion_value=4.0,
+                            complexity=2.0
+                        )
+                    )
+
+                # Chạy Engine tuyển chọn và sắp xếp
+                engine = TableSelectionEngine(objectives, candidates)
+                decisions = engine.run()
+                narrative_plan = NarrativePlanner.build(decisions)
+
+                # Lưu vào session state
+                st.session_state["selection_decisions"] = decisions
+                st.session_state["narrative_plan"] = narrative_plan
+                st.success("✅ Đã hoàn thành tuyển chọn, lọc trùng và sắp xếp cấu trúc Chương Kết quả!")
+
+            # Hiển thị kết quả trực quan cho người nghiên cứu duyệt
+            if "selection_decisions" in st.session_state:
+                st.write("### 📊 Bảng tổng hợp đề xuất cấu trúc Chương 3")
+                display_rows = []
+                for d in st.session_state["selection_decisions"]:
+                    display_rows.append({
+                        "Thứ tự": d.recommended_order or "Phụ lục",
+                        "Mức độ (Priority)": d.priority.value,
+                        "Hình thức": d.presentation.value,
+                        "Điểm tổng": d.total_score,
+                        "Tiêu đề kết quả": d.title,
+                        "Lý do đề xuất": d.reason
+                    })
+                
+                st.dataframe(pd.DataFrame(display_rows), use_container_width=True)
+
+                st.write("### 📖 Mạch kể chuyện (Result Story / Narrative Plan)")
+                st.json(st.session_state["narrative_plan"])
 
             st.write("---")
             
@@ -2016,68 +2082,6 @@ Yêu cầu:
 
         except Exception as exc:
             st.error(f"Lỗi đọc file Excel: {exc}")
-
-            st.write("---")
-            st.subheader("📋 7. Bộ máy tuyển chọn & Sắp xếp bảng cho Chương Kết quả")
-            st.info(
-                "Hệ thống tự động tổng hợp các kết quả thống kê, đối chiếu với mục tiêu nghiên cứu, "
-                "chấm điểm giá trị lâm sàng/khoa học, loại bỏ trùng lặp và sắp xếp theo mạch kể chuyện (Narrative Story)."
-            )
-
-            with st.expander("🎯 Khai báo Mục tiêu nghiên cứu (Dùng để engine chấm điểm bám sát)"):
-                obj_input_1 = st.text_input("Mục tiêu 1", value="Khảo sát đặc điểm đối tượng nghiên cứu và bệnh mắc kèm", key="obj_1")
-                obj_input_2 = st.text_input("Mục tiêu 2", value="Phân tích tình hình sử dụng thuốc và tính phù hợp", key="obj_2")
-                
-                objectives = [
-                    StudyObjective(id="MT1", title=obj_input_1, keywords=["tuổi", "giới", "bệnh", "đặc điểm"]),
-                    StudyObjective(id="MT2", title=obj_input_2, keywords=["thuốc", "phù hợp", "liều", "chỉ định"]),
-                ]
-
-            if st.button("🚀 Chạy Table Selection Engine & Lập mạch kể chuyện", type="primary", key="run_engine"):
-                candidates = []
-                # Tự động quét các cột dữ liệu để đưa vào candidate pool làm mẫu
-                for idx, col in enumerate(df.columns[:15]):
-                    candidates.append(
-                        CandidateResult(
-                            id=f"VAR_{idx+1}",
-                            title=f"Phân tích phân bố của biến: {col}",
-                            result_type="demographic" if pd.api.types.is_numeric_dtype(df[col]) else "clinical",
-                            variables=[col],
-                            scientific_value=4.0,
-                            clinical_importance=4.5,
-                            discussion_value=4.0,
-                            complexity=2.0
-                        )
-                    )
-
-                # Chạy Engine tuyển chọn và sắp xếp
-                engine = TableSelectionEngine(objectives, candidates)
-                decisions = engine.run()
-                narrative_plan = NarrativePlanner.build(decisions)
-
-                # Lưu vào session state
-                st.session_state["selection_decisions"] = decisions
-                st.session_state["narrative_plan"] = narrative_plan
-                st.success("✅ Đã hoàn thành tuyển chọn, lọc trùng và sắp xếp cấu trúc Chương Kết quả!")
-
-            # Hiển thị kết quả trực quan cho người nghiên cứu duyệt
-            if "selection_decisions" in st.session_state:
-                st.write("### 📊 Bảng tổng hợp đề xuất cấu trúc Chương 3")
-                display_rows = []
-                for d in st.session_state["selection_decisions"]:
-                    display_rows.append({
-                        "Thứ tự": d.recommended_order or "Phụ lục",
-                        "Mức độ (Priority)": d.priority.value,
-                        "Hình thức": d.presentation.value,
-                        "Điểm tổng": d.total_score,
-                        "Tiêu đề kết quả": d.title,
-                        "Lý do đề xuất": d.reason
-                    })
-                
-                st.dataframe(pd.DataFrame(display_rows), use_container_width=True)
-
-                st.write("### 📖 Mạch kể chuyện (Result Story / Narrative Plan)")
-                st.json(st.session_state["narrative_plan"])
 
 # ------------------------------------------------------------
 # TAB 5 – AUDIT
