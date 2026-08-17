@@ -61,8 +61,8 @@ st.set_page_config(
     layout="wide",
 )
 
-DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
-MODEL_LITE = "gemini-3.5-flash-lite"
+DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+MODEL_LITE = "gemini-3.6-flash-lite"
 DEFAULT_EMBEDDING = os.getenv(
     "EMBEDDING_MODEL",
     "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
