@@ -1554,129 +1554,106 @@ QUY TẮC TRÍCH DẪN & HÀN LÂM BẮT BUỘC:
 4. Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng Heading 3 (###) cho tiêu đề mục.
 """
 
+    # --- SỬA LỖI LAYOUT: TẠO CONTAINER FULL TRANG ---
+    ket_qua_container = st.container()
+
     def run_quick_task(task_label: str, query: str, task_prompt: str, k: int):
         with st.spinner(f"AI đang soạn: {task_label}..."):
             output, evidence, invalid = generate_evidence_based(task_prompt, query, k=k)
 
         if output:
-            st.subheader(task_label)
-            st.markdown(output)
+            # --- SỬA LỖI LAYOUT: ĐẨY KẾT QUẢ VÀO CONTAINER Ở TRÊN ---
+            with ket_qua_container:
+                st.write("---")
+                st.subheader(task_label)
+                st.markdown(output)
 
-            bib = citation_bibliography()
-            with st.expander("📖 Tài liệu tham khảo đã đăng ký (toàn phiên)"):
-                st.code(bib if bib else "Chưa có citation registry.", language="text")
+                bib = citation_bibliography()
+                with st.expander("📖 Tài liệu tham khảo đã đăng ký (toàn phiên)"):
+                    st.code(bib if bib else "Chưa có citation registry.", language="text")
 
-            audit = audit_generated_text(output)
-            colA, colB = st.columns(2)
-            with colA:
-                if audit["invalid_citation"]:
-                    st.error("Có citation không hợp lệ trong bản nháp.")
-                else:
-                    st.success("Không phát hiện citation invalid.")
-            with colB:
-                if audit["suspicious_generated_numbers"]:
-                    st.warning(f"Số liệu lạ (không có trong bằng chứng): {audit['suspicious_generated_numbers']}")
-                else:
-                    st.success("Không phát hiện số liệu lạ ngoài bằng chứng đã truy xuất.")
+                audit = audit_generated_text(output)
+                colA, colB = st.columns(2)
+                with colA:
+                    if audit["invalid_citation"]:
+                        st.error("Có citation không hợp lệ trong bản nháp.")
+                    else:
+                        st.success("Không phát hiện citation invalid.")
+                with colB:
+                    if audit["suspicious_generated_numbers"]:
+                        st.warning(f"Số liệu lạ (không có trong bằng chứng): {audit['suspicious_generated_numbers']}")
+                    else:
+                        st.success("Không phát hiện số liệu lạ ngoài bằng chứng đã truy xuất.")
 
-            st.session_state["audit_log"].append({
-                "type": task_label, "invalid_citation": invalid, "audit": audit,
-            })
+                st.session_state["audit_log"].append({
+                    "type": task_label, "invalid_citation": invalid, "audit": audit,
+                })
 
     st.subheader("📝 Lệnh viết nhanh")
     c1, c2, c3, c4, c5, c6 = st.columns(6)
 
-    with c1:
-        if st.button("Đặt vấn đề"):
-            query = "Đặt vấn đề, tính cấp thiết, lý do nghiên cứu, dịch tễ học, gánh nặng bệnh tật liên quan sử dụng thuốc"
-            task = f"""Viết phần 'Đặt vấn đề' cho luận văn CKI Dược lâm sàng.
-Nêu tính cấp thiết, dịch tễ, thực trạng sử dụng thuốc/vấn đề dược lâm sàng liên quan, khoảng trống nghiên cứu.
-{citation_rules}"""
-            run_quick_task("Đặt vấn đề", query, task, k=6)
-
-    with c2:
-        if st.button("Tổng quan tài liệu"):
-            query = "Tổng quan y văn, các nghiên cứu liên quan, cơ chế dược lý, kết quả chính, khuyến cáo điều trị"
-            task = f"""Viết phần 'Tổng quan tài liệu' chuyên sâu, tổng hợp các nghiên cứu và
-guideline liên quan, nêu bật cơ sở dược lý/lâm sàng.
-{citation_rules}"""
-            run_quick_task("Tổng quan tài liệu", query, task, k=8)
-
-    with c3:
-        if st.button("Phương pháp NC"):
-            query = "Đối tượng nghiên cứu, tiêu chuẩn chọn loại, thiết kế nghiên cứu, cỡ mẫu, biến số nghiên cứu, phương pháp thu thập số liệu"
-            task = f"""Viết 'Chương 2. ĐỐI TƯỢNG VÀ PHƯƠNG PHÁP NGHIÊN CỨU'.
-Mục biến số BẮT BUỘC trình bày dạng bảng Markdown 5 cột: TT | Tên biến | Định nghĩa | Phân loại | Kỹ thuật/công cụ thu thập.
-{citation_rules}"""
-            run_quick_task("Phương pháp nghiên cứu", query, task, k=5)
-
-    with c4:
-        if st.button("Bàn luận toàn diện"):
-            if not my_research_data.strip():
-                st.warning("Cần nhập số liệu của anh vào ô 'Số liệu nghiên cứu' trước!")
-            else:
-                task = f"""
-KẾT QUẢ NGHIÊN CỨU THỰC TẾ CỦA TÔI:
-{my_research_data}
-
-YÊU CẦU TRÌNH BÀY:
-1. Chia Bàn luận thành các tiểu mục Heading 3 phù hợp với số liệu đã cho
-   (ví dụ ### 4.1. Đặc điểm bệnh nhân, ### 4.2. Thực trạng sử dụng thuốc,
-   ### 4.3. Kết quả điều trị và so sánh...).
-2. Mỗi tiểu mục viết thành đoạn văn hoàn chỉnh (không liệt kê gạch đầu dòng).
-3. Trong mỗi đoạn: nêu số liệu thực tế của tôi -> giải thích cơ chế dược
-   lý/lâm sàng -> đối chiếu trực tiếp với số liệu trong bằng chứng (cao hơn/
-   thấp hơn/tương đồng), có gắn SOURCE_TAG.
-4. Văn phong chuyên khảo Dược lâm sàng, không suy diễn ngoài dữ liệu.
-{citation_rules}
-"""
-                run_quick_task("Bàn luận toàn diện", my_research_data, task, k=8)
-
-    with c5:
-        if st.button("So sánh NC liên quan"):
-            if not my_research_data.strip():
-                st.warning("Cần nhập số liệu của anh vào ô 'Số liệu nghiên cứu' trước!")
-            else:
-                task = f"""
-KẾT QUẢ NGHIÊN CỨU THỰC TẾ CỦA TÔI:
-{my_research_data}
-
-Trình bày đúng cấu trúc (chỉ Heading 3):
-### 4.2. So sánh với các nghiên cứu và khuyến cáo
-(Lấy số liệu của tôi làm gốc, đối chiếu trực tiếp với bằng chứng, giải thích
-nguyên nhân khác biệt dựa trên cỡ mẫu/kỹ thuật/đặc thù đối tượng — chỉ khi
-có căn cứ trong bằng chứng, nếu không có căn cứ phải ghi rõ đây là suy luận.)
-### 4.3. Ý nghĩa lâm sàng và thực tiễn
-### 4.4. Hạn chế của nghiên cứu
-{citation_rules}
-"""
-                run_quick_task("So sánh nghiên cứu liên quan", my_research_data, task, k=8)
-
-    with c6:
-        if st.button("Trích dẫn TLTK"):
-            query = "Tài liệu tham khảo, tác giả, năm xuất bản, tạp chí"
-            task = f"""Chỉ liệt kê các SOURCE_TAG bạn thấy phù hợp là tài liệu tham khảo
-chính, không tự viết danh mục — danh mục chính thức lấy từ citation registry.
-{citation_rules}"""
-            output, evidence, invalid = generate_evidence_based(task, query, k=10)
-            st.subheader("Danh mục Tài liệu tham khảo (từ Citation Registry)")
-            bib = citation_bibliography()
-            st.code(bib if bib else "Chưa có citation registry.", language="text")
+    # --- SỬA LỖI LAYOUT: CHỈ LƯU TRẠNG THÁI NÚT TRONG CỘT ---
+    with c1: btn_dat_van_de = st.button("Đặt vấn đề", use_container_width=True)
+    with c2: btn_tong_quan = st.button("Tổng quan tài liệu", use_container_width=True)
+    with c3: btn_phuong_phap = st.button("Phương pháp NC", use_container_width=True)
+    with c4: btn_ban_luan = st.button("Bàn luận toàn diện", use_container_width=True)
+    with c5: btn_so_sanh = st.button("So sánh NC liên quan", use_container_width=True)
+    with c6: btn_tltk = st.button("Trích dẫn TLTK", use_container_width=True)
 
     st.write("---")
     st.subheader("Lệnh tùy chỉnh")
     custom_prompt = st.text_area("Nhập câu lệnh khác:", key="custom_prompt_tab3")
     k_custom = st.slider("Số nguồn bằng chứng truy xuất", 3, MAX_TOP_K, DEFAULT_TOP_K, key="tk3")
+    btn_custom = st.button("▶️ Chạy lệnh tùy chỉnh")
 
-    if st.button("▶️ Chạy lệnh tùy chỉnh"):
+    # --- SỬA LỖI LAYOUT: THỰC THI HÀM BÊN NGOÀI CÁC CỘT HẸP ---
+    if btn_dat_van_de:
+        query = "Đặt vấn đề, tính cấp thiết, lý do nghiên cứu, dịch tễ học, gánh nặng bệnh tật liên quan sử dụng thuốc"
+        task = f"Viết phần 'Đặt vấn đề' cho luận văn CKI Dược lâm sàng.\nNêu tính cấp thiết, dịch tễ, thực trạng sử dụng thuốc/vấn đề dược lâm sàng liên quan, khoảng trống nghiên cứu.\n{citation_rules}"
+        run_quick_task("Đặt vấn đề", query, task, k=6)
+
+    if btn_tong_quan:
+        query = "Tổng quan y văn, các nghiên cứu liên quan, cơ chế dược lý, kết quả chính, khuyến cáo điều trị"
+        task = f"Viết phần 'Tổng quan tài liệu' chuyên sâu, tổng hợp các nghiên cứu và\nguideline liên quan, nêu bật cơ sở dược lý/lâm sàng.\n{citation_rules}"
+        run_quick_task("Tổng quan tài liệu", query, task, k=8)
+
+    if btn_phuong_phap:
+        query = "Đối tượng nghiên cứu, tiêu chuẩn chọn loại, thiết kế nghiên cứu, cỡ mẫu, biến số nghiên cứu, phương pháp thu thập số liệu"
+        task = f"Viết 'Chương 2. ĐỐI TƯỢNG VÀ PHƯƠNG PHÁP NGHIÊN CỨU'.\nMục biến số BẮT BUỘC trình bày dạng bảng Markdown 5 cột: TT | Tên biến | Định nghĩa | Phân loại | Kỹ thuật/công cụ thu thập.\n{citation_rules}"
+        run_quick_task("Phương pháp nghiên cứu", query, task, k=5)
+
+    if btn_ban_luan:
+        if not my_research_data.strip():
+            st.warning("Cần nhập số liệu của anh vào ô 'Số liệu nghiên cứu' trước!")
+        else:
+            task = f"KẾT QUẢ NGHIÊN CỨU THỰC TẾ CỦA TÔI:\n{my_research_data}\n\nYÊU CẦU TRÌNH BÀY:\n1. Chia Bàn luận thành các tiểu mục Heading 3 phù hợp với số liệu đã cho\n   (ví dụ ### 4.1. Đặc điểm bệnh nhân, ### 4.2. Thực trạng sử dụng thuốc,\n   ### 4.3. Kết quả điều trị và so sánh...).\n2. Mỗi tiểu mục viết thành đoạn văn hoàn chỉnh (không liệt kê gạch đầu dòng).\n3. Trong mỗi đoạn: nêu số liệu thực tế của tôi -> giải thích cơ chế dược\n   lý/lâm sàng -> đối chiếu trực tiếp với số liệu trong bằng chứng (cao hơn/\n   thấp hơn/tương đồng), có gắn SOURCE_TAG.\n4. Văn phong chuyên khảo Dược lâm sàng, không suy diễn ngoài dữ liệu.\n{citation_rules}"
+            run_quick_task("Bàn luận toàn diện", my_research_data, task, k=8)
+
+    if btn_so_sanh:
+        if not my_research_data.strip():
+            st.warning("Cần nhập số liệu của anh vào ô 'Số liệu nghiên cứu' trước!")
+        else:
+            task = f"KẾT QUẢ NGHIÊN CỨU THỰC TẾ CỦA TÔI:\n{my_research_data}\n\nTrình bày đúng cấu trúc (chỉ Heading 3):\n### 4.2. So sánh với các nghiên cứu và khuyến cáo\n(Lấy số liệu của tôi làm gốc, đối chiếu trực tiếp với bằng chứng, giải thích\nnguyên nhân khác biệt dựa trên cỡ mẫu/kỹ thuật/đặc thù đối tượng — chỉ khi\ncó căn cứ trong bằng chứng, nếu không có căn cứ phải ghi rõ đây là suy luận.)\n### 4.3. Ý nghĩa lâm sàng và thực tiễn\n### 4.4. Hạn chế của nghiên cứu\n{citation_rules}"
+            run_quick_task("So sánh nghiên cứu liên quan", my_research_data, task, k=8)
+
+    if btn_tltk:
+        query = "Tài liệu tham khảo, tác giả, năm xuất bản, tạp chí"
+        task = f"Chỉ liệt kê các SOURCE_TAG bạn thấy phù hợp là tài liệu tham khảo\nchính, không tự viết danh mục — danh mục chính thức lấy từ citation registry.\n{citation_rules}"
+        with st.spinner("AI đang soạn: Trích dẫn TLTK..."):
+            output, evidence, invalid = generate_evidence_based(task, query, k=10)
+            if output:
+                with ket_qua_container:
+                    st.write("---")
+                    st.subheader("Danh mục Tài liệu tham khảo (từ Citation Registry)")
+                    bib = citation_bibliography()
+                    st.code(bib if bib else "Chưa có citation registry.", language="text")
+
+    if btn_custom:
         if not custom_prompt.strip():
             st.warning("Vui lòng nhập yêu cầu!")
-        elif not st.session_state["chunks"]:
-            st.warning("Cần nạp tài liệu (Tab 1 hoặc Tab 2) trước.")
         else:
             task = f"{custom_prompt}\n{citation_rules}"
             run_quick_task("Kết quả lệnh tùy chỉnh", custom_prompt, task, k=k_custom)
-
 
 # ------------------------------------------------------------
 # TAB 4 – PHÂN TÍCH SỐ LIỆU
