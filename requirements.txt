@@ -9,3 +9,5 @@ langchain-huggingface
 langchain-text-splitters
 scikit-learn
 sentence-transformers
+requests
+python-docx
