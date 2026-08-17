@@ -1,4 +1,4 @@
-streamlit>=1.40
+streamlit
 google-genai>=1.0.0
 pypdf>=5.0.0
 pandas>=2.2.0
