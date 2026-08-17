@@ -1762,6 +1762,10 @@ QUY TẮC TRÍCH DẪN & HÀN LÂM BẮT BUỘC:
 with tabs[3]:
     st.header("📊 Phân tích số liệu bệnh án")
 
+    # Khởi tạo giỏ chứa kết quả trong bộ nhớ tạm
+    if "result_cart" not in st.session_state:
+        st.session_state["result_cart"] = []
+
     excel_file = st.file_uploader("Tải file Excel", type=["xlsx", "xls"], key="excel_data")
 
     if excel_file is not None:
@@ -1773,92 +1777,28 @@ with tabs[3]:
             if validation:
                 for item in validation:
                     st.warning(item)
-            else:
-                st.success("Không phát hiện cảnh báo cơ bản về cấu trúc dữ liệu.")
 
-            with st.expander("Xem dữ liệu"):
+            with st.expander("Xem dữ liệu thô"):
                 st.dataframe(df, use_container_width=True)
 
             st.write("---")
-            
-            # ==========================================
-            # 0. BỘ MÁY TUYỂN CHỌN BẢNG (ĐƯA LÊN ĐẦU TIÊN)
-            # ==========================================
-            st.subheader("📋 Bộ máy tuyển chọn & Sắp xếp bảng cho Chương Kết quả")
-            st.info(
-                "Hệ thống tự động tổng hợp các kết quả thống kê, đối chiếu với mục tiêu nghiên cứu, "
-                "chấm điểm giá trị lâm sàng/khoa học, loại bỏ trùng lặp và sắp xếp theo mạch kể chuyện (Narrative Story)."
-            )
-
-            with st.expander("🎯 Khai báo Mục tiêu nghiên cứu (Dùng để engine chấm điểm bám sát)"):
-                obj_input_1 = st.text_input("Mục tiêu 1", value="Khảo sát đặc điểm đối tượng nghiên cứu và bệnh mắc kèm", key="obj_1")
-                obj_input_2 = st.text_input("Mục tiêu 2", value="Phân tích tình hình sử dụng thuốc và tính phù hợp", key="obj_2")
-                
-                objectives = [
-                    StudyObjective(id="MT1", title=obj_input_1, keywords=["tuổi", "giới", "bệnh", "đặc điểm"]),
-                    StudyObjective(id="MT2", title=obj_input_2, keywords=["thuốc", "phù hợp", "liều", "chỉ định"]),
-                ]
-
-            if st.button("🚀 Chạy Table Selection Engine & Lập mạch kể chuyện", type="primary", key="run_engine"):
-                candidates = []
-                # Tự động quét các cột dữ liệu để đưa vào candidate pool làm mẫu
-                for idx, col in enumerate(df.columns[:15]):
-                    candidates.append(
-                        CandidateResult(
-                            id=f"VAR_{idx+1}",
-                            title=f"Phân tích phân bố của biến: {col}",
-                            result_type="demographic" if pd.api.types.is_numeric_dtype(df[col]) else "clinical",
-                            variables=[col],
-                            scientific_value=4.0,
-                            clinical_importance=4.5,
-                            discussion_value=4.0,
-                            complexity=2.0
-                        )
-                    )
-
-                # Chạy Engine tuyển chọn và sắp xếp
-                engine = TableSelectionEngine(objectives, candidates)
-                decisions = engine.run()
-                narrative_plan = NarrativePlanner.build(decisions)
-
-                # Lưu vào session state
-                st.session_state["selection_decisions"] = decisions
-                st.session_state["narrative_plan"] = narrative_plan
-                st.success("✅ Đã hoàn thành tuyển chọn, lọc trùng và sắp xếp cấu trúc Chương Kết quả!")
-
-            # Hiển thị kết quả trực quan cho người nghiên cứu duyệt
-            if "selection_decisions" in st.session_state:
-                st.write("### 📊 Bảng tổng hợp đề xuất cấu trúc Chương 3")
-                display_rows = []
-                for d in st.session_state["selection_decisions"]:
-                    display_rows.append({
-                        "Thứ tự": d.recommended_order or "Phụ lục",
-                        "Mức độ (Priority)": d.priority.value,
-                        "Hình thức": d.presentation.value,
-                        "Điểm tổng": d.total_score,
-                        "Tiêu đề kết quả": d.title,
-                        "Lý do đề xuất": d.reason
-                    })
-                
-                st.dataframe(pd.DataFrame(display_rows), use_container_width=True)
-
-                st.write("### 📖 Mạch kể chuyện (Result Story / Narrative Plan)")
-                st.json(st.session_state["narrative_plan"])
+            # --- HIỂN THỊ GIỎ KẾT QUẢ ---
+            st.markdown(f"### 🛒 Giỏ kết quả: **{len(st.session_state['result_cart'])}** bảng đã lưu")
+            st.info("💡 Mỗi khi anh bấm các nút thống kê bên dưới, kết quả sẽ tự động được nạp vào Giỏ này để lát nữa AI tuyển chọn.")
+            if st.button("🗑️ Xóa toàn bộ Giỏ kết quả"):
+                st.session_state["result_cart"] = []
+                st.rerun()
 
             st.write("---")
             
             # ==========================================
-            # 1. THỐNG KÊ MÔ TẢ (CHỌN NHIỀU)
+            # 1. THỐNG KÊ MÔ TẢ
             # ==========================================
             st.subheader("1. Thống kê mô tả (biến phân loại)")
-            
             all_cols = df.columns.tolist()
-            if st.checkbox("☑️ Chọn tất cả các biến phân loại", key="chk_all_desc"):
-                desc_vars = st.multiselect("Chọn biến phân loại", all_cols, default=all_cols, key="desc_vars")
-            else:
-                desc_vars = st.multiselect("Chọn biến phân loại", all_cols, key="desc_vars")
+            desc_vars = st.multiselect("Chọn biến phân loại", all_cols, key="desc_vars")
 
-            if st.button("Tính tần số và tỷ lệ", key="calc_desc"):
+            if st.button("Tính tần số và tỷ lệ (Tự động nạp vào Giỏ)", key="calc_desc"):
                 if not desc_vars:
                     st.warning("Vui lòng chọn ít nhất 1 biến.")
                 else:
@@ -1867,24 +1807,29 @@ with tabs[3]:
                         if not result.empty:
                             st.markdown(f"**► Biến: {var}**")
                             st.dataframe(result, use_container_width=True)
-                            st.caption(f"Mẫu phân tích hợp lệ của biến {var}: N = {int(result['n'].sum())}")
-                            st.write("")
+                            
+                            # NẠP VÀO GIỎ KẾT QUẢ
+                            st.session_state["result_cart"].append(
+                                CandidateResult(
+                                    id=f"DESC_{var}",
+                                    title=f"Đặc điểm phân bố của biến {var}",
+                                    result_type="demographic",
+                                    variables=[var],
+                                    scientific_value=3.5, clinical_importance=4.0, discussion_value=3.0
+                                )
+                            )
+                    st.success(f"✅ Đã nạp {len(desc_vars)} bảng mô tả vào Giỏ!")
 
             st.write("---")
             
             # ==========================================
-            # 2. BIẾN ĐỊNH LƯỢNG (CHỌN NHIỀU)
+            # 2. BIẾN ĐỊNH LƯỢNG
             # ==========================================
             st.subheader("2. Biến định lượng — Mô tả")
-
             numeric_candidates = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
             if numeric_candidates:
-                if st.checkbox("☑️ Chọn tất cả biến định lượng", key="chk_all_num"):
-                    num_vars = st.multiselect("Chọn biến định lượng", numeric_candidates, default=numeric_candidates, key="num_vars")
-                else:
-                    num_vars = st.multiselect("Chọn biến định lượng", numeric_candidates, key="num_vars")
-                
-                if st.button("Tính Mean/SD và Median/IQR", key="calc_num"):
+                num_vars = st.multiselect("Chọn biến định lượng", numeric_candidates, key="num_vars")
+                if st.button("Tính Mean/SD và Median/IQR (Tự động nạp vào Giỏ)", key="calc_num"):
                     if not num_vars:
                         st.warning("Vui lòng chọn ít nhất 1 biến.")
                     else:
@@ -1892,42 +1837,42 @@ with tabs[3]:
                             summary = numeric_summary(df, var)
                             if summary:
                                 st.markdown(f"**► Biến: {var}**")
-                                st.write(f"- N: **{summary['n']}** | Mean ± SD: **{summary['mean']:.2f} ± {summary['sd']:.2f}** | Median (IQR): **{summary['median']:.2f} ({summary['q1']:.2f} - {summary['q3']:.2f})** | Min-Max: **{summary['min']:.2f} - {summary['max']:.2f}**")
-                                st.write("")
-            else:
-                st.info("Không phát hiện biến định lượng dạng số.")
+                                st.write(f"- N: **{summary['n']}** | Mean ± SD: **{summary['mean']:.2f} ± {summary['sd']:.2f}** | Median (IQR): **{summary['median']:.2f} ({summary['q1']:.2f} - {summary['q3']:.2f})**")
+                                
+                                # NẠP VÀO GIỎ KẾT QUẢ
+                                st.session_state["result_cart"].append(
+                                    CandidateResult(
+                                        id=f"NUM_{var}",
+                                        title=f"Đặc điểm định lượng của biến {var}",
+                                        result_type="baseline",
+                                        variables=[var],
+                                        scientific_value=3.5, clinical_importance=4.0, discussion_value=3.0
+                                    )
+                                )
+                        st.success(f"✅ Đã nạp {len(num_vars)} bảng định lượng vào Giỏ!")
 
             st.write("---")
             
             # ==========================================
-            # 3. BẢNG CHÉO & KIỂM ĐỊNH (QUÉT MA TRẬN)
+            # 3. BẢNG CHÉO & KIỂM ĐỊNH
             # ==========================================
             st.subheader("3. Bảng chéo và kiểm định (Chi-square / Fisher)")
-            st.info("💡 Mẹo: Hệ thống quét mọi tổ hợp biến và **CHỈ HIỂN THỊ** những cặp có mối liên quan mang ý nghĩa thống kê (p < 0.05).")
-
             cc1, cc2 = st.columns(2)
             with cc1:
-                if st.checkbox("☑️ Chọn tất cả biến phụ thuộc", key="chk_all_cross_dep"):
-                    deps = st.multiselect("Các biến phụ thuộc", all_cols, default=all_cols, key="cross_deps")
-                else:
-                    deps = st.multiselect("Các biến phụ thuộc", all_cols, key="cross_deps")
+                deps = st.multiselect("Các biến phụ thuộc", all_cols, key="cross_deps")
             with cc2:
-                if st.checkbox("☑️ Chọn tất cả biến độc lập", key="chk_all_cross_indep"):
-                    indeps = st.multiselect("Các biến độc lập cần đối chiếu", all_cols, default=all_cols, key="cross_indeps")
-                else:
-                    indeps = st.multiselect("Các biến độc lập cần đối chiếu", all_cols, key="cross_indeps")
+                indeps = st.multiselect("Các biến độc lập cần đối chiếu", all_cols, key="cross_indeps")
 
-            if st.button("Quét Crosstab + Kiểm định hàng loạt", key="calc_cross"):
+            if st.button("Quét Crosstab + Kiểm định (Nạp các biến có p < 0.05 vào Giỏ)", key="calc_cross"):
                 if not deps or not indeps:
                     st.warning("Vui lòng chọn ít nhất 1 biến ở mỗi mục.")
                 else:
-                    found_sig = False
+                    found_count = 0
                     processed_pairs = set()
                     with st.spinner("Đang cày xới toàn bộ ma trận số liệu..."):
                         for dep in deps:
                             for indep in indeps:
                                 if dep == indep: continue
-                                # Tránh quét trùng ngược lại (A-B và B-A)
                                 pair_key = frozenset([dep, indep])
                                 if pair_key in processed_pairs: continue
                                 processed_pairs.add(pair_key)
@@ -1935,45 +1880,47 @@ with tabs[3]:
                                 try:
                                     result = crosstab_test(df, indep, dep)
                                     if result['p_value'] is not None and result['p_value'] < 0.05:
-                                        found_sig = True
+                                        found_count += 1
                                         st.markdown(f"**► Mối liên quan CÓ Ý NGHĨA giữa: [{indep}] & [{dep}]**")
                                         st.dataframe(result["table"], use_container_width=True)
                                         st.write(f"- **Kiểm định:** {result['test']} | **p-value:** `{result['p_value']:.6g}` 🟢")
-                                        if result.get("warning"):
-                                            st.caption(f"⚠️ {result['warning']}")
-                                        st.write("")
+                                        
+                                        # NẠP VÀO GIỎ KẾT QUẢ
+                                        st.session_state["result_cart"].append(
+                                            CandidateResult(
+                                                id=f"CROSS_{indep}_{dep}",
+                                                title=f"Mối liên quan giữa {indep} và {dep}",
+                                                result_type="association",
+                                                variables=[indep, dep],
+                                                p_value=result['p_value'],
+                                                scientific_value=4.5, clinical_importance=4.5, discussion_value=5.0
+                                            )
+                                        )
                                 except Exception:
-                                    pass # Âm thầm lờ đi các biến bị lỗi (do thiếu dữ liệu, v.v.)
+                                    pass
                                     
-                    if not found_sig:
-                        st.info("Không tìm thấy cặp biến nào có mối liên quan mang ý nghĩa thống kê (p < 0.05).")
+                    if found_count > 0:
+                        st.success(f"✅ Đã tìm thấy và nạp {found_count} bảng kiểm định vào Giỏ!")
+                    else:
+                        st.info("Không tìm thấy cặp biến nào có p < 0.05.")
 
             st.write("---")
             
             # ==========================================
-            # 4. SO SÁNH 2 NHÓM (QUÉT MA TRẬN)
+            # 4. SO SÁNH 2 NHÓM
             # ==========================================
             st.subheader("4. So sánh biến định lượng giữa 2 nhóm (T-test / Mann-Whitney)")
-            st.info("💡 Hệ thống tự dò tìm các biến thỏa mãn ĐÚNG 2 MỨC để chia nhóm và **CHỈ HIỂN THỊ** kết quả có sự khác biệt (p < 0.05).")
-
             gc1, gc2 = st.columns(2)
             with gc1:
-                if st.checkbox("☑️ Chọn tất cả biến chia nhóm", key="chk_all_group"):
-                    group_vars = st.multiselect("Biến nhóm (Tự lọc biến 2 mức)", all_cols, default=all_cols, key="group_vars")
-                else:
-                    group_vars = st.multiselect("Biến nhóm (Tự lọc biến 2 mức)", all_cols, key="group_vars")
+                group_vars = st.multiselect("Biến nhóm (Tự lọc biến 2 mức)", all_cols, key="group_vars")
             with gc2:
-                val_candidates = numeric_candidates or all_cols
-                if st.checkbox("☑️ Chọn tất cả biến định lượng", key="chk_all_comp"):
-                    val_vars = st.multiselect("Biến định lượng cần so sánh", val_candidates, default=val_candidates, key="val_vars")
-                else:
-                    val_vars = st.multiselect("Biến định lượng cần so sánh", val_candidates, key="val_vars")
+                val_vars = st.multiselect("Biến định lượng cần so sánh", numeric_candidates or all_cols, key="val_vars")
 
-            if st.button("Quét kiểm định so sánh hàng loạt", key="run_group_compare"):
+            if st.button("Quét kiểm định so sánh hàng loạt (Nạp vào Giỏ)", key="run_group_compare"):
                 if not group_vars or not val_vars:
                     st.warning("Vui lòng chọn ít nhất 1 biến ở mỗi mục.")
                 else:
-                    found_sig = False
+                    found_count = 0
                     with st.spinner("Đang rà soát và so sánh các nhóm..."):
                         for gv in group_vars:
                             for vv in val_vars:
@@ -1981,101 +1928,87 @@ with tabs[3]:
                                 try:
                                     result = compare_two_groups(df, gv, vv)
                                     if result['p_value'] is not None and result['p_value'] < 0.05:
-                                        found_sig = True
+                                        found_count += 1
                                         g1n, g2n = result["group_names"]
                                         st.markdown(f"**► Sự khác biệt CÓ Ý NGHĨA của [{vv}] giữa 2 nhóm [{gv}]**")
-                                        comp_df = pd.DataFrame({
-                                            g1n: result["group1_stats"],
-                                            g2n: result["group2_stats"],
-                                        })
-                                        st.dataframe(comp_df, use_container_width=True)
-                                        dist_status = "Phân phối chuẩn" if result['normal_distribution_assumed'] else "Không chuẩn"
-                                        st.write(f"- **Kiểm định:** {result['test']} ({dist_status}) | **p-value:** `{result['p_value']:.6g}` 🟢")
-                                        st.write("")
+                                        st.write(f"**p-value:** `{result['p_value']:.6g}` 🟢")
+                                        
+                                        # NẠP VÀO GIỎ
+                                        st.session_state["result_cart"].append(
+                                            CandidateResult(
+                                                id=f"COMP_{gv}_{vv}",
+                                                title=f"Sự khác biệt của biến {vv} giữa các nhóm {gv}",
+                                                result_type="association",
+                                                variables=[gv, vv],
+                                                p_value=result['p_value'],
+                                                scientific_value=4.5, clinical_importance=4.5, discussion_value=5.0
+                                            )
+                                        )
                                 except Exception:
-                                    pass # Âm thầm lờ đi các biến không thỏa mãn 2 mức
-                                    
-                    if not found_sig:
-                        st.info("Không tìm thấy sự khác biệt nào mang ý nghĩa thống kê (p < 0.05) giữa các nhóm được xét.")
+                                    pass
+                    if found_count > 0:
+                        st.success(f"✅ Đã nạp {found_count} kết quả so sánh vào Giỏ!")
+                    else:
+                        st.info("Không có sự khác biệt (p < 0.05).")
 
             st.write("---")
             
             # ==========================================
-            # 5. HỒI QUY LOGISTIC NHỊ PHÂN (QUÉT ĐA MÔ HÌNH)
+            # 7. BỘ MÁY TUYỂN CHỌN
             # ==========================================
-            st.subheader("5. Hồi quy logistic nhị phân (Tìm yếu tố nguy cơ độc lập)")
-            st.info("💡 Quét các mô hình và **CHỈ HIỂN THỊ** mô hình nào tìm ra được yếu tố tác động độc lập có ý nghĩa (p < 0.05).")
+            st.subheader("📋 7. Chạy Bộ máy tuyển chọn & Cấu trúc luận văn")
+            st.info("Sau khi anh đã chạy các phép tính thống kê ở trên để nạp dữ liệu vào Giỏ, hãy dùng công cụ này để lọc bảng đưa vào luận văn.")
 
-            lc1, lc2 = st.columns([1, 2])
-            with lc1:
-                if st.checkbox("☑️ Chọn tất cả biến kết cục", key="chk_all_log_out"):
-                    outcomes = st.multiselect("Biến kết cục (Tự lọc biến nhị phân)", all_cols, default=all_cols, key="log_outcomes")
-                else:
-                    outcomes = st.multiselect("Biến kết cục (Tự lọc biến nhị phân)", all_cols, key="log_outcomes")
-            with lc2:
-                if st.checkbox("☑️ Chọn tất cả biến độc lập", key="chk_all_log_indep"):
-                    predictors = st.multiselect("Các yếu tố đưa vào mô hình", all_cols, default=all_cols, key="log_predictors")
-                else:
-                    predictors = st.multiselect("Các yếu tố đưa vào mô hình", all_cols, key="log_predictors")
+            with st.expander("🎯 Khai báo Mục tiêu nghiên cứu (Bao gồm từ khóa có dấu/không dấu để AI dễ nối bảng)"):
+                obj_input_1 = st.text_input("Mục tiêu 1", value="ĐẶC ĐIỂM BỆNH NHÂN NGHIÊN CỨU", key="obj_1")
+                obj_input_2 = st.text_input("Mục tiêu 2", value="PHÂN TÍCH THỰC TRẠNG SỬ DỤNG THUỐC", key="obj_2")
+                
+                objectives = [
+                    StudyObjective(id="MT1", title=obj_input_1, keywords=["tuổi", "tuoi", "giới", "gioi", "bệnh", "benh", "đặc điểm", "nhân khẩu", "bmi"]),
+                    StudyObjective(id="MT2", title=obj_input_2, keywords=["thuốc", "thuoc", "phù hợp", "phu hop", "liều", "lieu", "chỉ định", "chi dinh", "hoạt chất", "icd"]),
+                ]
 
-            if st.button("Quét Logistic Regression hàng loạt", key="run_logistic"):
-                if not outcomes or not predictors:
-                    st.warning("Chọn ít nhất một biến ở mỗi bên.")
+            if st.button("🚀 Chạy Table Selection Engine & Lập mạch kể chuyện", type="primary", key="run_engine"):
+                if not st.session_state["result_cart"]:
+                    st.error("❌ Giỏ kết quả đang trống! Anh cần cuộn lên trên, bấm các nút 'Tính tần số', 'Quét Crosstab'... để nạp số liệu vào Giỏ trước.")
                 else:
-                    found_sig = False
-                    with st.spinner("Đang chạy hàng loạt mô hình hồi quy đa biến..."):
-                        for out in outcomes:
-                            preds = [p for p in predictors if p != out]
-                            if not preds: continue
-                            try:
-                                result_df, summary = binary_logistic_regression(df, out, preds)
-                                sig_df = result_df[result_df['p-value'] < 0.05]
-                                
-                                if not sig_df.empty:
-                                    found_sig = True
-                                    st.markdown(f"**► CÁC YẾU TỐ ĐỘC LẬP có tác động tới kết cục: [{out}]**")
-                                    st.dataframe(sig_df, use_container_width=True)
-                                    with st.expander("Xem chi tiết toàn bộ Model Summary (Statsmodels)"):
-                                        st.text(summary)
-                                    st.write("")
-                            except Exception:
-                                pass # Bỏ qua nếu biến không đủ điều kiện chạy mô hình
-                                
-                    if not found_sig:
-                        st.info("Không tìm thấy mô hình hoặc yếu tố độc lập nào có ý nghĩa thống kê (p < 0.05).")
+                    engine = TableSelectionEngine(objectives, st.session_state["result_cart"])
+                    decisions = engine.run()
+                    narrative_plan = NarrativePlanner.build(decisions)
+
+                    st.session_state["selection_decisions"] = decisions
+                    st.session_state["narrative_plan"] = narrative_plan
+                    st.success("✅ Đã hoàn thành tuyển chọn, lọc trùng và sắp xếp cấu trúc Chương Kết quả!")
+
+            if "selection_decisions" in st.session_state:
+                st.write("### 📊 Bảng tổng hợp đề xuất cấu trúc Chương 3")
+                display_rows = []
+                for d in st.session_state["selection_decisions"]:
+                    display_rows.append({
+                        "Thứ tự": d.recommended_order or "Phụ lục",
+                        "Mức độ": d.priority.value,
+                        "Hình thức": d.presentation.value,
+                        "Điểm": d.total_score,
+                        "Tiêu đề bảng": d.title,
+                        "Lý do đề xuất": d.reason
+                    })
+                st.dataframe(pd.DataFrame(display_rows), use_container_width=True)
+                
+                st.write("### 📖 Mạch kể chuyện (Result Story / Narrative Plan)")
+                st.json(st.session_state["narrative_plan"])
 
             st.write("---")
-            
             # ==========================================
-            # 6. DIỄN GIẢI BẰNG AI
+            # 8. DIỄN GIẢI BẰNG AI
             # ==========================================
-            st.subheader("6. Diễn giải kết quả bằng AI (không tính lại số liệu)")
-
-            interpretation_request = st.text_area(
-                "Dán bảng kết quả hoặc mô tả kết quả cần diễn giải",
-                height=160, key="interpretation_request",
-            )
+            st.subheader("8. Diễn giải kết quả bằng AI (không tính lại số liệu)")
+            interpretation_request = st.text_area("Dán bảng kết quả thô vào đây", height=160, key="interpretation_request")
 
             if st.button("AI diễn giải", key="ai_interpret"):
                 if not interpretation_request.strip():
                     st.warning("Nhập kết quả trước.")
                 else:
-                    prompt = f"""
-{BASE_SYSTEM_RULES}
-
-Bạn chỉ được DIỄN GIẢI kết quả thống kê dưới đây. Không được tính lại
-hoặc sửa số liệu.
-
-KẾT QUẢ:
-{interpretation_request}
-
-Yêu cầu:
-- Phân biệt mô tả và suy luận.
-- Không nói "có ý nghĩa lâm sàng" nếu dữ liệu không cho phép.
-- Không suy ra quan hệ nhân quả từ nghiên cứu quan sát.
-- Nếu p-value không có, không tự tạo p-value.
-- Không thêm OR, CI95% hoặc tỷ lệ mới.
-"""
+                    prompt = f"""{BASE_SYSTEM_RULES}\nBạn chỉ được DIỄN GIẢI kết quả thống kê dưới đây. Không được tính lại hoặc sửa số liệu.\nKẾT QUẢ:\n{interpretation_request}"""
                     response = call_gemini(prompt)
                     if response:
                         st.markdown(response)
