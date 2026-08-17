@@ -75,7 +75,10 @@ st.set_page_config(
     layout="wide",
 )
 
-DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+# Đặt 3.7-flash làm bộ não chính cho các tác vụ quan trọng (Viết, Diễn giải, Logic)
+DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
+# Khai báo riêng 3.5-flash-lite cho các tác vụ vụn vặt
+MODEL_LITE = "gemini-3.5-flash-lite"
 DEFAULT_EMBEDDING = os.getenv(
     "EMBEDDING_MODEL",
     "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
@@ -550,7 +553,8 @@ def translate_query_to_mesh(vietnamese_query: str) -> str:
         f"Từ gốc: {vietnamese_query}\n"
         "Chỉ trả về chuỗi tiếng Anh, không giải thích, không markdown."
     )
-    text = call_gemini(prompt, temperature=0.1)
+    # ÉP CHẠY LITE: Tác vụ dịch thuật đơn giản, tiết kiệm quota
+    text = call_gemini(prompt, model=MODEL_LITE, temperature=0.1)
     if text:
         return text.strip().strip('"').strip("'")
     return vietnamese_query
@@ -1344,7 +1348,8 @@ def spelling_and_terminology_check(text: str) -> Optional[str]:
     
     Chỉ trình bày những lỗi tìm thấy và đề xuất cách sửa. Nếu không có lỗi, hãy báo "✅ Không tìm thấy lỗi chính tả/thuật ngữ đáng kể".
     """
-    return call_gemini(prompt)
+    # ÉP CHẠY LITE: Soi chính tả không cần suy luận sâu
+    return call_gemini(prompt, model=MODEL_LITE)
 
 def plagiarism_style_review(text: str) -> Optional[str]:
     if not text.strip(): return None
@@ -1375,7 +1380,8 @@ def heuristic_ai_style_score(text: str) -> Optional[str]:
     
     Trình bày dưới dạng gạch đầu dòng ngắn gọn các dấu hiệu "bốc mùi AI" tìm thấy và hướng dẫn người viết cách sửa lại cho tự nhiên.
     """
-    return call_gemini(prompt)
+    # ÉP CHẠY LITE: Kiểm tra dấu hiệu AI là form mẫu cơ bản
+    return call_gemini(prompt, model=MODEL_LITE)
 
 
 # ============================================================
