@@ -70,7 +70,7 @@ from docx.shared import Pt
 # ============================================================
 
 st.set_page_config(
-    page_title="Hỗ trợ Nghiên cứu Khoa học",
+    page_title="NCKH",
     page_icon="🔬",
     layout="wide",
 )
