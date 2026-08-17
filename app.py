@@ -171,6 +171,21 @@ custom_css = """
         padding-left: 12px;
         margin-top: 10px;
     }
+
+    /* ===== NỘI DUNG BÀI VIẾT DO AI TẠO - CHỮ NHỎ, CANH ĐỀU 2 LỀ, DỄ ĐỌC ===== */
+    .stMarkdown p, .stMarkdown li {
+        font-size: 0.92rem !important;
+        line-height: 1.75 !important;
+        text-align: justify !important;
+        text-justify: inter-word;
+    }
+    .stMarkdown table td, .stMarkdown table th {
+        font-size: 0.85rem !important;
+    }
+    /* Giữ tiêu đề (h1,h2,h3) không bị justify/canh trái đều, chỉ áp cho đoạn văn */
+    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4 {
+        text-align: left !important;
+    }
 </style>
 """
 st.markdown(custom_css, unsafe_allow_html=True)
