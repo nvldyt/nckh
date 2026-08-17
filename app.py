@@ -735,7 +735,63 @@ def ingest_vn_article(article: Dict[str, Any]) -> bool:
 # ============================================================
 # 10. INDEX / VECTOR RETRIEVAL (dùng chung cho PDF + kết quả tra cứu)
 # ============================================================
+def evidence_database_summary() -> Dict[str, Any]:
+    """Đếm số nguồn/số đoạn bằng chứng theo từng nguồn gốc (PDF/PubMed/VN/Thủ công)."""
+    documents = st.session_state.get("documents", {})
+    chunks = st.session_state.get("chunks", [])
 
+    by_origin_sources: Dict[str, int] = {}
+    for meta in documents.values():
+        origin = meta.get("origin", "Khác")
+        by_origin_sources[origin] = by_origin_sources.get(origin, 0) + 1
+
+    by_origin_chunks: Dict[str, int] = {}
+    source_to_origin = {sid: meta.get("origin", "Khác") for sid, meta in documents.items()}
+    for c in chunks:
+        origin = source_to_origin.get(c.get("source_id"), "Khác")
+        by_origin_chunks[origin] = by_origin_chunks.get(origin, 0) + 1
+
+    return {
+        "total_sources": len(documents),
+        "total_chunks": len(chunks),
+        "by_origin_sources": by_origin_sources,
+        "by_origin_chunks": by_origin_chunks,
+        "index_ready": st.session_state.get("embeddings") is not None,
+    }
+
+
+def render_evidence_database_status(context_label: str = ""):
+    """Hiển thị hộp trạng thái Evidence Database - dùng ở đầu các tab cần bằng chứng."""
+    summary = evidence_database_summary()
+
+    if summary["total_sources"] == 0:
+        st.markdown(
+            '<div class="danger-box">⚠️ <b>Evidence Database đang RỖNG.</b> '
+            "Chưa có tài liệu nào được nạp — các nút viết nhanh sẽ trả về "
+            '"chưa đủ bằng chứng để kết luận". Hãy nạp PDF ở Tab 1 hoặc tra cứu '
+            "và bấm \"Nạp vào Evidence Database\" ở Tab 2 trước.</div>",
+            unsafe_allow_html=True,
+        )
+        return
+
+    origin_labels = {
+        "PDF": "📄 PDF", "PubMed": "🌍 PubMed",
+        "Tạp chí VN": "🇻🇳 Tạp chí VN", "Khác": "❓ Khác",
+    }
+
+    pieces = []
+    for origin, count in summary["by_origin_sources"].items():
+        label = origin_labels.get(origin, origin)
+        n_chunks = summary["by_origin_chunks"].get(origin, 0)
+        pieces.append(f"{label}: <b>{count}</b> nguồn ({n_chunks} đoạn)")
+
+    status_html = (
+        f'<div class="success-box">✅ <b>Evidence Database{" - " + context_label if context_label else ""}:</b> '
+        f'{summary["total_sources"]} nguồn / {summary["total_chunks"]} đoạn bằng chứng '
+        f'&nbsp;—&nbsp; {" &nbsp;|&nbsp; ".join(pieces)}'
+        f'{"" if summary["index_ready"] else " &nbsp;—&nbsp; ⚠️ chưa dựng xong index, thử tải lại"}</div>'
+    )
+    st.markdown(status_html, unsafe_allow_html=True)
 def rebuild_index():
     chunks = st.session_state["chunks"]
     if not chunks:
@@ -1276,7 +1332,7 @@ def create_word_document(title: str, body: str, bibliography: str = "") -> bytes
 # 19. GIAO DIỆN
 # ============================================================
 
-st.title("🔬 HỖ TRỢ NGHIÊN CỨU KHOA HỌC – DƯỢC LÂM SÀNG")
+st.title("🔬 HỖ TRỢ NGHIÊN CỨU KHOA HỌC")
 st.caption(
     "Evidence-Based RAG • Tra cứu đa nguồn (PubMed + Tạp chí VN) • "
     "Citation Registry • Statistical Engine • Audit"
@@ -1297,6 +1353,7 @@ tabs = st.tabs([
 # ------------------------------------------------------------
 with tabs[0]:
     st.header("📚 Ngân hàng tài liệu gốc (PDF)")
+    render_evidence_database_status()
 
     uploaded_files = st.file_uploader(
         "Tải PDF nghiên cứu / guideline / bài báo",
@@ -1378,6 +1435,7 @@ with tabs[1]:
         "chọn nạp sẽ được đưa vào cùng Evidence Database với PDF ở Tab 1, "
         "và được gắn SOURCE_TAG/citation như tài liệu gốc."
     )
+    render_evidence_database_status()
 
     col_search, col_btn = st.columns([4, 1])
     with col_search:
@@ -1477,6 +1535,7 @@ with tabs[2]:
         "Đây là công cụ tạo bản nháp. Mọi citation và số liệu phải được kiểm "
         "tra lại (đối chiếu bản gốc) trước khi đưa vào luận văn chính thức."
     )
+    render_evidence_database_status("dùng cho các nút viết nhanh bên dưới")
 
     my_research_data = st.text_area(
         "🌉 Số liệu nghiên cứu của riêng anh (dùng cho Bàn luận / So sánh):",
