@@ -1729,83 +1729,143 @@ with tabs[3]:
                 st.dataframe(df, use_container_width=True)
 
             st.write("---")
+            
+            # ==========================================
+            # 1. THỐNG KÊ MÔ TẢ (CHỌN NHIỀU)
+            # ==========================================
             st.subheader("1. Thống kê mô tả (biến phân loại)")
-            desc_var = st.selectbox("Chọn biến phân loại", df.columns, key="desc_var")
+            
+            all_cols = df.columns.tolist()
+            if st.checkbox("☑️ Chọn tất cả các biến phân loại", key="chk_all_desc"):
+                desc_vars = st.multiselect("Chọn biến phân loại", all_cols, default=all_cols, key="desc_vars")
+            else:
+                desc_vars = st.multiselect("Chọn biến phân loại", all_cols, key="desc_vars")
 
             if st.button("Tính tần số và tỷ lệ", key="calc_desc"):
-                result = descriptive_table(df, desc_var)
-                st.dataframe(result, use_container_width=True)
-                st.caption(f"Mẫu phân tích hợp lệ của biến: N = {int(result['n'].sum())}")
+                if not desc_vars:
+                    st.warning("Vui lòng chọn ít nhất 1 biến.")
+                else:
+                    for var in desc_vars:
+                        st.markdown(f"**► Biến: {var}**")
+                        result = descriptive_table(df, var)
+                        st.dataframe(result, use_container_width=True)
+                        st.caption(f"Mẫu phân tích hợp lệ của biến {var}: N = {int(result['n'].sum())}")
+                        st.write("")
 
             st.write("---")
+            
+            # ==========================================
+            # 2. BIẾN ĐỊNH LƯỢNG (CHỌN NHIỀU)
+            # ==========================================
             st.subheader("2. Biến định lượng — Mô tả")
 
             numeric_candidates = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
             if numeric_candidates:
-                num_var = st.selectbox("Chọn biến định lượng", numeric_candidates, key="num_var")
+                if st.checkbox("☑️ Chọn tất cả biến định lượng", key="chk_all_num"):
+                    num_vars = st.multiselect("Chọn biến định lượng", numeric_candidates, default=numeric_candidates, key="num_vars")
+                else:
+                    num_vars = st.multiselect("Chọn biến định lượng", numeric_candidates, key="num_vars")
+                
                 if st.button("Tính Mean/SD và Median/IQR", key="calc_num"):
-                    summary = numeric_summary(df, num_var)
-                    if summary:
-                        st.json(summary)
+                    if not num_vars:
+                        st.warning("Vui lòng chọn ít nhất 1 biến.")
                     else:
-                        st.warning("Không có dữ liệu số hợp lệ.")
+                        for var in num_vars:
+                            st.markdown(f"**► Biến: {var}**")
+                            summary = numeric_summary(df, var)
+                            if summary:
+                                st.write(f"- N: **{summary['n']}** | Mean ± SD: **{summary['mean']:.2f} ± {summary['sd']:.2f}** | Median (IQR): **{summary['median']:.2f} ({summary['q1']:.2f} - {summary['q3']:.2f})** | Min-Max: **{summary['min']:.2f} - {summary['max']:.2f}**")
+                            else:
+                                st.warning(f"Không có dữ liệu số hợp lệ cho {var}.")
+                            st.write("")
             else:
                 st.info("Không phát hiện biến định lượng dạng số.")
 
             st.write("---")
+            
+            # ==========================================
+            # 3. BẢNG CHÉO & KIỂM ĐỊNH (CHỌN NHIỀU BIẾN ĐỘC LẬP)
+            # ==========================================
             st.subheader("3. Bảng chéo và kiểm định (Chi-square / Fisher)")
 
-            cc1, cc2 = st.columns(2)
+            cc1, cc2 = st.columns([1, 2])
             with cc1:
-                indep = st.selectbox("Biến độc lập", df.columns, key="cross_indep")
+                dep = st.selectbox("Biến phụ thuộc (Chọn 1 làm mốc)", df.columns, key="cross_dep")
             with cc2:
-                dep = st.selectbox("Biến phụ thuộc", df.columns, key="cross_dep")
-
-            if st.button("Tính Crosstab + kiểm định", key="calc_cross"):
-                if indep == dep:
-                    st.error("Biến độc lập và phụ thuộc phải khác nhau.")
+                indep_candidates = [c for c in df.columns if c != dep]
+                if st.checkbox("☑️ Chọn tất cả biến độc lập", key="chk_all_cross"):
+                    indeps = st.multiselect("Các biến độc lập cần đối chiếu", indep_candidates, default=indep_candidates, key="cross_indeps")
                 else:
-                    result = crosstab_test(df, indep, dep)
-                    st.dataframe(result["table"], use_container_width=True)
-                    st.write(f"**Kiểm định:** {result['test']}")
-                    st.write(f"**p-value:** {result['p_value']:.6g}")
-                    if result["warning"]:
-                        st.warning(result["warning"])
+                    indeps = st.multiselect("Các biến độc lập cần đối chiếu", indep_candidates, key="cross_indeps")
+
+            if st.button("Tính Crosstab + kiểm định hàng loạt", key="calc_cross"):
+                if not indeps:
+                    st.warning("Vui lòng chọn ít nhất 1 biến độc lập.")
+                else:
+                    for indep in indeps:
+                        st.markdown(f"**► Mối liên quan giữa: {indep} & {dep}**")
+                        result = crosstab_test(df, indep, dep)
+                        st.dataframe(result["table"], use_container_width=True)
+                        st.write(f"- **Kiểm định:** {result['test']} | **p-value:** {result['p_value']:.6g}")
+                        if result["warning"]:
+                            st.warning(result["warning"])
+                        st.write("")
 
             st.write("---")
+            
+            # ==========================================
+            # 4. SO SÁNH 2 NHÓM (CHỌN NHIỀU BIẾN ĐỊNH LƯỢNG)
+            # ==========================================
             st.subheader("4. So sánh biến định lượng giữa 2 nhóm (T-test / Mann-Whitney)")
 
-            gc1, gc2 = st.columns(2)
+            gc1, gc2 = st.columns([1, 2])
             with gc1:
-                group_var = st.selectbox("Biến nhóm (2 mức)", df.columns, key="group_var")
+                group_var = st.selectbox("Biến nhóm (Bắt buộc có 2 mức)", df.columns, key="group_var")
             with gc2:
-                value_var = st.selectbox("Biến định lượng cần so sánh", numeric_candidates or df.columns, key="value_var")
+                val_candidates = [c for c in (numeric_candidates or df.columns) if c != group_var]
+                if st.checkbox("☑️ Chọn tất cả biến định lượng", key="chk_all_comp"):
+                    val_vars = st.multiselect("Các biến định lượng cần so sánh", val_candidates, default=val_candidates, key="val_vars")
+                else:
+                    val_vars = st.multiselect("Các biến định lượng cần so sánh", val_candidates, key="val_vars")
 
-            if st.button("Chạy kiểm định so sánh 2 nhóm", key="run_group_compare"):
-                try:
-                    result = compare_two_groups(df, group_var, value_var)
-                    g1n, g2n = result["group_names"]
+            if st.button("Chạy kiểm định so sánh hàng loạt", key="run_group_compare"):
+                if not val_vars:
+                    st.warning("Vui lòng chọn ít nhất 1 biến định lượng.")
+                else:
+                    for val_var in val_vars:
+                        st.markdown(f"**► So sánh biến [{val_var}] theo 2 nhóm của [{group_var}]**")
+                        try:
+                            result = compare_two_groups(df, group_var, val_var)
+                            g1n, g2n = result["group_names"]
 
-                    comp_df = pd.DataFrame({
-                        g1n: result["group1_stats"],
-                        g2n: result["group2_stats"],
-                    })
-                    st.dataframe(comp_df, use_container_width=True)
+                            comp_df = pd.DataFrame({
+                                g1n: result["group1_stats"],
+                                g2n: result["group2_stats"],
+                            })
+                            st.dataframe(comp_df, use_container_width=True)
 
-                    st.write(f"**Kiểm định sử dụng:** {result['test']} "
-                             f"({'giả định phân phối chuẩn' if result['normal_distribution_assumed'] else 'không giả định phân phối chuẩn (Shapiro-Wilk p ≤ 0.05)'})")
-                    st.write(f"**Thống kê kiểm định:** {result['statistic']:.4f}")
-                    st.write(f"**p-value:** {result['p_value']:.6g}")
-                except Exception as exc:
-                    st.error(f"Không chạy được kiểm định: {exc}")
+                            dist_status = "Giả định phân phối chuẩn" if result['normal_distribution_assumed'] else "Không giả định chuẩn (Shapiro-Wilk p ≤ 0.05)"
+                            st.write(f"- **Kiểm định:** {result['test']} ({dist_status}) | **Thống kê:** {result['statistic']:.4f} | **p-value:** {result['p_value']:.6g}")
+                        except Exception as exc:
+                            st.error(f"Không chạy được kiểm định cho biến {val_var}: {exc}")
+                        st.write("")
 
             st.write("---")
+            
+            # ==========================================
+            # 5. HỒI QUY LOGISTIC (CÓ NÚT CHỌN TẤT CẢ)
+            # ==========================================
             st.subheader("5. Hồi quy logistic nhị phân")
 
-            outcome = st.selectbox("Biến kết cục nhị phân", df.columns, key="log_outcome")
-            predictors = st.multiselect(
-                "Biến độc lập", [c for c in df.columns if c != outcome], key="log_predictors"
-            )
+            lc1, lc2 = st.columns([1, 2])
+            with lc1:
+                outcome = st.selectbox("Biến kết cục nhị phân (Chọn 1)", df.columns, key="log_outcome")
+            with lc2:
+                pred_candidates = [c for c in df.columns if c != outcome]
+                if st.checkbox("☑️ Chọn tất cả biến độc lập", key="chk_all_log"):
+                    predictors = st.multiselect("Các biến độc lập đưa vào mô hình", pred_candidates, default=pred_candidates, key="log_predictors")
+                else:
+                    predictors = st.multiselect("Các biến độc lập đưa vào mô hình", pred_candidates, key="log_predictors")
 
             if st.button("Chạy logistic regression", key="run_logistic"):
                 if not predictors:
@@ -1814,12 +1874,16 @@ with tabs[3]:
                     try:
                         result_df, summary = binary_logistic_regression(df, outcome, predictors)
                         st.dataframe(result_df, use_container_width=True)
-                        with st.expander("Xem model summary"):
+                        with st.expander("Xem chi tiết Model Summary (Của Statsmodels)"):
                             st.text(summary)
                     except Exception as exc:
                         st.error(f"Không chạy được mô hình: {exc}")
 
             st.write("---")
+            
+            # ==========================================
+            # 6. DIỄN GIẢI BẰNG AI
+            # ==========================================
             st.subheader("6. Diễn giải kết quả bằng AI (không tính lại số liệu)")
 
             interpretation_request = st.text_area(
