@@ -356,7 +356,7 @@ def call_gemini(
     prompt: str,
     model: Optional[str] = None,
     temperature: float = 0.1,
-    max_retries: int = 3,
+    max_retries: int = 5,
 ) -> Optional[str]:
     api_key = get_api_key()
     if not api_key:
@@ -365,6 +365,43 @@ def call_gemini(
             "hoặc biến môi trường."
         )
         return None
+
+    client = get_gemini_client(api_key)
+    model_name = model or DEFAULT_MODEL
+
+    for attempt in range(max_retries):
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(temperature=temperature),
+            )
+            text = getattr(response, "text", None)
+            if text:
+                return text.strip()
+            return None
+            
+        except Exception as exc:
+            error_msg = str(exc)
+            
+            # Bắt chung cả lỗi 429 (Hết Quota) và 503 (Server quá tải)
+            if any(code in error_msg for code in ["429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE"]):
+                if attempt < max_retries - 1:
+                    wait_time = 15 # Cho ứng dụng nghỉ 15 giây để server Google hạ nhiệt
+                    status = st.warning(f"⏳ Trạm máy chủ Google đang quá tải đột xuất. Ứng dụng tự động đợi {wait_time} giây rồi thử lại (Lần {attempt + 1}/{max_retries})...")
+                    time.sleep(wait_time)
+                    status.empty() # Xóa câu thông báo sau khi chờ xong
+                else:
+                    st.error("❌ Máy chủ Google Gemini hiện đang quá bận. Anh vui lòng đợi 1-2 phút rồi bấm thử lại nhé!")
+                    return None
+            else:
+                # Nếu là các lỗi mạng khác, đợi 3 giây rồi thử lại
+                if attempt == max_retries - 1:
+                    st.error(f"Lỗi Gemini: {error_msg}")
+                    return None
+                time.sleep(3)
+
+    return None
 
     client = get_gemini_client(api_key)
     model_name = model or DEFAULT_MODEL
