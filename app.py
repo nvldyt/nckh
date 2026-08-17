@@ -118,7 +118,11 @@ st.markdown(
         font-family: 'Be Vietnam Pro', 'Arial', sans-serif;
     }
 
-    /* ===== NỀN TOÀN TRANG - GRADIENT ĐA SẮC ĐỘNG ===== */
+    /* ===== NỀN TOÀN TRANG VÀ LÀM TRONG SUỐT THANH HEADER ===== */
+    [data-testid="stHeader"] {
+        background-color: transparent !important;
+    }
+    
     .stApp {
         background: linear-gradient(-45deg, #ff9a9e, #a18cd1, #667eea, #43e97b, #38f9d7, #6a1b9a);
         background-size: 400% 400%;
@@ -130,7 +134,12 @@ st.markdown(
         100% { background-position: 0% 50%; }
     }
 
-    .block-container { max-width: 1450px; padding-top: 1.5rem; }
+    /* Đẩy lùi nội dung xuống một chút để không bị lẹm vào Header */
+    .block-container { 
+        max-width: 1450px; 
+        padding-top: 4.5rem !important; 
+        padding-bottom: 2rem !important;
+    }
 
     /* ===== TIÊU ĐỀ CHÍNH ===== */
     h1 {
@@ -138,6 +147,7 @@ st.markdown(
         text-align: center;
         font-weight: 800;
         letter-spacing: 1px;
+        margin-top: 0 !important;
         margin-bottom: 6px;
         text-shadow: 0 4px 12px rgba(0,0,0,0.35), 0 0 30px rgba(255,255,255,0.25);
     }
