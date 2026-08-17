@@ -3,11 +3,13 @@ import pandas as pd
 from scipy import stats
 import statsmodels.formula.api as smf
 from typing import Any, Dict, List
+import streamlit as st
 
 # ============================================================
-# 1. EXCEL – VALIDATION & THỐNG KÊ MÔ TẢ
+# 1. EXCEL – VALIDATION & THỐNG KÊ MÔ TẢ (CÓ CACHE)
 # ============================================================
 
+@st.cache_data(show_spinner=False)
 def validate_dataframe(df: pd.DataFrame) -> List[str]:
     warnings = []
     if df.empty:
@@ -27,7 +29,7 @@ def validate_dataframe(df: pd.DataFrame) -> List[str]:
 
     return warnings
 
-
+@st.cache_data(show_spinner=False)
 def descriptive_table(df: pd.DataFrame, column: str) -> pd.DataFrame:
     s = df[column].dropna()
     counts = s.value_counts(dropna=False)
@@ -37,7 +39,7 @@ def descriptive_table(df: pd.DataFrame, column: str) -> pd.DataFrame:
     result["%"] = (result["n"] / total * 100).round(2)
     return result
 
-
+@st.cache_data(show_spinner=False)
 def numeric_summary(df: pd.DataFrame, column: str) -> Dict[str, Any]:
     s = pd.to_numeric(df[column], errors="coerce").dropna()
     if len(s) == 0:
@@ -54,9 +56,10 @@ def numeric_summary(df: pd.DataFrame, column: str) -> Dict[str, Any]:
     }
 
 # ============================================================
-# 2. CROSSTAB + CHI-SQUARE / FISHER
+# 2. CROSSTAB + CHI-SQUARE / FISHER (CÓ CACHE)
 # ============================================================
 
+@st.cache_data(show_spinner=False)
 def crosstab_test(df: pd.DataFrame, independent: str, dependent: str) -> Dict[str, Any]:
     tmp = df[[independent, dependent]].dropna()
     table = pd.crosstab(tmp[independent], tmp[dependent])
@@ -79,20 +82,16 @@ def crosstab_test(df: pd.DataFrame, independent: str, dependent: str) -> Dict[st
         result["p_value"] = float(fisher_p)
         result["warning"] = "Một số tần số kỳ vọng <5; sử dụng Fisher's exact."
     elif (expected < 5).any():
-        result["warning"] = (
-            "Có ô có tần số kỳ vọng <5. Cần cân nhắc gộp nhóm hoặc "
-            "phương pháp kiểm định phù hợp hơn."
-        )
+        result["warning"] = "Có ô có tần số kỳ vọng <5. Cần cân nhắc gộp nhóm hoặc phương pháp kiểm định phù hợp hơn."
 
     return result
 
 # ============================================================
-# 3. SO SÁNH BIẾN ĐỊNH LƯỢNG GIỮA 2 NHÓM (T-TEST / MANN-WHITNEY)
+# 3. SO SÁNH 2 NHÓM (CÓ CACHE)
 # ============================================================
 
-def compare_two_groups(
-    df: pd.DataFrame, group_col: str, value_col: str
-) -> Dict[str, Any]:
+@st.cache_data(show_spinner=False)
+def compare_two_groups(df: pd.DataFrame, group_col: str, value_col: str) -> Dict[str, Any]:
     tmp = df[[group_col, value_col]].dropna()
     tmp[value_col] = pd.to_numeric(tmp[value_col], errors="coerce")
     tmp = tmp.dropna()
@@ -142,9 +141,10 @@ def compare_two_groups(
     }
 
 # ============================================================
-# 4. HỒI QUY LOGISTIC – CƠ BẢN
+# 4. HỒI QUY LOGISTIC – LƯU TOÀN BỘ MÔ HÌNH (CÓ CACHE)
 # ============================================================
 
+@st.cache_data(show_spinner=False)
 def binary_logistic_regression(df: pd.DataFrame, outcome: str, predictors: List[str]):
     cols = [outcome] + predictors
     tmp = df[cols].dropna().copy()
@@ -172,6 +172,7 @@ def binary_logistic_regression(df: pd.DataFrame, outcome: str, predictors: List[
     conf = model.conf_int()
     params = model.params
 
+    # Trả về toàn bộ các biến trong mô hình, không lọc bỏ biến nào theo p-value
     output = pd.DataFrame({
         "Biến": params.index,
         "OR": np.exp(params.values),
