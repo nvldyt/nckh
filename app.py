@@ -2017,7 +2017,7 @@ Yêu cầu:
         except Exception as exc:
             st.error(f"Lỗi đọc file Excel: {exc}")
 
-st.write("---")
+            st.write("---")
             st.subheader("📋 7. Bộ máy tuyển chọn & Sắp xếp bảng cho Chương Kết quả")
             st.info(
                 "Hệ thống tự động tổng hợp các kết quả thống kê, đối chiếu với mục tiêu nghiên cứu, "
