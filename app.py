@@ -8,17 +8,31 @@ import io
 import os
 import re
 import time
+import hashlib
+from dataclasses import dataclass, asdict
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+import requests
 import streamlit as st
+import xml.etree.ElementTree as ET
+from pypdf import PdfReader
 
+# Google Gemini SDK mới: pip install google-genai
 from google import genai
 from google.genai import types
-from sentence_transformers import SentenceTransformer
-from docx import Document
 
+# Embedding: pip install sentence-transformers
+from sentence_transformers import SentenceTransformer
+
+# DOCX
+from docx import Document
+from docx.shared import Pt
+
+# ============================================================
+# IMPORT TỪ CÁC MODULE ĐÃ ĐƯỢC BÓC TÁCH
+# ============================================================
 from table_selection_engine import (
     StudyObjective, CandidateResult,
     TableSelectionEngine, NarrativePlanner,
@@ -36,11 +50,11 @@ from evidence_engine import (
 from project_storage import save_project, load_project, list_projects
 
 # ============================================================
-# 1. CẤU HÌNH & GIAO DIỆN KHOA HỌC (ACADEMIC CLEAN THEME)
+# 1. CẤU HÌNH
 # ============================================================
 
 st.set_page_config(
-    page_title="NCKH - Dược lâm sàng",
+    page_title="NCKH",
     page_icon="🔬",
     layout="wide",
 )
@@ -62,103 +76,190 @@ DEFAULT_VN_JOURNAL_DOMAINS = [
     "jmp.huemed-univ.edu.vn",
 ]
 
+# ============================================================
+# 2. CSS – GIAO DIỆN SẶC SỠ & TRONG SUỐT HEADER
+# ============================================================
+
 st.markdown(
     """
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&display=swap');
 
     html, body, p, h1, h2, h3, h4, h5, h6, span, div, label, li, .stMarkdown {
         font-family: 'Be Vietnam Pro', 'Arial', sans-serif;
     }
 
+    /* ===== NỀN TOÀN TRANG VÀ LÀM TRONG SUỐT THANH HEADER ===== */
     [data-testid="stHeader"] {
         background-color: transparent !important;
     }
     
     .stApp {
-        background-color: #f4f6f9;
+        background: linear-gradient(-45deg, #ff9a9e, #a18cd1, #667eea, #43e97b, #38f9d7, #6a1b9a);
+        background-size: 400% 400%;
+        animation: gradientShift 20s ease infinite;
+    }
+    @keyframes gradientShift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
     }
 
+    /* Đẩy lùi nội dung xuống một chút để không bị lẹm vào Header */
     .block-container { 
         max-width: 1450px; 
-        padding-top: 3.5rem !important; 
+        padding-top: 4.5rem !important; 
         padding-bottom: 2rem !important;
     }
 
+    /* ===== TIÊU ĐỀ CHÍNH ===== */
     h1 {
-        color: #1e293b !important;
+        color: #ffffff !important;
         text-align: center;
-        font-weight: 700;
-        letter-spacing: -0.5px;
-        margin-bottom: 4px;
+        font-weight: 800;
+        letter-spacing: 1px;
+        margin-top: 0 !important;
+        margin-bottom: 6px;
+        text-shadow: 0 4px 12px rgba(0,0,0,0.35), 0 0 30px rgba(255,255,255,0.25);
     }
     .stCaption, [data-testid="stCaptionContainer"] {
         text-align: center;
-        color: #64748b !important;
     }
-    h2, h3 { color: #1e3a8a !important; font-weight: 600; }
+    h1 + div p, .stApp > div > div > div > div > div:has(h1) + div {
+        color: rgba(255,255,255,0.92) !important;
+    }
+    h2, h3 { color: #4a148c !important; font-weight: 700; }
 
+    /* ===== KHỐI NỘI DUNG TAB - HIỆU ỨNG KÍNH MỜ (GLASSMORPHISM) ===== */
     .stTabs [data-baseweb="tab-panel"] {
-        background: #ffffff;
-        border-radius: 12px;
-        padding: 24px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        border: 1px solid #e2e8f0;
+        background: rgba(255, 255, 255, 0.88);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border-radius: 20px;
+        padding: 28px;
+        box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+        border: 1px solid rgba(255,255,255,0.4);
         margin-top: 10px;
     }
 
+    /* ===== THANH TAB ===== */
     .stTabs [data-baseweb="tab-list"] {
-        background: #e2e8f0;
-        border-radius: 10px;
-        padding: 4px;
-        gap: 4px;
+        background: rgba(255, 255, 255, 0.35);
+        backdrop-filter: blur(8px);
+        border-radius: 14px;
+        padding: 6px;
+        gap: 6px;
+        flex-wrap: wrap;
     }
     .stTabs [data-baseweb="tab"] {
-        border-radius: 8px !important;
-        font-weight: 600;
-        color: #475569;
+        border-radius: 10px !important;
+        font-weight: 700;
+        color: #ffffff;
+        transition: all 0.25s ease;
     }
     .stTabs [aria-selected="true"] {
-        background: #1e3a8a !important;
+        background: linear-gradient(135deg, #6a1b9a, #ab47bc) !important;
         color: #fff !important;
+        box-shadow: 0 4px 10px rgba(106,27,154,0.4);
     }
 
+    /* ===== NÚT BẤM - GRADIENT SẶC SỠ + HOVER ===== */
     div.stButton > button, div.stDownloadButton > button {
-        background: #1e3a8a !important;
+        background: linear-gradient(135deg, #6a1b9a 0%, #ab47bc 50%, #ff6ec4 100%) !important;
         color: white !important;
-        font-weight: 600;
-        border-radius: 8px;
+        font-weight: 700;
+        border-radius: 12px;
         border: none;
-        padding: 8px 16px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        transition: all 0.2s ease;
+        padding: 10px 20px;
+        box-shadow: 0 6px 14px rgba(106,27,154,0.35);
+        transition: all 0.25s ease;
     }
-    div.stButton > button:hover {
-        background: #1d4ed8 !important;
+    div.stButton > button:hover, div.stDownloadButton > button:hover {
+        transform: translateY(-3px) scale(1.02);
+        box-shadow: 0 10px 22px rgba(106,27,154,0.5);
+        filter: brightness(1.08);
+    }
+    div.stButton > button:active { transform: translateY(0px) scale(0.98); }
+
+    div.stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #ff512f, #f09819) !important;
+        box-shadow: 0 6px 14px rgba(255,81,47,0.4);
     }
 
+    /* ===== BẢNG DỮ LIỆU ===== */
     [data-testid="stDataFrame"] {
         background-color: white;
-        border-radius: 8px;
-        border: 1px solid #cbd5e1;
+        border-radius: 14px;
+        padding: 10px;
+        box-shadow: 0 6px 16px rgba(0,0,0,0.12);
     }
 
-    .warning-box { border-left: 4px solid #f59e0b; padding: 10px 14px; background: #fffbeb; border-radius: 6px; color: #92400e; }
-    .danger-box  { border-left: 4px solid #ef4444; padding: 10px 14px; background: #fef2f2; border-radius: 6px; color: #991b1b; }
-    .success-box { border-left: 4px solid #10b981; padding: 10px 14px; background: #ecfdf5; border-radius: 6px; color: #065f46; }
+    /* ===== Ô NHẬP LIỆU ===== */
+    .stTextArea textarea, .stTextInput input, .stNumberInput input {
+        border-radius: 12px !important;
+        border: 1.5px solid #d1a3f0 !important;
+        background-color: rgba(255,255,255,0.9) !important;
+    }
+    .stTextArea textarea:focus, .stTextInput input:focus {
+        border-color: #6a1b9a !important;
+        box-shadow: 0 0 0 3px rgba(106,27,154,0.15) !important;
+    }
+    div[data-baseweb="select"] > div {
+        border-radius: 12px !important;
+        border: 1.5px solid #d1a3f0 !important;
+    }
 
+    /* ===== EXPANDER / CONTAINER / ALERT ===== */
+    .streamlit-expanderHeader {
+        background: rgba(171, 71, 188, 0.12);
+        border-radius: 10px;
+        font-weight: 600;
+        color: #4a148c;
+    }
+    .stAlert { border-radius: 12px !important; }
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        border-radius: 14px !important;
+        border: 1px solid rgba(171,71,188,0.25) !important;
+        background: rgba(255,255,255,0.7);
+    }
+
+    /* ===== FILE UPLOADER ===== */
+    [data-testid="stFileUploader"] {
+        border-radius: 14px;
+        background: rgba(255,255,255,0.6);
+        padding: 10px;
+    }
+
+    /* ===== CÁC KHỐI CẢNH BÁO TÙY CHỈNH ===== */
+    .source-card {
+        border: 1px solid #d9e2ec; border-radius: 10px;
+        padding: 10px 14px; margin-bottom: 8px; background: white;
+    }
+    .warning-box { border-left: 5px solid #f0ad4e; padding: 10px 14px; background: #fff8e8; border-radius: 8px; }
+    .danger-box  { border-left: 5px solid #d9534f; padding: 10px 14px; background: #fff1f0; border-radius: 8px; }
+    .success-box { border-left: 5px solid #2e8b57; padding: 10px 14px; background: #eef9f1; border-radius: 8px; }
+
+    /* ===== VĂN BẢN HỌC THUẬT DO AI TẠO - DỄ ĐỌC, CANH ĐỀU 2 LỀ ===== */
     .stMarkdown p, .stMarkdown li {
         font-size: 0.95rem !important;
-        line-height: 1.7 !important;
+        line-height: 1.75 !important;
         text-align: justify !important;
+        text-justify: inter-word;
+    }
+    .stMarkdown table td, .stMarkdown table th { font-size: 0.85rem !important; }
+    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4 {
+        text-align: left !important;
+        border-left: 5px solid #ab47bc;
+        padding-left: 12px;
     }
 </style>
 """,
     unsafe_allow_html=True,
 )
 
+
 # ============================================================
-# 2. SESSION STATE
+# 4. SESSION STATE
 # ============================================================
 
 def init_state():
@@ -183,8 +284,9 @@ def init_state():
 
 init_state()
 
+
 # ============================================================
-# 3. GEMINI CLIENT & EMBEDDING
+# 5. GEMINI CLIENT
 # ============================================================
 
 @st.cache_resource
@@ -205,7 +307,10 @@ def call_gemini(
 ) -> Optional[str]:
     api_key = get_api_key()
     if not api_key:
-        st.error("Chưa có GEMINI_API_KEY trong Streamlit Secrets hoặc biến môi trường.")
+        st.error(
+            "Chưa có GEMINI_API_KEY. Hãy thêm vào Streamlit Secrets "
+            "hoặc biến môi trường."
+        )
         return None
 
     client = get_gemini_client(api_key)
@@ -222,23 +327,30 @@ def call_gemini(
             if text:
                 return text.strip()
             return None
+            
         except Exception as exc:
             error_msg = str(exc)
             if any(code in error_msg for code in ["429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE"]):
                 if attempt < max_retries - 1:
                     wait_time = 15
-                    status = st.warning(f"⏳ Máy chủ Google đang quá tải. Tự động đợi {wait_time}s rồi thử lại (Lần {attempt + 1}/{max_retries})...")
+                    status = st.warning(f"⏳ Trạm máy chủ Google đang quá tải đột xuất. Ứng dụng tự động đợi {wait_time} giây rồi thử lại (Lần {attempt + 1}/{max_retries})...")
                     time.sleep(wait_time)
                     status.empty()
                 else:
-                    st.error("❌ Máy chủ Google Gemini đang quá bận. Vui lòng thử lại sau ít phút!")
+                    st.error("❌ Máy chủ Google Gemini hiện đang quá bận. Anh vui lòng đợi 1-2 phút rồi bấm thử lại nhé!")
                     return None
             else:
                 if attempt == max_retries - 1:
                     st.error(f"Lỗi Gemini: {error_msg}")
                     return None
                 time.sleep(3)
+
     return None
+
+
+# ============================================================
+# 6. EMBEDDING MODEL
+# ============================================================
 
 @st.cache_resource
 def load_embedding_model(model_name: str):
@@ -249,8 +361,14 @@ def get_embeddings(texts: List[str]) -> np.ndarray:
     vectors = model.encode(texts, normalize_embeddings=True, show_progress_bar=False)
     return np.asarray(vectors, dtype=np.float32)
 
+
+# ============================================================
+# 7. ADD PDF DOCUMENTS HELPER
+# ============================================================
+
 def add_pdf_documents(uploaded_files) -> Tuple[int, int, List[str]]:
     new_sources, new_chunks, errors = 0, 0, []
+
     for uploaded_file in uploaded_files:
         try:
             source, chunks = extract_pdf(uploaded_file)
@@ -259,9 +377,16 @@ def add_pdf_documents(uploaded_files) -> Tuple[int, int, List[str]]:
                 new_chunks += len(chunks)
         except Exception as exc:
             errors.append(f"{uploaded_file.name}: {exc}")
+
     if new_sources:
         rebuild_index()
+
     return new_sources, new_chunks, errors
+
+
+# ============================================================
+# 8. TRA CỨU MESH (Helper)
+# ============================================================
 
 def translate_query_to_mesh(vietnamese_query: str) -> str:
     prompt = (
@@ -275,18 +400,25 @@ def translate_query_to_mesh(vietnamese_query: str) -> str:
         return text.strip().strip('"').strip("'")
     return vietnamese_query
 
+
+# ============================================================
+# 10. INDEX / VECTOR RETRIEVAL
+# ============================================================
 def evidence_database_summary() -> Dict[str, Any]:
     documents = st.session_state.get("documents", {})
     chunks = st.session_state.get("chunks", [])
+
     by_origin_sources: Dict[str, int] = {}
     for meta in documents.values():
         origin = meta.get("origin", "Khác")
         by_origin_sources[origin] = by_origin_sources.get(origin, 0) + 1
+
     by_origin_chunks: Dict[str, int] = {}
     source_to_origin = {sid: meta.get("origin", "Khác") for sid, meta in documents.items()}
     for c in chunks:
         origin = source_to_origin.get(c.get("source_id"), "Khác")
         by_origin_chunks[origin] = by_origin_chunks.get(origin, 0) + 1
+
     return {
         "total_sources": len(documents),
         "total_chunks": len(chunks),
@@ -295,28 +427,39 @@ def evidence_database_summary() -> Dict[str, Any]:
         "index_ready": st.session_state.get("embeddings") is not None,
     }
 
+
 def render_evidence_database_status(context_label: str = ""):
     summary = evidence_database_summary()
+
     if summary["total_sources"] == 0:
         st.markdown(
             '<div class="danger-box">⚠️ <b>Evidence Database đang RỖNG.</b> '
             "Chưa có tài liệu nào được nạp — các nút viết nhanh sẽ trả về "
-            '"chưa đủ bằng chứng để kết luận". Hãy nạp PDF ở Tab 1 hoặc tra cứu trước.</div>',
+            '"chưa đủ bằng chứng để kết luận". Hãy nạp PDF ở Tab 1 hoặc tra cứu '
+            "và bấm \"Nạp vào Evidence Database\" ở Tab 2 trước.</div>",
             unsafe_allow_html=True,
         )
         return
-    origin_labels = {"PDF": "📄 PDF", "PubMed": "🌍 PubMed", "Tạp chí VN": "🇻🇳 Tạp chí VN", "Khác": "❓ Khác"}
+
+    origin_labels = {
+        "PDF": "📄 PDF", "PubMed": "🌍 PubMed",
+        "Tạp chí VN": "🇻🇳 Tạp chí VN", "Khác": "❓ Khác",
+    }
+
     pieces = []
     for origin, count in summary["by_origin_sources"].items():
         label = origin_labels.get(origin, origin)
         n_chunks = summary["by_origin_chunks"].get(origin, 0)
         pieces.append(f"{label}: <b>{count}</b> nguồn ({n_chunks} đoạn)")
-    st.markdown(
+
+    status_html = (
         f'<div class="success-box">✅ <b>Evidence Database{" - " + context_label if context_label else ""}:</b> '
         f'{summary["total_sources"]} nguồn / {summary["total_chunks"]} đoạn bằng chứng '
-        f'&nbsp;—&nbsp; {" &nbsp;|&nbsp; ".join(pieces)}</div>',
-        unsafe_allow_html=True,
+        f'&nbsp;—&nbsp; {" &nbsp;|&nbsp; ".join(pieces)}'
+        f'{"" if summary["index_ready"] else " &nbsp;—&nbsp; ⚠️ chưa dựng xong index, thử tải lại"}</div>'
     )
+    st.markdown(status_html, unsafe_allow_html=True)
+
 
 def rebuild_index():
     chunks = st.session_state["chunks"]
@@ -326,15 +469,20 @@ def rebuild_index():
     texts = [c["text"] for c in chunks]
     st.session_state["embeddings"] = get_embeddings(texts)
 
+
 def retrieve_evidence(query: str, k: int = DEFAULT_TOP_K) -> List[Dict[str, Any]]:
     chunks = st.session_state["chunks"]
     matrix = st.session_state.get("embeddings")
+
     if not chunks or matrix is None:
         return []
+
     query_vector = get_embeddings([query])[0]
     scores = matrix @ query_vector
+
     k = min(k, len(chunks))
     indices = np.argsort(scores)[::-1][:k]
+
     results = []
     for idx in indices:
         item = dict(chunks[idx])
@@ -342,14 +490,17 @@ def retrieve_evidence(query: str, k: int = DEFAULT_TOP_K) -> List[Dict[str, Any]
         results.append(item)
     return results
 
+
 def format_evidence_for_prompt(evidence: List[Dict[str, Any]]) -> str:
     if not evidence:
         return "KHÔNG CÓ BẰNG CHỨNG ĐƯỢC TRUY XUẤT."
+
     blocks = []
     for ev in evidence:
         meta = st.session_state["documents"].get(ev["source_id"], {})
         origin_note = f" | Nguồn gốc: {meta.get('origin', '')}"
         table_note = f"\nGhi chú: {ev['table_hint']}" if ev.get("table_hint") else ""
+
         blocks.append(
             f"""
 [SOURCE_TAG={ev['chunk_id']}]
@@ -363,10 +514,17 @@ NỘI DUNG GỐC:
 [/SOURCE_TAG]
 """.strip()
         )
+
     return "\n\n".join(blocks)
+
+
+# ============================================================
+# 11. CITATION ENGINE
+# ============================================================
 
 def source_metadata(source_id: str) -> Dict[str, Any]:
     return st.session_state["documents"].get(source_id, {})
+
 
 def register_citations(evidence: List[Dict[str, Any]]) -> Dict[str, int]:
     registry = st.session_state["citation_registry"]
@@ -375,6 +533,7 @@ def register_citations(evidence: List[Dict[str, Any]]) -> Dict[str, int]:
         if source_id not in registry:
             registry[source_id] = len(registry) + 1
     return registry
+
 
 def citation_bibliography() -> str:
     registry = st.session_state["citation_registry"]
@@ -395,13 +554,16 @@ def citation_bibliography() -> str:
         rows.append(citation)
     return "\n".join(rows)
 
+
 def replace_source_tags_with_citations(
     generated_text: str, evidence: List[Dict[str, Any]]
 ) -> Tuple[str, List[str]]:
     registry = register_citations(evidence)
     valid_chunk_to_source = {ev["chunk_id"]: ev["source_id"] for ev in evidence}
     invalid_tags = []
+
     pattern = re.compile(r"\[SOURCE_TAG=([A-Za-z0-9_-]+)\]")
+
     def repl(match):
         chunk_id = match.group(1)
         if chunk_id not in valid_chunk_to_source:
@@ -409,56 +571,93 @@ def replace_source_tags_with_citations(
             return "[CITATION_INVALID]"
         source_id = valid_chunk_to_source[chunk_id]
         return f"[{registry[source_id]}]"
+
     converted = pattern.sub(repl, generated_text)
     return converted, invalid_tags
 
+
+# ============================================================
+# 12. PROMPT ENGINE – EVIDENCE ONLY
+# ============================================================
+
 BASE_SYSTEM_RULES = """
-Bạn là trợ lý nghiên cứu khoa học, hỗ trợ viết luận văn Chuyên khoa cấp I ngành Dược lâm sàng.
+Bạn là trợ lý nghiên cứu khoa học, hỗ trợ viết luận văn Chuyên khoa cấp I
+ngành Dược lâm sàng.
+
 NGUYÊN TẮC BẮT BUỘC:
-1. Tài liệu cung cấp là nguồn bằng chứng ưu tiên duy nhất.
+1. Tài liệu được cung cấp là nguồn bằng chứng ưu tiên duy nhất.
 2. Không tự tạo số liệu, p-value, OR, RR, HR, CI95%, tỷ lệ %, liều dùng hoặc cỡ mẫu.
 3. Không tự tạo tên tác giả, năm, tên bài báo, DOI, PMID.
 4. Mọi khẳng định phải gắn SOURCE_TAG thật ngay sau khẳng định: [SOURCE_TAG=SRC-...-Pxxx-Cxxx]
 5. Văn phong chuyên khảo Dược lâm sàng, khô khan, trực diện, không hoa mỹ.
 """
 
+
 def generate_evidence_based(
     task: str, query: str, k: int = DEFAULT_TOP_K
 ) -> Tuple[Optional[str], List[Dict[str, Any]], List[str]]:
     evidence = retrieve_evidence(query, k=k)
+
     if not evidence:
         return "Tài liệu được cung cấp chưa đủ bằng chứng để kết luận.", [], []
+
     evidence_text = format_evidence_for_prompt(evidence)
+
     prompt = f"""
 {BASE_SYSTEM_RULES}
-NHIỆM VỤ: {task}
-CÂU HỎI/TRUY VẤN: {query}
-BẰNG CHỨNG: {evidence_text}
+
+NHIỆM VỤ:
+{task}
+
+CÂU HỎI/TRUY VẤN:
+{query}
+
+BẰNG CHỨNG ĐƯỢC PHÉP SỬ DỤNG:
+{evidence_text}
 """
+
     output = call_gemini(prompt)
     if output is None:
         return None, evidence, []
+
     converted, invalid_tags = replace_source_tags_with_citations(output, evidence)
+
+    if invalid_tags:
+        converted += (
+            "\n\n> ⚠️ CẢNH BÁO AUDIT: Có SOURCE_TAG không tồn tại trong bằng "
+            "chứng được truy xuất. Đoạn này cần kiểm tra thủ công trước khi sử dụng."
+        )
+
     st.session_state["last_generated"] = converted
     st.session_state["last_evidence"] = evidence
     return converted, evidence, invalid_tags
 
+
+# ============================================================
+# 17. KIỂM TRA NHẤT QUÁN SỐ LIỆU + TRÙNG LẶP NỘI BỘ
+# ============================================================
+
 def extract_numeric_tokens(text: str) -> List[str]:
     if not text:
         return []
-    return re.findall(r"(?<![\w])\d+(?:[.,]\d+)?(?:\s*%)?", text)
+    pattern = r"(?<![\w])\d+(?:[.,]\d+)?(?:\s*%)?"
+    return re.findall(pattern, text)
+
 
 def compare_numbers(source_text: str, generated_text: str) -> Dict[str, Any]:
     source_nums = extract_numeric_tokens(source_text)
     generated_nums = extract_numeric_tokens(generated_text)
+
     source_normalized = set(x.replace(",", ".").replace(" ", "") for x in source_nums)
     generated_normalized = set(x.replace(",", ".").replace(" ", "") for x in generated_nums)
     suspicious = sorted(generated_normalized - source_normalized)
+
     return {
         "source_numbers": sorted(source_normalized),
         "generated_numbers": sorted(generated_normalized),
         "suspicious_generated_numbers": suspicious,
     }
+
 
 def audit_generated_text(text: str) -> Dict[str, Any]:
     evidence = st.session_state.get("last_evidence", [])
@@ -467,10 +666,13 @@ def audit_generated_text(text: str) -> Dict[str, Any]:
     citation_invalid = "[CITATION_INVALID]" in text
     return {"invalid_citation": citation_invalid, **audit}
 
+
 def normalize_for_similarity(text: str) -> str:
     text = text.lower()
     text = re.sub(r"\s+", " ", text)
-    return re.sub(r"[^\w\s%.,-]", "", text).strip()
+    text = re.sub(r"[^\w\s%.,-]", "", text)
+    return text.strip()
+
 
 def ngram_set(text: str, n: int = 8) -> set:
     words = normalize_for_similarity(text).split()
@@ -478,19 +680,23 @@ def ngram_set(text: str, n: int = 8) -> set:
         return set()
     return {" ".join(words[i:i + n]) for i in range(len(words) - n + 1)}
 
+
 def internal_overlap_audit(text: str, top_k: int = 5) -> List[Dict[str, Any]]:
     target = ngram_set(text)
     if not target:
         return []
+
     results = []
     for chunk in st.session_state["chunks"]:
         other = ngram_set(chunk["text"])
         if not other:
             continue
+
         intersection = len(target & other)
         union = len(target | other)
         if union == 0:
             continue
+
         jaccard = intersection / union
         if jaccard > 0:
             results.append({
@@ -498,21 +704,31 @@ def internal_overlap_audit(text: str, top_k: int = 5) -> List[Dict[str, Any]]:
                 "chunk_id": chunk["chunk_id"], "similarity": round(jaccard, 4),
                 "text": chunk["text"][:500],
             })
+
     results.sort(key=lambda x: x["similarity"], reverse=True)
     return results[:top_k]
+
+
+# ============================================================
+# 18. XUẤT WORD
+# ============================================================
 
 def add_markdown_body_to_doc(doc: Document, body: str):
     lines = body.split("\n")
     buffer_paragraph = []
+
     def flush_paragraph():
         if buffer_paragraph:
             doc.add_paragraph(" ".join(buffer_paragraph).strip())
             buffer_paragraph.clear()
+
     for line in lines:
         stripped = line.strip()
+
         if not stripped:
             flush_paragraph()
             continue
+
         if stripped.startswith("### "):
             flush_paragraph()
             doc.add_heading(stripped[4:].strip(), level=3)
@@ -525,126 +741,379 @@ def add_markdown_body_to_doc(doc: Document, body: str):
         elif stripped.startswith(("- ", "* ")):
             flush_paragraph()
             doc.add_paragraph(stripped[2:].strip(), style="List Bullet")
+        elif stripped.startswith("|"):
+            if set(stripped.replace("|", "").replace(" ", "").replace(":", "")) <= {"-"}:
+                continue
+            flush_paragraph()
+            cells = [c.strip() for c in stripped.strip("|").split("|")]
+            table = doc.tables[-1] if doc.tables and getattr(doc, "_last_table_open", False) else None
+            if table is None:
+                table = doc.add_table(rows=1, cols=len(cells))
+                table.style = "Light Grid Accent 1"
+                for i, c in enumerate(cells):
+                    table.rows[0].cells[i].text = c
+                doc._last_table_open = True
+            else:
+                row = table.add_row()
+                for i, c in enumerate(cells):
+                    if i < len(row.cells):
+                        row.cells[i].text = c
         else:
+            doc._last_table_open = False
             buffer_paragraph.append(stripped)
+
     flush_paragraph()
+
 
 def create_word_document(title: str, body: str, bibliography: str = "") -> bytes:
     doc = Document()
     doc.add_heading(title, level=0)
     add_markdown_body_to_doc(doc, body)
+
     if bibliography.strip():
         doc.add_heading("Tài liệu tham khảo", level=1)
         for item in bibliography.splitlines():
             if item.strip():
                 doc.add_paragraph(item.strip())
+
     output = io.BytesIO()
     doc.save(output)
     return output.getvalue()
 
+
+# ============================================================
+# 18.5. HÀM AUDIT (NGÔN NGỮ, ĐẠO VĂN, AI-STYLE)
+# ============================================================
+
 def spelling_and_terminology_check(text: str) -> Optional[str]:
     if not text.strip(): return None
-    prompt = f"{BASE_SYSTEM_RULES}\nRà soát lỗi chính tả và thuật ngữ y khoa Dược lâm sàng trong đoạn văn sau:\n{text}"
+    prompt = f"""
+    {BASE_SYSTEM_RULES}
+    Bạn là biên tập viên y khoa chuyên ngành Dược lâm sàng. Rà soát lỗi chính tả và thuật ngữ y khoa trong đoạn sau:
+    {text}
+    """
     return call_gemini(prompt, model=MODEL_LITE)
 
 def plagiarism_style_review(text: str) -> Optional[str]:
     if not text.strip(): return None
-    prompt = f"{BASE_SYSTEM_RULES}\nĐóng vai hội đồng phản biện luận văn, đánh giá cấu trúc, văn phong học thuật và đối chiếu đạo văn nội bộ với đoạn văn sau:\n{text}"
+    prompt = f"""
+    {BASE_SYSTEM_RULES}
+    Đóng vai hội đồng phản biện luận văn CKI Dược lâm sàng, đánh giá tính logic và văn phong học thuật:
+    {text}
+    """
     return call_gemini(prompt)
 
 def heuristic_ai_style_score(text: str) -> Optional[str]:
     if not text.strip(): return None
-    prompt = f"{BASE_SYSTEM_RULES}\nPhân tích các dấu hiệu văn bản có khả năng do AI viết trong đoạn sau:\n{text}"
+    prompt = f"""
+    {BASE_SYSTEM_RULES}
+    Phân tích các dấu hiệu văn bản có khả năng do AI viết trong đoạn sau:
+    {text}
+    """
     return call_gemini(prompt, model=MODEL_LITE)
 
+
 # ============================================================
-# 19. GIAO DIỆN CHÍNH
+# 19. GIAO DIỆN CHÍNH (FULL TÍNH NĂNG)
 # ============================================================
 
 st.title("🔬 HỖ TRỢ NGHIÊN CỨU KHOA HỌC")
-st.caption("Evidence-Based RAG • Citation Registry • Statistical Engine • Academic Platform")
+st.caption(
+    "Evidence-Based RAG • Tra cứu đa nguồn (PubMed + Tạp chí VN) • "
+    "Citation Registry • Statistical Engine • Audit"
+)
 
 tabs = st.tabs([
     "📚 1. Tài liệu (PDF)",
     "🔍 2. Tra cứu đa nguồn",
     "✍️ 3. Viết luận văn",
-    "📊 4. Phân tích số liệu & Cấu trúc Ch.3",
+    "📊 4. Phân tích số liệu",
     "🔎 5. Audit",
     "⚙️ 6. Nguồn & cấu hình",
 ])
 
+
+# ------------------------------------------------------------
+# TAB 1 – TÀI LIỆU PDF
+# ------------------------------------------------------------
 with tabs[0]:
     st.header("📚 Ngân hàng tài liệu gốc (PDF)")
     render_evidence_database_status()
-    uploaded_files = st.file_uploader("Tải PDF nghiên cứu / guideline", type=["pdf"], accept_multiple_files=True)
+
+    uploaded_files = st.file_uploader(
+        "Tải PDF nghiên cứu / guideline / bài báo",
+        type=["pdf"], accept_multiple_files=True,
+    )
+
     col1, col2 = st.columns([1, 1])
     with col1:
         if st.button("📥 Nạp tài liệu vào Evidence Database", type="primary"):
             if not uploaded_files:
                 st.warning("Chưa có file PDF.")
             else:
-                with st.spinner("Đang xử lý PDF và Embedding..."):
+                with st.spinner("Đang đọc PDF, tạo source registry và embedding..."):
                     ns, nc, errors = add_pdf_documents(uploaded_files)
                 st.success(f"Đã thêm {ns} tài liệu, {nc} phân đoạn bằng chứng.")
+                for err in errors:
+                    st.error(err)
+
     with col2:
         if st.button("🗑️ Xóa toàn bộ ngân hàng tài liệu"):
             st.session_state["documents"] = {}
             st.session_state["chunks"] = []
             st.session_state["embeddings"] = None
             st.session_state["citation_registry"] = {}
-            st.success("Đã xóa dữ liệu.")
+            st.session_state["last_evidence"] = []
+            st.success("Đã xóa dữ liệu trong phiên hiện tại.")
             st.rerun()
+
+    st.write("---")
+    st.subheader("Nguồn đã nạp (tất cả nguồn gốc)")
 
     docs = list(st.session_state["documents"].values())
     if docs:
         st.dataframe(pd.DataFrame(docs))
+    else:
+        st.info("Chưa có tài liệu.")
 
+    st.subheader("Tìm bằng chứng trong toàn bộ Evidence Database")
+
+    evidence_query = st.text_area(
+        "Nhập vấn đề cần tìm trong tài liệu:",
+        placeholder=(
+            "Ví dụ: tỷ lệ bệnh nhân đạt huyết áp mục tiêu hoặc "
+            "tiêu chuẩn hiệu chỉnh liều theo eGFR"
+        ),
+    )
+    top_k = st.slider("Số đoạn bằng chứng", 3, MAX_TOP_K, DEFAULT_TOP_K, key="tk1")
+
+    if st.button("🔎 Truy xuất bằng chứng", key="retrieve_tab1"):
+        if not evidence_query.strip():
+            st.warning("Nhập câu hỏi trước.")
+        else:
+            evidence = retrieve_evidence(evidence_query, k=top_k)
+            st.session_state["last_evidence"] = evidence
+
+            if not evidence:
+                st.warning("Không tìm thấy bằng chứng trong tài liệu.")
+            else:
+                for ev in evidence:
+                    meta = st.session_state["documents"].get(ev["source_id"], {})
+                    st.markdown(
+                        f"""**{ev['chunk_id']}** _( {meta.get('origin', '')} )_
+Nguồn: `{ev['file_name']}` — Trang/mục: **{ev['page'] or ev.get('section', '')}**
+Điểm tương đồng: **{ev['score']:.4f}**
+
+> {ev['text']}
+"""
+                    )
+
+
+# ------------------------------------------------------------
+# TAB 2 – TRA CỨU ĐA NGUỒN: PUBMED + TẠP CHÍ Y HỌC VIỆT NAM
+# ------------------------------------------------------------
 with tabs[1]:
-    st.header("🔍 Tra cứu đa nguồn (PubMed & Tạp chí VN)")
+    st.header("🔍 Tra cứu đa nguồn: PubMed (Quốc tế) + Tạp chí Y học Việt Nam")
+    st.info(
+        "Nhập tên đề tài bằng tiếng Việt. Hệ thống tự dịch sang từ khoá MeSH để "
+        "tìm trên PubMed, đồng thời tìm bài báo tiếng Việt liên quan."
+    )
     render_evidence_database_status()
-    t3_query = st.text_input("Tên đề tài nghiên cứu:", placeholder="VD: Khảo sát sử dụng kháng sinh...")
-    if st.button("🚀 Tra cứu", type="primary"):
-        if t3_query.strip():
-            en_query = translate_query_to_mesh(t3_query)
-            st.session_state["t3_pm_data"] = search_pubmed(en_query, 5)
-            vn_results, _ = search_vn_journals(t3_query, 5)
-            st.session_state["t3_vn_data"] = vn_results
-    if st.session_state["t3_pm_data"] or st.session_state["t3_vn_data"]:
-        if st.button("➕ Nạp tất cả vào Evidence Database"):
-            for art in st.session_state["t3_pm_data"]: ingest_pubmed_article(art)
-            for art in st.session_state["t3_vn_data"]: ingest_vn_article(art)
-            rebuild_index()
-            st.success("Đã nạp thành công.")
 
+    col_search, col_btn = st.columns([4, 1])
+    with col_search:
+        t3_query = st.text_input(
+            "Tên đề tài nghiên cứu (tiếng Việt):",
+            placeholder="VD: Hiệu quả kiểm soát đường huyết bằng metformin...",
+            key="t3_query_input",
+        )
+    with col_btn:
+        max_res = st.number_input("Số bài/nguồn", min_value=2, max_value=10, value=5, key="t3_max_res")
+
+    if st.button("🚀 Tra cứu song song 2 nguồn", type="primary", key="t3_btn_search"):
+        if not t3_query.strip():
+            st.warning("Vui lòng nhập tên đề tài nghiên cứu!")
+        else:
+            st.session_state["t3_query"] = t3_query
+            with st.spinner("Đang dịch & chuẩn hoá từ khoá sang MeSH..."):
+                en_query = translate_query_to_mesh(t3_query)
+                st.session_state["t3_en_keyword"] = en_query
+            with st.spinner("Đang tìm & tải Abstract từ PubMed..."):
+                st.session_state["t3_pm_data"] = search_pubmed(en_query, max_res)
+            with st.spinner("Đang tìm bài báo trên tạp chí Y học Việt Nam..."):
+                vn_results, vn_err = search_vn_journals(t3_query, max_res)
+                st.session_state["t3_vn_data"] = vn_results
+                if vn_err:
+                    st.warning(vn_err)
+
+    if st.session_state["t3_pm_data"] or st.session_state["t3_vn_data"]:
+        st.write("---")
+        col_vn, col_pm = st.columns(2)
+
+        with col_vn:
+            st.markdown("### 🇻🇳 Tạp chí Y học Việt Nam")
+            if not st.session_state["t3_vn_data"]:
+                st.info("Chưa có dữ liệu.")
+            else:
+                for i, art in enumerate(st.session_state["t3_vn_data"]):
+                    with st.container(border=True):
+                        st.markdown(f"**[{art['title']}]({art['link']})**" if art.get("link") else f"**{art['title']}**")
+                        st.caption(art["source"])
+                        st.write(art["snippet"])
+                        if st.button("➕ Nạp vào Evidence Database", key=f"vn_ingest_{i}"):
+                            if ingest_vn_article(art):
+                                rebuild_index()
+                                st.success("Đã nạp thành công.")
+                            else:
+                                st.info("Nguồn đã tồn tại.")
+
+        with col_pm:
+            st.markdown("### 🌍 PubMed (Quốc tế)")
+            if st.session_state["t3_en_keyword"]:
+                st.success(f"🔑 MeSH: **{st.session_state['t3_en_keyword']}**")
+            if not st.session_state["t3_pm_data"]:
+                st.info("Chưa có dữ liệu.")
+            else:
+                for i, art in enumerate(st.session_state["t3_pm_data"]):
+                    with st.container(border=True):
+                        st.markdown(f"**[{art['title']}]({art['url']})**")
+                        st.caption(f"✍️ {art['authors']} ({art['year']}) — {art['journal']}")
+                        with st.expander("Xem tóm tắt"):
+                            st.write(art["abstract"])
+                        if st.button("➕ Nạp vào Evidence Database", key=f"pm_ingest_{i}"):
+                            if ingest_pubmed_article(art):
+                                rebuild_index()
+                                st.success("Đã nạp thành công.")
+                            else:
+                                st.info("Nguồn đã tồn tại.")
+
+        st.write("---")
+        if st.button("➕ Nạp TẤT CẢ kết quả ở trên", key="t3_ingest_all"):
+            count = 0
+            for art in st.session_state["t3_pm_data"]:
+                if ingest_pubmed_article(art): count += 1
+            for art in st.session_state["t3_vn_data"]:
+                if ingest_vn_article(art): count += 1
+            if count:
+                rebuild_index()
+            st.success(f"Đã nạp {count} nguồn mới.")
+
+
+# ------------------------------------------------------------
+# TAB 3 – VIẾT LUẬN VĂN (FULL NÚT VIẾT NHANH)
+# ------------------------------------------------------------
 with tabs[2]:
     st.header("✍️ Viết luận văn dựa trên bằng chứng")
-    render_evidence_database_status()
-    my_research_data = st.text_area("Bridge Data (Số liệu thực tế của anh từ Tab 4):", height=120)
-    citation_rules = "Quy tắc: Dùng SOURCE_TAG, trích dẫn chuẩn, không tự bịa số."
-    
+    st.warning("Công cụ tạo bản nháp. Cần đối chiếu bản gốc trước khi đưa vào luận văn chính thức.")
+    render_evidence_database_status("cho các nút viết nhanh bên dưới")
+
+    my_research_data = st.text_area(
+        "🌉 Số liệu nghiên cứu của riêng anh (dùng cho Bàn luận / So sánh):",
+        placeholder="VD: 'Tỷ lệ nam/nữ là 1.42:1' hoặc dán kết quả từ Tab 4...",
+        height=140,
+    )
+
+    citation_rules = """
+QUY TẮC TRÍCH DẪN & HÀN LÂM BẮT BUỘC:
+1. Chỉ dùng SOURCE_TAG thật để hệ thống tự chuyển thành [n].
+2. Các số trích dẫn theo đúng thứ tự xuất hiện.
+3. Không dùng kiểu [Tên tác giả, Năm].
+4. Dùng Heading 3 (###) cho tiêu đề mục.
+"""
+
     ket_qua_container = st.container()
-    def run_quick_task(task_label, query, task_prompt, k):
-        with st.spinner(f"AI đang soạn {task_label}..."):
+
+    def run_quick_task(task_label: str, query: str, task_prompt: str, k: int):
+        with st.spinner(f"AI đang soạn: {task_label}..."):
             output, evidence, invalid = generate_evidence_based(task_prompt, query, k=k)
+
         if output:
             with ket_qua_container:
                 st.write("---")
                 st.subheader(task_label)
                 st.markdown(output)
+
                 bib = citation_bibliography()
-                with st.expander("📖 Danh mục tham khảo phiên"):
-                    st.code(bib, language="text")
+                with st.expander("📖 Tài liệu tham khảo đã đăng ký (toàn phiên)"):
+                    st.code(bib if bib else "Chưa có citation registry.", language="text")
 
-    c1, c2, c3, c4 = st.columns(4)
-    with c1: btn_dv = st.button("Đặt vấn đề", use_container_width=True)
-    with c2: btn_tq = st.button("Tổng quan", use_container_width=True)
-    with c3: btn_pp = st.button("Phương pháp", use_container_width=True)
-    with c4: btn_bl = st.button("Bàn luận", use_container_width=True)
+                audit = audit_generated_text(output)
+                colA, colB = st.columns(2)
+                with colA:
+                    if audit["invalid_citation"]:
+                        st.error("Có citation không hợp lệ.")
+                    else:
+                        st.success("Citation hợp lệ.")
+                with colB:
+                    if audit["suspicious_generated_numbers"]:
+                        st.warning(f"Số liệu lạ: {audit['suspicious_generated_numbers']}")
+                    else:
+                        st.success("Số liệu khớp bằng chứng.")
 
-    if btn_dv: run_quick_task("Đặt vấn đề", "Tính cấp thiết nghiên cứu", f"Viết Đặt vấn đề.\n{citation_rules}", 6)
-    if btn_tq: run_quick_task("Tổng quan", "Tổng quan y văn liên quan", f"Viết Tổng quan.\n{citation_rules}", 8)
-    if btn_pp: run_quick_task("Phương pháp", "Phương pháp nghiên cứu", f"Viết Phương pháp.\n{citation_rules}", 5)
-    if btn_bl and my_research_data.strip(): run_quick_task("Bàn luận", my_research_data, f"Viết Bàn luận dựa trên số liệu thực tế.\n{citation_rules}", 8)
+    st.subheader("📝 Lệnh viết nhanh")
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+
+    with c1: btn_dat_van_de = st.button("Đặt vấn đề", use_container_width=True)
+    with c2: btn_tong_quan = st.button("Tổng quan tài liệu", use_container_width=True)
+    with c3: btn_phuong_phap = st.button("Phương pháp NC", use_container_width=True)
+    with c4: btn_ban_luan = st.button("Bàn luận toàn diện", use_container_width=True)
+    with c5: btn_so_sanh = st.button("So sánh NC liên quan", use_container_width=True)
+    with c6: btn_tltk = st.button("Trích dẫn TLTK", use_container_width=True)
+
+    st.write("---")
+    st.subheader("Lệnh tùy chỉnh")
+    custom_prompt = st.text_area("Nhập câu lệnh khác:", key="custom_prompt_tab3")
+    k_custom = st.slider("Số nguồn bằng chứng truy xuất", 3, MAX_TOP_K, DEFAULT_TOP_K, key="tk3")
+    btn_custom = st.button("▶️ Chạy lệnh tùy chỉnh")
+
+    if btn_dat_van_de:
+        query = "Đặt vấn đề, tính cấp thiết, lý do nghiên cứu, dịch tễ học, gánh nặng bệnh tật liên quan sử dụng thuốc"
+        task = f"Viết phần 'Đặt vấn đề' cho luận văn CKI Dược lâm sàng.\n{citation_rules}"
+        run_quick_task("Đặt vấn đề", query, task, k=6)
+
+    if btn_tong_quan:
+        query = "Tổng quan y văn, các nghiên cứu liên quan, cơ chế dược lý, kết quả chính, khuyến cáo điều trị"
+        task = f"Viết phần 'Tổng quan tài liệu' chuyên sâu.\n{citation_rules}"
+        run_quick_task("Tổng quan tài liệu", query, task, k=8)
+
+    if btn_phuong_phap:
+        query = "Đối tượng nghiên cứu, tiêu chuẩn chọn loại, thiết kế nghiên cứu, cỡ mẫu, biến số nghiên cứu, phương pháp thu thập số liệu"
+        task = f"Viết 'Chương 2. ĐỐI TƯỢNG VÀ PHƯƠNG PHÁP NGHIÊN CỨU'.\n{citation_rules}"
+        run_quick_task("Phương pháp nghiên cứu", query, task, k=5)
+
+    if btn_ban_luan:
+        if not my_research_data.strip():
+            st.warning("Cần nhập số liệu của anh vào ô 'Số liệu nghiên cứu' trước!")
+        else:
+            task = f"KẾT QUẢ NGHIÊN CỨU THỰC TẾ CỦA TÔI:\n{my_research_data}\n\nYÊU CẦU: Viết Bàn luận toàn diện, đối chiếu trực tiếp với bằng chứng.\n{citation_rules}"
+            run_quick_task("Bàn luận toàn diện", my_research_data, task, k=8)
+
+    if btn_so_sanh:
+        if not my_research_data.strip():
+            st.warning("Cần nhập số liệu của anh vào ô 'Số liệu nghiên cứu' trước!")
+        else:
+            task = f"KẾT QUẢ NGHIÊN CỨU THỰC TẾ CỦA TÔI:\n{my_research_data}\n\nYÊU CẦU: So sánh với các nghiên cứu và khuyến cáo liên quan.\n{citation_rules}"
+            run_quick_task("So sánh nghiên cứu liên quan", my_research_data, task, k=8)
+
+    if btn_tltk:
+        query = "Tài liệu tham khảo, tác giả, năm xuất bản, tạp chí"
+        task = f"Liệt kê các SOURCE_TAG phù hợp làm tài liệu tham khảo chính.\n{citation_rules}"
+        with st.spinner("AI đang soạn: Trích dẫn TLTK..."):
+            output, evidence, invalid = generate_evidence_based(task, query, k=10)
+            if output:
+                with ket_qua_container:
+                    st.write("---")
+                    st.subheader("Danh mục Tài liệu tham khảo")
+                    bib = citation_bibliography()
+                    st.code(bib if bib else "Chưa có citation registry.", language="text")
+
+    if btn_custom:
+        if not custom_prompt.strip():
+            st.warning("Vui lòng nhập yêu cầu!")
+        else:
+            task = f"{custom_prompt}\n{citation_rules}"
+            run_quick_task("Kết quả lệnh tùy chỉnh", custom_prompt, task, k=k_custom)
+
 
 # ------------------------------------------------------------
 # TAB 4 – PHÂN TÍCH SỐ LIỆU & RESULT DATABASE (KHÔNG LỌC P<0.05)
@@ -813,32 +1282,159 @@ with tabs[3]:
         except Exception as exc:
             st.error(f"Lỗi đọc file Excel: {exc}")
 
+
+# ------------------------------------------------------------
+# TAB 5 – AUDIT (SỬA LỖI OVERLAPS)
+# ------------------------------------------------------------
 with tabs[4]:
     st.header("🔎 Audit luận văn")
-    audit_text = st.text_area("Dán đoạn văn cần kiểm tra", height=250)
-    c_a1, c_a2, c_a3 = st.columns(3)
-    with c_a1:
-        if st.button("🔢 Audit số liệu"):
-            if audit_text: st.write(audit_generated_text(audit_text))
-    with c_a2:
-        if st.button("📄 Kiểm tra nguy cơ đạo văn"):
-            if audit_text:
-                overlaps = internal_overlap_audit(audit_text, top_k=5)
-                st.write(f"Tỷ lệ trùng n-gram cao nhất phát hiện trong kho: {max([o['similarity'] for o in overlaps])*100 if overlaps else 0}%")
-                st.markdown(plagiarism_style_review(audit_text) or "")
-    with c_a3:
-        if st.button("🤖 Chỉ báo AI-style"):
-            if audit_text: st.markdown(heuristic_ai_style_score(audit_text) or "")
+ 
+    st.markdown(
+        '<div class="warning-box">⚠️ <b>Giới hạn cần biết:</b> các công cụ ở '
+        "tab này chỉ đưa ra <b>chỉ báo nguy cơ / gợi ý kiểm tra thêm</b>. "
+        "Không có công cụ nào (kể cả phần mềm thương mại) khẳng định chắc "
+        "chắn 100% một đoạn văn <i>không đạo văn</i> hay <i>không do AI "
+        "viết</i>. Đạo văn chỉ được đối chiếu với các nguồn đã nạp trong "
+        "Evidence Database, không phải toàn bộ internet.</div>",
+        unsafe_allow_html=True,
+    )
+ 
+    audit_text = st.text_area("Dán đoạn văn cần kiểm tra", height=280, key="audit_text")
+ 
+    st.write("---")
+    ket_qua_audit_container = st.container()
+ 
+    st.subheader("Nhóm 1: Đối chiếu với bằng chứng & citation")
+    a1, a2, a3 = st.columns(3)
+ 
+    with a1:
+        if st.button("🔢 Audit số liệu", key="audit_numbers"):
+            if not audit_text.strip():
+                st.warning("Chưa có văn bản.")
+            else:
+                result = audit_generated_text(audit_text)
+                with ket_qua_audit_container:
+                    st.markdown("### 🔢 Kết quả Audit Số liệu")
+                    st.write("**Số xuất hiện trong nguồn:**")
+                    st.write(result["source_numbers"])
+                    st.write("**Số xuất hiện trong bản viết:**")
+                    st.write(result["generated_numbers"])
+                    if result["suspicious_generated_numbers"]:
+                        st.error("Có số cần kiểm tra:")
+                        st.write(result["suspicious_generated_numbers"])
+                    else:
+                        st.success("Không phát hiện số mới ngoài tập bằng chứng.")
+ 
+    with a2:
+        if st.button("📚 Audit citation", key="audit_citation"):
+            if not audit_text.strip():
+                st.warning("Chưa có văn bản.")
+            else:
+                invalid = "[CITATION_INVALID]" in audit_text
+                with ket_qua_audit_container:
+                    st.markdown("### 📚 Kết quả Audit Citation")
+                    if invalid:
+                        st.error("Có citation invalid.")
+                    else:
+                        st.success("Không phát hiện citation invalid.")
+ 
+    with a3:
+        if st.button("🔍 Tìm trùng lặp nội bộ", key="audit_overlap"):
+            if not audit_text.strip():
+                st.warning("Chưa có văn bản.")
+            else:
+                overlaps = internal_overlap_audit(audit_text)
+                with ket_qua_audit_container:
+                    st.markdown("### 🔍 Kết quả tìm trùng lặp nội bộ")
+                    if not overlaps:
+                        st.info("Không tìm thấy đoạn trùng đáng kể.")
+                    else:
+                        for item in overlaps:
+                            st.markdown(
+                                f"""**{item['file']} – trang {item['page']}**
+Similarity nội bộ: **{item['similarity']}**
+ 
+> {item['text']}
+"""
+                            )
+ 
+    st.write("---")
+    st.subheader("Nhóm 2: Ngôn ngữ, đạo văn diện rộng & chỉ báo AI-viết")
+    b1, b2, b3 = st.columns(3)
+ 
+    with b1:
+        if st.button("🔤 Kiểm tra chính tả & thuật ngữ", key="audit_spelling"):
+            if not audit_text.strip():
+                st.warning("Chưa có văn bản.")
+            else:
+                with st.spinner("AI đang rà soát chính tả & thuật ngữ..."):
+                    response = spelling_and_terminology_check(audit_text)
+                with ket_qua_audit_container:
+                    st.markdown("### 🔤 Kết quả kiểm tra Chính tả & Thuật ngữ")
+                    if response: st.markdown(response)
+                    else: st.error("Không nhận được kết quả từ AI.")
+ 
+    with b2:
+        if st.button("📄 Kiểm tra nguy cơ đạo văn (mở rộng)", key="audit_plagiarism"):
+            if not audit_text.strip():
+                st.warning("Chưa có văn bản.")
+            else:
+                with st.spinner("Đang đối chiếu n-gram và phân tích diễn đạt..."):
+                    overlaps = internal_overlap_audit(audit_text, top_k=5) # Sửa lỗi xác định overlaps
+                    response = plagiarism_style_review(audit_text)
+                
+                with ket_qua_audit_container:
+                    st.markdown("### 📄 Kết quả kiểm tra Nguy cơ đạo văn")
+                    if overlaps:
+                        max_sim = max(o["similarity"] for o in overlaps)
+                        if max_sim >= 0.3:
+                            st.error(f"Tỷ lệ trùng n-gram cao nhất: {max_sim*100:.1f}% — cần xem lại diễn đạt.")
+                        elif max_sim >= 0.1:
+                            st.warning(f"Tỷ lệ trùng n-gram cao nhất: {max_sim*100:.1f}% — nên kiểm tra thêm.")
+                        else:
+                            st.info(f"Tỷ lệ trùng n-gram cao nhất: {max_sim*100:.1f}% — khá thấp.")
+                    else:
+                        st.info("Không phát hiện trùng cụm từ dài.")
+                    if response: st.markdown(response)
+ 
+    with b3:
+        if st.button("🤖 Chỉ báo nguy cơ văn bản do AI viết", key="audit_ai_style"):
+            if not audit_text.strip():
+                st.warning("Chưa có văn bản.")
+            else:
+                with st.spinner("Đang phân tích phong cách văn bản..."):
+                    style_analysis = heuristic_ai_style_score(audit_text)
+                with ket_qua_audit_container:
+                    st.markdown("### 🤖 Chỉ báo nguy cơ văn bản do AI viết")
+                    if style_analysis: st.markdown(style_analysis)
 
+    st.write("---")
+    st.subheader("Phản biện logic bằng AI")
+    logic_request = st.text_area("Mô tả vấn đề hoặc dán đoạn văn", height=180, key="logic_request")
+    if st.button("⚖️ Phản biện logic", key="logic_review"):
+        if not logic_request.strip():
+            st.warning("Nhập nội dung cần phản biện.")
+        else:
+            with st.spinner("AI đang xử lý..."):
+                prompt = f"{BASE_SYSTEM_RULES}\nĐóng vai phản biện luận văn CKI Dược lâm sàng, kiểm tra tính logic của:\n{logic_request}"
+                response = call_gemini(prompt)
+                if response: st.markdown(response)
+
+
+# ------------------------------------------------------------
+# TAB 6 – NGUỒN, CITATION & QUẢN LÝ DỰ ÁN (CHECKPOINT)
+# ------------------------------------------------------------
 with tabs[5]:
     st.header("⚙️ Nguồn, Citation & Quản lý Dự án")
+
     st.write(f"**Gemini Model:** `{DEFAULT_MODEL}`")
+    st.write(f"**Embedding Model:** `{DEFAULT_EMBEDDING}`")
     st.write(f"**Citation Registry hiện có:** {len(st.session_state['citation_registry'])} nguồn")
-    st.code(citation_bibliography(), language="text")
 
     st.write("---")
     st.subheader("💾 Quản lý Checkpoint & Dự án Luận văn")
     st.info("Lưu lại toàn bộ trạng thái nghiên cứu xuống hệ thống để tránh mất dữ liệu khi restart app.")
+    
     col_save1, col_save2 = st.columns([2, 1])
     with col_save1:
         proj_name_input = st.text_input("Tên định danh đề tài / dự án:", value="THA_BVTP_2026")
@@ -865,6 +1461,25 @@ with tabs[5]:
         st.caption("Chưa có dự án nào được lưu.")
 
     st.write("---")
-    if st.button("📄 Xuất bản nháp ra Word"):
-        docx_data = create_word_document("Bản nháp luận văn", st.session_state["last_generated"], citation_bibliography())
-        st.download_button("📥 Tải Word", data=docx_data, file_name="Ban_nhap_CKI.docx")
+    st.subheader("Danh mục tham khảo hiện tại")
+    registry = st.session_state["citation_registry"]
+    if registry:
+        st.code(citation_bibliography(), language="text")
+    else:
+        st.info("Citation registry chưa có dữ liệu.")
+
+    st.write("---")
+    if st.button("📄 Xuất bản nháp hiện tại ra Word", key="export_word"):
+        if not st.session_state["last_generated"]:
+            st.warning("Chưa có bản nháp.")
+        else:
+            docx_data = create_word_document(
+                title="Bản nháp hỗ trợ nghiên cứu – Dược lâm sàng",
+                body=st.session_state["last_generated"],
+                bibliography=citation_bibliography(),
+            )
+            st.download_button(
+                "📥 Tải Word", data=docx_data,
+                file_name="Ban_nhap_NCKH_Duoc_Lam_Sang.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
