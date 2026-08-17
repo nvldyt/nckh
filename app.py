@@ -1326,6 +1326,56 @@ def create_word_document(title: str, body: str, bibliography: str = "") -> bytes
     output = io.BytesIO()
     doc.save(output)
     return output.getvalue()
+    # ============================================================
+# 18.5. CÁC HÀM XỬ LÝ CHO TAB AUDIT (NGÔN NGỮ, ĐẠO VĂN, AI-STYLE)
+# ============================================================
+
+def spelling_and_terminology_check(text: str) -> Optional[str]:
+    if not text.strip(): return None
+    prompt = f"""
+    {BASE_SYSTEM_RULES}
+    Bạn là một biên tập viên y khoa khó tính chuyên ngành Dược lâm sàng.
+    Hãy rà soát đoạn văn bản sau để tìm ra:
+    1. Các lỗi chính tả, lỗi đánh máy.
+    2. Các lỗi dùng từ sai thuật ngữ chuyên ngành.
+    
+    ĐOẠN VĂN GỐC:
+    {text}
+    
+    Chỉ trình bày những lỗi tìm thấy và đề xuất cách sửa. Nếu không có lỗi, hãy báo "✅ Không tìm thấy lỗi chính tả/thuật ngữ đáng kể".
+    """
+    return call_gemini(prompt)
+
+def plagiarism_style_review(text: str) -> Optional[str]:
+    if not text.strip(): return None
+    prompt = f"""
+    {BASE_SYSTEM_RULES}
+    Hãy đóng vai hội đồng phản biện luận văn CKI Dược lâm sàng.
+    Phân tích đoạn văn sau để:
+    1. Đánh giá độ logic và tính mạch lạc của các lập luận.
+    2. Cảnh báo những câu văn có cấu trúc lặp lại quá nhiều (nguy cơ đạo văn cấu trúc).
+    3. Đề xuất cách nâng cấp đoạn văn này thành văn phong học thuật, khô khan và trực diện hơn.
+    
+    ĐOẠN VĂN GỐC:
+    {text}
+    """
+    return call_gemini(prompt)
+
+def heuristic_ai_style_score(text: str) -> Optional[str]:
+    if not text.strip(): return None
+    prompt = f"""
+    {BASE_SYSTEM_RULES}
+    Hãy phân tích đoạn văn sau và soi khắt khe các dấu hiệu nhận biết văn bản này có thể do AI (như ChatGPT/Gemini) viết:
+    1. Việc lạm dụng các từ nối chuyển ý rập khuôn (Tóm lại, Có thể thấy rằng, Nhìn chung, Đáng chú ý là...).
+    2. Cấu trúc câu quá máy móc, thiếu tính tự nhiên hoặc độ "gồ ghề" của văn phong do con người tự viết.
+    3. Việc sử dụng tính từ hoa mỹ không phù hợp với văn bản khoa học chuyên khảo.
+    
+    ĐOẠN VĂN GỐC:
+    {text}
+    
+    Trình bày dưới dạng gạch đầu dòng ngắn gọn các dấu hiệu "bốc mùi AI" tìm thấy và hướng dẫn người viết cách sửa lại cho tự nhiên.
+    """
+    return call_gemini(prompt)
 
 
 # ============================================================
