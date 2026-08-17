@@ -2101,47 +2101,27 @@ Similarity nội bộ: **{item['similarity']}**
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
-                with st.spinner("Đang tính chỉ báo phong cách văn bản..."):
-                    heuristic = heuristic_ai_style_score(audit_text)
-                    style_note = ai_style_review_gemini(audit_text)
- 
+                with st.spinner("Đang phân tích phong cách văn bản..."):
+                    # Gọi hàm backend đã cấu hình (trả về chuỗi Markdown)
+                    style_analysis = heuristic_ai_style_score(audit_text)
+
                 with ket_qua_audit_container:
                     st.markdown("### 🤖 Chỉ báo nguy cơ văn bản do AI viết")
                     st.caption(
-                        "Đây là chỉ báo thống kê phong cách văn bản, mang tính tham "
-                        "khảo — KHÔNG phải kết luận đoạn văn có do AI viết hay không."
+                        "Đây là đánh giá dựa trên phong cách ngôn ngữ, mang tính tham "
+                        "khảo — KHÔNG phải kết luận chắc chắn 100% văn bản do AI viết hay không."
                     )
- 
-                    risk_level = heuristic.get("risk_level", "Không đủ dữ liệu")
-                    if risk_level == "Cao":
-                        st.error(f"Mức chỉ báo: **{risk_level}**")
-                    elif risk_level == "Trung bình":
-                        st.warning(f"Mức chỉ báo: **{risk_level}**")
-                    elif risk_level == "Thấp":
-                        st.success(f"Mức chỉ báo: **{risk_level}**")
+                    
+                    if style_analysis:
+                        st.markdown(style_analysis)
                     else:
-                        st.info(heuristic.get("note", "Không đủ dữ liệu."))
- 
-                    if heuristic.get("reasons"):
-                        st.write("**Cơ sở tính toán:**")
-                        for r in heuristic["reasons"]:
-                            st.write(f"- {r}")
- 
-                    with st.expander("Xem chỉ số chi tiết"):
-                        st.json({
-                            k: v for k, v in heuristic.items()
-                            if k not in ("reasons", "note")
-                        })
- 
-                    if style_note:
-                        st.write("**Nhận xét văn phong (AI hỗ trợ):**")
-                        st.markdown(style_note)
- 
+                        st.error("Không nhận được kết quả phân tích từ AI.")
+
     st.write("---")
     st.subheader("Phản biện logic bằng AI")
- 
+
     logic_request = st.text_area("Mô tả vấn đề hoặc dán đoạn văn", height=180, key="logic_request")
- 
+
     if st.button("⚖️ Phản biện logic", key="logic_review"):
         if not logic_request.strip():
             st.warning("Nhập nội dung cần phản biện.")
@@ -2149,7 +2129,6 @@ Similarity nội bộ: **{item['similarity']}**
             with st.spinner("AI đang xử lý..."):
                 prompt = f"""
 {BASE_SYSTEM_RULES}
- 
 Đóng vai phản biện luận văn CKI Dược lâm sàng.
  
 NỘI DUNG:
