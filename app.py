@@ -343,9 +343,167 @@ tab1, tab2, tab3 = st.tabs([
     "📊 Phân tích Số liệu Bệnh án (Excel)",
     "🔬 Tra cứu Đa nguồn (PubMed + Tạp chí VN)",
 ])
+# ----------------------------------------------------
+# TAB 1: TRA CỨU ĐA NGUỒN (PubMed + Tạp chí Y học Việt Nam)
+#        + TỰ ĐỘNG TỔNG HỢP TÓM TẮT
+# ----------------------------------------------------
+with tab3:
+    st.header("🔬 Tra cứu Đa nguồn: PubMed (Quốc tế) + Tạp chí Y học Việt Nam")
+    st.info(
+        "💡 Chỉ cần nhập **tên đề tài bằng tiếng Việt**. Hệ thống sẽ tự động dịch "
+        "sang từ khoá MeSH để tìm trên PubMed, đồng thời tìm các bài báo liên quan "
+        "trên tạp chí Y học Việt Nam, rồi tổng hợp thành một bản tóm tắt duy nhất."
+    )
+
+    # --- Khởi tạo session state riêng cho Tab 3 ---
+    for key, default in [
+        ("t3_pm_data", []), ("t3_vn_data", []), ("t3_en_keyword", ""),
+        ("t3_summary", ""), ("t3_query", ""),
+    ]:
+        if key not in st.session_state:
+            st.session_state[key] = default
+    if "saved_reviews" not in st.session_state:
+        st.session_state["saved_reviews"] = []
+
+    col_search, col_btn = st.columns([4, 1])
+    with col_search:
+        t3_query = st.text_input(
+            "Nhập tên đề tài nghiên cứu (Tiếng Việt):",
+            placeholder="VD: Hiệu quả kiểm soát đường huyết bằng metformin ở bệnh nhân đái tháo đường type 2",
+            key="t3_query_input",
+        )
+    with col_btn:
+        max_res = st.number_input("Số bài/nguồn", min_value=2, max_value=10, value=5, key="t3_max_res")
+
+    btn_search = st.button("🚀 Tra cứu song song 2 nguồn", type="primary", key="t3_btn_search")
+
+    if btn_search:
+        if not t3_query:
+            st.warning("Vui lòng nhập tên đề tài nghiên cứu!")
+        else:
+            st.session_state["t3_query"] = t3_query
+
+            with st.spinner("🧠 AI đang dịch & chuẩn hoá từ khoá sang MeSH (tiếng Anh)..."):
+                en_query = translate_and_optimize_query(t3_query)
+                st.session_state["t3_en_keyword"] = en_query
+
+            with st.spinner("🌍 Đang tìm & tải Abstract từ PubMed..."):
+                search_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+                search_params = {"db": "pubmed", "term": en_query, "retmode": "json", "retmax": max_res}
+                try:
+                    id_list = requests.get(search_url, params=search_params).json() \
+                        .get("esearchresult", {}).get("idlist", [])
+                    st.session_state["t3_pm_data"] = fetch_pubmed_details(id_list)
+                except Exception as e:
+                    st.session_state["t3_pm_data"] = []
+                    st.error(f"Lỗi tìm PubMed: {e}")
+
+            with st.spinner("🇻🇳 Đang tìm bài báo trên tạp chí Y học Việt Nam..."):
+                vn_results, vn_err = search_vn_medical_journals(t3_query, max_res)
+                st.session_state["t3_vn_data"] = vn_results
+                if vn_err:
+                    st.error(vn_err)
+
+            # Reset tóm tắt cũ khi tìm kiếm mới
+            st.session_state["t3_summary"] = ""
+
+    # --- Hiển thị kết quả 2 cột ---
+    if st.session_state["t3_pm_data"] or st.session_state["t3_vn_data"]:
+        st.write("---")
+        col_vn, col_pm = st.columns(2)
+
+        with col_vn:
+            st.markdown("### 🇻🇳 Tạp chí Y học Việt Nam")
+            if not st.session_state["t3_vn_data"]:
+                st.info("Chưa có dữ liệu / không tìm thấy kết quả phù hợp.")
+            else:
+                for art in st.session_state["t3_vn_data"]:
+                    st.markdown(f"**[{art['title']}]({art['link']})**")
+                    st.caption(art["source"])
+                    st.write(art["snippet"])
+                    st.divider()
+
+        with col_pm:
+            st.markdown("### 🌍 PubMed (Quốc tế)")
+            if st.session_state["t3_en_keyword"]:
+                st.success(f"🔑 Từ khoá MeSH: **{st.session_state['t3_en_keyword']}**")
+            if not st.session_state["t3_pm_data"]:
+                st.info("Chưa có dữ liệu / không tìm thấy kết quả phù hợp.")
+            else:
+                for art in st.session_state["t3_pm_data"]:
+                    st.markdown(f"**[{art['title']}]({art['url']})**")
+                    st.caption(f"✍️ {art['citation']}")
+                    with st.expander("Xem tóm tắt (Abstract)"):
+                        st.write(art["abstract"])
+                    st.divider()
+
+        # --- Nút tổng hợp tóm tắt bằng Gemini ---
+        st.write("---")
+        if st.button("✍️ Tổng hợp & Tóm tắt toàn bộ (PubMed + VN)", type="primary", key="t3_btn_summarize"):
+            if not st.session_state["t3_pm_data"] and not st.session_state["t3_vn_data"]:
+                st.warning("Không có tài liệu nào để tổng hợp. Vui lòng tra cứu trước.")
+            else:
+                with st.spinner("AI đang đọc và tổng hợp nội dung chính..."):
+                    context_parts = []
+                    for idx, art in enumerate(st.session_state["t3_pm_data"]):
+                        context_parts.append(
+                            f"[PubMed {idx + 1}]\nTiêu đề: {art['title']}\n"
+                            f"Tóm tắt: {art['abstract']}\nTrích dẫn: {art['citation']}"
+                        )
+                    for idx, art in enumerate(st.session_state["t3_vn_data"]):
+                        context_parts.append(
+                            f"[VN {idx + 1}]\nTiêu đề: {art['title']}\n"
+                            f"Đoạn trích: {art['snippet']}\nNguồn: {art['source']}"
+                        )
+
+                    context_text = "\n\n".join(context_parts)
+                    prompt = (
+                        "Bạn là chuyên gia viết 'Tổng quan tài liệu' cho luận văn y khoa "
+                        "(Dược sĩ Chuyên khoa Cấp I).\n"
+                        f"Dựa trên các tài liệu sau (gồm cả PubMed quốc tế và tạp chí Việt Nam):\n"
+                        f"{context_text}\n\n"
+                        "Yêu cầu:\n"
+                        "1. Tổng hợp thành một bài viết tiếng Việt mạch lạc, logic, nêu bật các "
+                        "điểm chính, số liệu, và điểm tương đồng/khác biệt giữa nghiên cứu trong "
+                        "và ngoài nước.\n"
+                        "2. Bắt buộc chèn trích dẫn dạng [PubMed X] hoặc [VN X] ngay sau mỗi "
+                        "thông tin lấy từ tài liệu tương ứng.\n"
+                        "3. Văn phong hàn lâm, khô khan, trực diện, không suy diễn ngoài dữ liệu "
+                        "đã cho.\n"
+                        "4. Nếu đoạn trích tiếng Việt quá ngắn để kết luận chắc chắn, hãy nêu rõ "
+                        "đây là thông tin sơ bộ cần kiểm tra lại bản gốc."
+                    )
+
+                    gemini_res = safe_generate_content(prompt)
+                    if gemini_res and hasattr(gemini_res, 'text'):
+                        st.session_state["t3_summary"] = gemini_res.text
+                        st.session_state["saved_reviews"].append({
+                            "query": st.session_state["t3_query"],
+                            "content": gemini_res.text,
+                        })
+                        st.success("✅ Đã tổng hợp xong!")
+
+    # --- Hiển thị kết quả tổng hợp + tải Word ---
+    if st.session_state["t3_summary"]:
+        st.write("---")
+        st.subheader("📄 Bản tổng hợp")
+        with st.container(border=True):
+            st.markdown(st.session_state["t3_summary"])
+
+        word_file = generate_word_document(
+            st.session_state["t3_summary"],
+            heading=f"Tổng hợp Tài liệu: {st.session_state['t3_query']}",
+        )
+        st.download_button(
+            label="📥 Tải xuống file Word (.docx)",
+            data=word_file,
+            file_name="Tong_Hop_Da_Nguon.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            key="t3_download_word",
+        )
 
 # ----------------------------------------------------
-# TAB 1: RAG VECTOR DATABASE
+# TAB 2: RAG VECTOR DATABASE
 # ----------------------------------------------------
 with tab1:
     st.header("Phân tích tài liệu và Viết bài")
@@ -663,7 +821,7 @@ with tab1:
                 st.text(f"- {f.name} ({round(f.size / 1024, 1)} KB)")
 
 # ----------------------------------------------------
-# TAB 2: PHÂN TÍCH SỐ LIỆU TỪ EXCEL (MÔ PHỎNG SPSS)
+# TAB 3: PHÂN TÍCH SỐ LIỆU TỪ EXCEL (MÔ PHỎNG SPSS)
 # ----------------------------------------------------
 with tab2:
     st.header("📊 Phân tích thống kê & Kiểm định")
@@ -777,161 +935,3 @@ with tab2:
             else:
                 st.warning("Vui lòng nhập yêu cầu!")
 
-# ----------------------------------------------------
-# TAB 3: TRA CỨU ĐA NGUỒN (PubMed + Tạp chí Y học Việt Nam)
-#        + TỰ ĐỘNG TỔNG HỢP TÓM TẮT
-# ----------------------------------------------------
-with tab3:
-    st.header("🔬 Tra cứu Đa nguồn: PubMed (Quốc tế) + Tạp chí Y học Việt Nam")
-    st.info(
-        "💡 Chỉ cần nhập **tên đề tài bằng tiếng Việt**. Hệ thống sẽ tự động dịch "
-        "sang từ khoá MeSH để tìm trên PubMed, đồng thời tìm các bài báo liên quan "
-        "trên tạp chí Y học Việt Nam, rồi tổng hợp thành một bản tóm tắt duy nhất."
-    )
-
-    # --- Khởi tạo session state riêng cho Tab 3 ---
-    for key, default in [
-        ("t3_pm_data", []), ("t3_vn_data", []), ("t3_en_keyword", ""),
-        ("t3_summary", ""), ("t3_query", ""),
-    ]:
-        if key not in st.session_state:
-            st.session_state[key] = default
-    if "saved_reviews" not in st.session_state:
-        st.session_state["saved_reviews"] = []
-
-    col_search, col_btn = st.columns([4, 1])
-    with col_search:
-        t3_query = st.text_input(
-            "Nhập tên đề tài nghiên cứu (Tiếng Việt):",
-            placeholder="VD: Hiệu quả kiểm soát đường huyết bằng metformin ở bệnh nhân đái tháo đường type 2",
-            key="t3_query_input",
-        )
-    with col_btn:
-        max_res = st.number_input("Số bài/nguồn", min_value=2, max_value=10, value=5, key="t3_max_res")
-
-    btn_search = st.button("🚀 Tra cứu song song 2 nguồn", type="primary", key="t3_btn_search")
-
-    if btn_search:
-        if not t3_query:
-            st.warning("Vui lòng nhập tên đề tài nghiên cứu!")
-        else:
-            st.session_state["t3_query"] = t3_query
-
-            with st.spinner("🧠 AI đang dịch & chuẩn hoá từ khoá sang MeSH (tiếng Anh)..."):
-                en_query = translate_and_optimize_query(t3_query)
-                st.session_state["t3_en_keyword"] = en_query
-
-            with st.spinner("🌍 Đang tìm & tải Abstract từ PubMed..."):
-                search_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
-                search_params = {"db": "pubmed", "term": en_query, "retmode": "json", "retmax": max_res}
-                try:
-                    id_list = requests.get(search_url, params=search_params).json() \
-                        .get("esearchresult", {}).get("idlist", [])
-                    st.session_state["t3_pm_data"] = fetch_pubmed_details(id_list)
-                except Exception as e:
-                    st.session_state["t3_pm_data"] = []
-                    st.error(f"Lỗi tìm PubMed: {e}")
-
-            with st.spinner("🇻🇳 Đang tìm bài báo trên tạp chí Y học Việt Nam..."):
-                vn_results, vn_err = search_vn_medical_journals(t3_query, max_res)
-                st.session_state["t3_vn_data"] = vn_results
-                if vn_err:
-                    st.error(vn_err)
-
-            # Reset tóm tắt cũ khi tìm kiếm mới
-            st.session_state["t3_summary"] = ""
-
-    # --- Hiển thị kết quả 2 cột ---
-    if st.session_state["t3_pm_data"] or st.session_state["t3_vn_data"]:
-        st.write("---")
-        col_vn, col_pm = st.columns(2)
-
-        with col_vn:
-            st.markdown("### 🇻🇳 Tạp chí Y học Việt Nam")
-            if not st.session_state["t3_vn_data"]:
-                st.info("Chưa có dữ liệu / không tìm thấy kết quả phù hợp.")
-            else:
-                for art in st.session_state["t3_vn_data"]:
-                    st.markdown(f"**[{art['title']}]({art['link']})**")
-                    st.caption(art["source"])
-                    st.write(art["snippet"])
-                    st.divider()
-
-        with col_pm:
-            st.markdown("### 🌍 PubMed (Quốc tế)")
-            if st.session_state["t3_en_keyword"]:
-                st.success(f"🔑 Từ khoá MeSH: **{st.session_state['t3_en_keyword']}**")
-            if not st.session_state["t3_pm_data"]:
-                st.info("Chưa có dữ liệu / không tìm thấy kết quả phù hợp.")
-            else:
-                for art in st.session_state["t3_pm_data"]:
-                    st.markdown(f"**[{art['title']}]({art['url']})**")
-                    st.caption(f"✍️ {art['citation']}")
-                    with st.expander("Xem tóm tắt (Abstract)"):
-                        st.write(art["abstract"])
-                    st.divider()
-
-        # --- Nút tổng hợp tóm tắt bằng Gemini ---
-        st.write("---")
-        if st.button("✍️ Tổng hợp & Tóm tắt toàn bộ (PubMed + VN)", type="primary", key="t3_btn_summarize"):
-            if not st.session_state["t3_pm_data"] and not st.session_state["t3_vn_data"]:
-                st.warning("Không có tài liệu nào để tổng hợp. Vui lòng tra cứu trước.")
-            else:
-                with st.spinner("AI đang đọc và tổng hợp nội dung chính..."):
-                    context_parts = []
-                    for idx, art in enumerate(st.session_state["t3_pm_data"]):
-                        context_parts.append(
-                            f"[PubMed {idx + 1}]\nTiêu đề: {art['title']}\n"
-                            f"Tóm tắt: {art['abstract']}\nTrích dẫn: {art['citation']}"
-                        )
-                    for idx, art in enumerate(st.session_state["t3_vn_data"]):
-                        context_parts.append(
-                            f"[VN {idx + 1}]\nTiêu đề: {art['title']}\n"
-                            f"Đoạn trích: {art['snippet']}\nNguồn: {art['source']}"
-                        )
-
-                    context_text = "\n\n".join(context_parts)
-                    prompt = (
-                        "Bạn là chuyên gia viết 'Tổng quan tài liệu' cho luận văn y khoa "
-                        "(Dược sĩ Chuyên khoa Cấp I).\n"
-                        f"Dựa trên các tài liệu sau (gồm cả PubMed quốc tế và tạp chí Việt Nam):\n"
-                        f"{context_text}\n\n"
-                        "Yêu cầu:\n"
-                        "1. Tổng hợp thành một bài viết tiếng Việt mạch lạc, logic, nêu bật các "
-                        "điểm chính, số liệu, và điểm tương đồng/khác biệt giữa nghiên cứu trong "
-                        "và ngoài nước.\n"
-                        "2. Bắt buộc chèn trích dẫn dạng [PubMed X] hoặc [VN X] ngay sau mỗi "
-                        "thông tin lấy từ tài liệu tương ứng.\n"
-                        "3. Văn phong hàn lâm, khô khan, trực diện, không suy diễn ngoài dữ liệu "
-                        "đã cho.\n"
-                        "4. Nếu đoạn trích tiếng Việt quá ngắn để kết luận chắc chắn, hãy nêu rõ "
-                        "đây là thông tin sơ bộ cần kiểm tra lại bản gốc."
-                    )
-
-                    gemini_res = safe_generate_content(prompt)
-                    if gemini_res and hasattr(gemini_res, 'text'):
-                        st.session_state["t3_summary"] = gemini_res.text
-                        st.session_state["saved_reviews"].append({
-                            "query": st.session_state["t3_query"],
-                            "content": gemini_res.text,
-                        })
-                        st.success("✅ Đã tổng hợp xong!")
-
-    # --- Hiển thị kết quả tổng hợp + tải Word ---
-    if st.session_state["t3_summary"]:
-        st.write("---")
-        st.subheader("📄 Bản tổng hợp")
-        with st.container(border=True):
-            st.markdown(st.session_state["t3_summary"])
-
-        word_file = generate_word_document(
-            st.session_state["t3_summary"],
-            heading=f"Tổng hợp Tài liệu: {st.session_state['t3_query']}",
-        )
-        st.download_button(
-            label="📥 Tải xuống file Word (.docx)",
-            data=word_file,
-            file_name="Tong_Hop_Da_Nguon.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            key="t3_download_word",
-        )
