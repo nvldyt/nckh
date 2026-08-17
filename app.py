@@ -70,12 +70,12 @@ from docx.shared import Pt
 # ============================================================
 
 st.set_page_config(
-    page_title="Hỗ trợ Nghiên cứu Khoa học – Dược lâm sàng",
+    page_title="Hỗ trợ Nghiên cứu Khoa học",
     page_icon="🔬",
     layout="wide",
 )
 
-DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
 DEFAULT_EMBEDDING = os.getenv(
     "EMBEDDING_MODEL",
     "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
@@ -1777,51 +1777,63 @@ with tabs[4]:
 
     audit_text = st.text_area("Dán đoạn văn cần kiểm tra", height=280, key="audit_text")
     a1, a2, a3 = st.columns(3)
+    
+    # TẠO CONTAINER FULL TRANG Ở DƯỚI CÙNG ĐỂ HỨNG KẾT QUẢ
+    st.write("---")
+    ket_qua_audit_container = st.container()
 
     with a1:
-        if st.button("🔢 Audit số liệu", key="audit_numbers"):
+        # Thêm use_container_width=True để nút bấm dàn đều trong cột
+        if st.button("🔢 Audit số liệu", key="audit_numbers", use_container_width=True):
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
                 result = audit_generated_text(audit_text)
-                st.write("**Số xuất hiện trong nguồn (bằng chứng đã truy xuất gần nhất):**")
-                st.write(result["source_numbers"])
-                st.write("**Số xuất hiện trong bản viết:**")
-                st.write(result["generated_numbers"])
-                if result["suspicious_generated_numbers"]:
-                    st.error("Có số cần kiểm tra:")
-                    st.write(result["suspicious_generated_numbers"])
-                else:
-                    st.success("Không phát hiện số mới ngoài tập bằng chứng đang truy xuất.")
+                # Đẩy kết quả xuống container full trang
+                with ket_qua_audit_container:
+                    st.markdown("### 🔢 Kết quả Audit Số liệu")
+                    st.write("**Số xuất hiện trong nguồn (bằng chứng đã truy xuất gần nhất):**")
+                    st.write(result["source_numbers"])
+                    st.write("**Số xuất hiện trong bản viết:**")
+                    st.write(result["generated_numbers"])
+                    if result["suspicious_generated_numbers"]:
+                        st.error("Có số cần kiểm tra:")
+                        st.write(result["suspicious_generated_numbers"])
+                    else:
+                        st.success("Không phát hiện số mới ngoài tập bằng chứng đang truy xuất.")
 
     with a2:
-        if st.button("📚 Audit citation", key="audit_citation"):
+        if st.button("📚 Audit citation", key="audit_citation", use_container_width=True):
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
                 invalid = "[CITATION_INVALID]" in audit_text
-                if invalid:
-                    st.error("Có citation invalid.")
-                else:
-                    st.success("Không phát hiện citation invalid theo bộ kiểm tra hiện tại.")
+                with ket_qua_audit_container:
+                    st.markdown("### 📚 Kết quả Audit Citation")
+                    if invalid:
+                        st.error("Có citation invalid.")
+                    else:
+                        st.success("Không phát hiện citation invalid theo bộ kiểm tra hiện tại.")
 
     with a3:
-        if st.button("🔍 Tìm trùng lặp nội bộ", key="audit_overlap"):
+        if st.button("🔍 Tìm trùng lặp nội bộ", key="audit_overlap", use_container_width=True):
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
                 overlaps = internal_overlap_audit(audit_text)
-                if not overlaps:
-                    st.info("Không tìm thấy đoạn trùng đáng kể trong kho tài liệu hiện tại.")
-                else:
-                    for item in overlaps:
-                        st.markdown(
-                            f"""**{item['file']} – trang {item['page']}**
+                with ket_qua_audit_container:
+                    st.markdown("### 🔍 Kết quả tìm trùng lặp nội bộ")
+                    if not overlaps:
+                        st.info("Không tìm thấy đoạn trùng đáng kể trong kho tài liệu hiện tại.")
+                    else:
+                        for item in overlaps:
+                            st.markdown(
+                                f"""**{item['file']} – trang {item['page']}**
 Similarity nội bộ: **{item['similarity']}**
 
 > {item['text']}
 """
-                        )
+                            )
 
     st.write("---")
     st.subheader("Phản biện logic bằng AI")
@@ -1832,7 +1844,8 @@ Similarity nội bộ: **{item['similarity']}**
         if not logic_request.strip():
             st.warning("Nhập nội dung cần phản biện.")
         else:
-            prompt = f"""
+            with st.spinner("AI đang xử lý..."):
+                prompt = f"""
 {BASE_SYSTEM_RULES}
 
 Đóng vai phản biện luận văn CKI Dược lâm sàng.
@@ -1851,9 +1864,9 @@ Hãy kiểm tra:
 
 Không được tự bổ sung tài liệu hoặc số liệu.
 """
-            response = call_gemini(prompt)
-            if response:
-                st.markdown(response)
+                response = call_gemini(prompt)
+                if response:
+                    st.markdown(response)
 
 
 # ------------------------------------------------------------
