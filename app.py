@@ -926,7 +926,7 @@ with tabs[0]:
 
     docs = list(st.session_state["documents"].values())
     if docs:
-        st.dataframe(pd.DataFrame(docs), use_container_width=True)
+        st.dataframe(pd.DataFrame(docs))
     else:
         st.info("Chưa có tài liệu.")
 
@@ -1132,12 +1132,12 @@ QUY TẮC TRÍCH DẪN & HÀN LÂM BẮT BUỘC:
     c1, c2, c3, c4, c5, c6 = st.columns(6)
 
     # --- SỬA LỖI LAYOUT: CHỈ LƯU TRẠNG THÁI NÚT TRONG CỘT ---
-    with c1: btn_dat_van_de = st.button("Đặt vấn đề", use_container_width=True)
-    with c2: btn_tong_quan = st.button("Tổng quan tài liệu", use_container_width=True)
-    with c3: btn_phuong_phap = st.button("Phương pháp NC", use_container_width=True)
-    with c4: btn_ban_luan = st.button("Bàn luận toàn diện", use_container_width=True)
-    with c5: btn_so_sanh = st.button("So sánh NC liên quan", use_container_width=True)
-    with c6: btn_tltk = st.button("Trích dẫn TLTK", use_container_width=True)
+    with c1: btn_dat_van_de = st.button("Đặt vấn đề")
+    with c2: btn_tong_quan = st.button("Tổng quan tài liệu")
+    with c3: btn_phuong_phap = st.button("Phương pháp NC")
+    with c4: btn_ban_luan = st.button("Bàn luận toàn diện")
+    with c5: btn_so_sanh = st.button("So sánh NC liên quan")
+    with c6: btn_tltk = st.button("Trích dẫn TLTK")
 
     st.write("---")
     st.subheader("Lệnh tùy chỉnh")
@@ -1219,7 +1219,7 @@ with tabs[3]:
                     st.warning(item)
 
             with st.expander("Xem dữ liệu thô"):
-                st.dataframe(df, use_container_width=True)
+                st.dataframe(df)
 
             st.write("---")
             # --- HIỂN THỊ GIỎ KẾT QUẢ ---
@@ -1271,7 +1271,7 @@ with tabs[3]:
                         "Tiêu đề bảng": d.title,
                         "Lý do đề xuất": d.reason
                     })
-                st.dataframe(pd.DataFrame(display_rows), use_container_width=True)
+                st.dataframe(pd.DataFrame(display_rows))
                 
                 st.write("### 🖨️ XEM & COPY CÁC BẢNG ĐÃ ĐƯỢC CHỌN (Sẵn sàng đưa vào Word)")
                 st.info("Bôi đen các bảng dưới đây và bấm Ctrl+C để copy, sau đó sang Word bấm Ctrl+V để dán.")
@@ -1309,7 +1309,7 @@ with tabs[3]:
                         result = descriptive_table(df, var)
                         if not result.empty:
                             st.markdown(f"**► Biến: {var}**")
-                            st.dataframe(result, use_container_width=True)
+                            st.dataframe(result)
                             
                             # NẠP VÀO GIỎ & LƯU BẢNG ĐỂ COPY
                             result_id = f"DESC_{var}"
@@ -1348,7 +1348,7 @@ with tabs[3]:
                                     "Median (IQR)": f"{summary['median']:.2f} ({summary['q1']:.2f} - {summary['q3']:.2f})",
                                     "Min-Max": f"{summary['min']:.2f} - {summary['max']:.2f}"
                                 }])
-                                st.dataframe(num_df, use_container_width=True)
+                                st.dataframe(num_df)
                                 
                                 # NẠP VÀO GIỎ & LƯU BẢNG ĐỂ COPY
                                 result_id = f"NUM_{var}"
@@ -1395,7 +1395,7 @@ with tabs[3]:
                                     if result['p_value'] is not None and result['p_value'] < 0.05:
                                         found_count += 1
                                         st.markdown(f"**► Mối liên quan CÓ Ý NGHĨA giữa: [{indep}] & [{dep}]**")
-                                        st.dataframe(result["table"], use_container_width=True)
+                                        st.dataframe(result["table"])
                                         st.write(f"- **Kiểm định:** {result['test']} | **p-value:** `{result['p_value']:.6g}` 🟢")
                                         
                                         # NẠP VÀO GIỎ & LƯU BẢNG ĐỂ COPY
@@ -1500,7 +1500,7 @@ with tabs[3]:
                                 if not sig_df.empty:
                                     found_count += 1
                                     st.markdown(f"**► CÁC YẾU TỐ ĐỘC LẬP có tác động tới kết cục: [{out}]**")
-                                    st.dataframe(sig_df, use_container_width=True)
+                                    st.dataframe(sig_df)
                                     
                                     # NẠP VÀO GIỎ & LƯU BẢNG ĐỂ COPY
                                     result_id = f"LOG_{out}"
@@ -1566,7 +1566,7 @@ with tabs[4]:
     a1, a2, a3 = st.columns(3)
  
     with a1:
-        if st.button("🔢 Audit số liệu", key="audit_numbers", use_container_width=True):
+        if st.button("🔢 Audit số liệu", key="audit_numbers"):
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
@@ -1584,7 +1584,7 @@ with tabs[4]:
                         st.success("Không phát hiện số mới ngoài tập bằng chứng đang truy xuất.")
  
     with a2:
-        if st.button("📚 Audit citation", key="audit_citation", use_container_width=True):
+        if st.button("📚 Audit citation", key="audit_citation"):
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
@@ -1597,7 +1597,7 @@ with tabs[4]:
                         st.success("Không phát hiện citation invalid theo bộ kiểm tra hiện tại.")
  
     with a3:
-        if st.button("🔍 Tìm trùng lặp nội bộ", key="audit_overlap", use_container_width=True):
+        if st.button("🔍 Tìm trùng lặp nội bộ", key="audit_overlap"):
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
@@ -1621,7 +1621,7 @@ Similarity nội bộ: **{item['similarity']}**
     b1, b2, b3 = st.columns(3)
  
     with b1:
-        if st.button("🔤 Kiểm tra chính tả & thuật ngữ", key="audit_spelling", use_container_width=True):
+        if st.button("🔤 Kiểm tra chính tả & thuật ngữ", key="audit_spelling"):
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
@@ -1635,7 +1635,7 @@ Similarity nội bộ: **{item['similarity']}**
                         st.error("Không nhận được kết quả từ AI.")
  
     with b2:
-        if st.button("📄 Kiểm tra nguy cơ đạo văn (mở rộng)", key="audit_plagiarism", use_container_width=True):
+        if st.button("📄 Kiểm tra nguy cơ đạo văn (mở rộng)", key="audit_plagiarism"):
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
@@ -1666,7 +1666,7 @@ Similarity nội bộ: **{item['similarity']}**
                         st.error("Không nhận được nhận xét từ AI.")
  
     with b3:
-        if st.button("🤖 Chỉ báo nguy cơ văn bản do AI viết", key="audit_ai_style", use_container_width=True):
+        if st.button("🤖 Chỉ báo nguy cơ văn bản do AI viết", key="audit_ai_style"):
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
@@ -1756,7 +1756,7 @@ with tabs[5]:
                 "Tạp chí": meta.get("journal", ""), "DOI": meta.get("doi", ""),
                 "PMID": meta.get("pmid", ""),
             })
-        st.dataframe(pd.DataFrame(registry_rows), use_container_width=True)
+        st.dataframe(pd.DataFrame(registry_rows))
 
         st.subheader("Danh mục tham khảo hiện tại")
         st.code(citation_bibliography(), language="text")
