@@ -75,7 +75,7 @@ st.set_page_config(
     layout="wide",
 )
 
-DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
+DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 DEFAULT_EMBEDDING = os.getenv(
     "EMBEDDING_MODEL",
     "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
@@ -94,23 +94,172 @@ DEFAULT_VN_JOURNAL_DOMAINS = [
 
 
 # ============================================================
-# 2. CSS – tối giản, ưu tiên khả năng đọc (phù hợp văn bản học thuật)
+# 2. CSS – giao diện sặc sỡ (gradient động + glassmorphism),
+#    vẫn giữ khả năng đọc cho văn bản học thuật (justify, cỡ chữ hợp lý)
 # ============================================================
 
 st.markdown(
     """
 <style>
-.stApp { background: #f5f7fb; }
-.block-container { max-width: 1450px; padding-top: 1.5rem; }
-h1, h2, h3 { color: #183b56; }
-.source-card {
-    border: 1px solid #d9e2ec; border-radius: 10px;
-    padding: 10px 14px; margin-bottom: 8px; background: white;
-}
-.warning-box { border-left: 5px solid #f0ad4e; padding: 10px 14px; background: #fff8e8; }
-.danger-box  { border-left: 5px solid #d9534f; padding: 10px 14px; background: #fff1f0; }
-.success-box { border-left: 5px solid #2e8b57; padding: 10px 14px; background: #eef9f1; }
-.stMarkdown p, .stMarkdown li { font-size: 0.95rem; line-height: 1.7; text-align: justify; }
+    @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&display=swap');
+
+    html, body, p, h1, h2, h3, h4, h5, h6, span, div, label, li, .stMarkdown {
+        font-family: 'Be Vietnam Pro', 'Arial', sans-serif;
+    }
+
+    /* ===== NỀN TOÀN TRANG - GRADIENT ĐA SẮC ĐỘNG ===== */
+    .stApp {
+        background: linear-gradient(-45deg, #ff9a9e, #a18cd1, #667eea, #43e97b, #38f9d7, #6a1b9a);
+        background-size: 400% 400%;
+        animation: gradientShift 20s ease infinite;
+    }
+    @keyframes gradientShift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+
+    .block-container { max-width: 1450px; padding-top: 1.5rem; }
+
+    /* ===== TIÊU ĐỀ CHÍNH ===== */
+    h1 {
+        color: #ffffff !important;
+        text-align: center;
+        font-weight: 800;
+        letter-spacing: 1px;
+        margin-bottom: 6px;
+        text-shadow: 0 4px 12px rgba(0,0,0,0.35), 0 0 30px rgba(255,255,255,0.25);
+    }
+    .stCaption, [data-testid="stCaptionContainer"] {
+        text-align: center;
+    }
+    h1 + div p, .stApp > div > div > div > div > div:has(h1) + div {
+        color: rgba(255,255,255,0.92) !important;
+    }
+    h2, h3 { color: #4a148c !important; font-weight: 700; }
+
+    /* ===== KHỐI NỘI DUNG TAB - HIỆU ỨNG KÍNH MỜ (GLASSMORPHISM) ===== */
+    .stTabs [data-baseweb="tab-panel"] {
+        background: rgba(255, 255, 255, 0.88);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border-radius: 20px;
+        padding: 28px;
+        box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+        border: 1px solid rgba(255,255,255,0.4);
+        margin-top: 10px;
+    }
+
+    /* ===== THANH TAB ===== */
+    .stTabs [data-baseweb="tab-list"] {
+        background: rgba(255, 255, 255, 0.35);
+        backdrop-filter: blur(8px);
+        border-radius: 14px;
+        padding: 6px;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 10px !important;
+        font-weight: 700;
+        color: #ffffff;
+        transition: all 0.25s ease;
+    }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #6a1b9a, #ab47bc) !important;
+        color: #fff !important;
+        box-shadow: 0 4px 10px rgba(106,27,154,0.4);
+    }
+
+    /* ===== NÚT BẤM - GRADIENT SẶC SỠ + HOVER ===== */
+    div.stButton > button, div.stDownloadButton > button {
+        background: linear-gradient(135deg, #6a1b9a 0%, #ab47bc 50%, #ff6ec4 100%) !important;
+        color: white !important;
+        font-weight: 700;
+        border-radius: 12px;
+        border: none;
+        padding: 10px 20px;
+        box-shadow: 0 6px 14px rgba(106,27,154,0.35);
+        transition: all 0.25s ease;
+    }
+    div.stButton > button:hover, div.stDownloadButton > button:hover {
+        transform: translateY(-3px) scale(1.02);
+        box-shadow: 0 10px 22px rgba(106,27,154,0.5);
+        filter: brightness(1.08);
+    }
+    div.stButton > button:active { transform: translateY(0px) scale(0.98); }
+
+    div.stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #ff512f, #f09819) !important;
+        box-shadow: 0 6px 14px rgba(255,81,47,0.4);
+    }
+
+    /* ===== BẢNG DỮ LIỆU ===== */
+    [data-testid="stDataFrame"] {
+        background-color: white;
+        border-radius: 14px;
+        padding: 10px;
+        box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+    }
+
+    /* ===== Ô NHẬP LIỆU ===== */
+    .stTextArea textarea, .stTextInput input, .stNumberInput input {
+        border-radius: 12px !important;
+        border: 1.5px solid #d1a3f0 !important;
+        background-color: rgba(255,255,255,0.9) !important;
+    }
+    .stTextArea textarea:focus, .stTextInput input:focus {
+        border-color: #6a1b9a !important;
+        box-shadow: 0 0 0 3px rgba(106,27,154,0.15) !important;
+    }
+    div[data-baseweb="select"] > div {
+        border-radius: 12px !important;
+        border: 1.5px solid #d1a3f0 !important;
+    }
+
+    /* ===== EXPANDER / CONTAINER / ALERT ===== */
+    .streamlit-expanderHeader {
+        background: rgba(171, 71, 188, 0.12);
+        border-radius: 10px;
+        font-weight: 600;
+        color: #4a148c;
+    }
+    .stAlert { border-radius: 12px !important; }
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        border-radius: 14px !important;
+        border: 1px solid rgba(171,71,188,0.25) !important;
+        background: rgba(255,255,255,0.7);
+    }
+
+    /* ===== FILE UPLOADER ===== */
+    [data-testid="stFileUploader"] {
+        border-radius: 14px;
+        background: rgba(255,255,255,0.6);
+        padding: 10px;
+    }
+
+    /* ===== CÁC KHỐI CẢNH BÁO TÙY CHỈNH ===== */
+    .source-card {
+        border: 1px solid #d9e2ec; border-radius: 10px;
+        padding: 10px 14px; margin-bottom: 8px; background: white;
+    }
+    .warning-box { border-left: 5px solid #f0ad4e; padding: 10px 14px; background: #fff8e8; border-radius: 8px; }
+    .danger-box  { border-left: 5px solid #d9534f; padding: 10px 14px; background: #fff1f0; border-radius: 8px; }
+    .success-box { border-left: 5px solid #2e8b57; padding: 10px 14px; background: #eef9f1; border-radius: 8px; }
+
+    /* ===== VĂN BẢN HỌC THUẬT DO AI TẠO - DỄ ĐỌC, CANH ĐỀU 2 LỀ ===== */
+    .stMarkdown p, .stMarkdown li {
+        font-size: 0.95rem !important;
+        line-height: 1.75 !important;
+        text-align: justify !important;
+        text-justify: inter-word;
+    }
+    .stMarkdown table td, .stMarkdown table th { font-size: 0.85rem !important; }
+    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4 {
+        text-align: left !important;
+        border-left: 5px solid #ab47bc;
+        padding-left: 12px;
+    }
 </style>
 """,
     unsafe_allow_html=True,
