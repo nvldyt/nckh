@@ -1762,9 +1762,11 @@ QUY TẮC TRÍCH DẪN & HÀN LÂM BẮT BUỘC:
 with tabs[3]:
     st.header("📊 Phân tích số liệu bệnh án")
 
-    # Khởi tạo giỏ chứa kết quả trong bộ nhớ tạm
+    # Khởi tạo giỏ chứa kết quả và kho lưu bảng thô trong bộ nhớ tạm
     if "result_cart" not in st.session_state:
         st.session_state["result_cart"] = []
+    if "saved_tables" not in st.session_state:
+        st.session_state["saved_tables"] = {}
 
     excel_file = st.file_uploader("Tải file Excel", type=["xlsx", "xls"], key="excel_data")
 
@@ -1787,7 +1789,62 @@ with tabs[3]:
             st.info("💡 Mỗi khi anh bấm các nút thống kê bên dưới, kết quả sẽ tự động được nạp vào Giỏ này để lát nữa AI tuyển chọn.")
             if st.button("🗑️ Xóa toàn bộ Giỏ kết quả"):
                 st.session_state["result_cart"] = []
+                st.session_state["saved_tables"] = {}
                 st.rerun()
+
+            st.write("---")
+            
+            # ==========================================
+            # 0. BỘ MÁY TUYỂN CHỌN & SẮP XẾP BẢNG
+            # ==========================================
+            st.subheader("📋 Bộ máy tuyển chọn & Sắp xếp bảng cho Chương Kết quả")
+            st.info("Sau khi anh đã chạy các phép tính thống kê ở dưới để nạp dữ liệu vào Giỏ, hãy dùng công cụ này để lọc bảng đưa vào luận văn.")
+
+            with st.expander("🎯 Khai báo Mục tiêu nghiên cứu (Gợi ý: Dùng chính xác tên cột trong Excel làm từ khóa)"):
+                obj_input_1 = st.text_input("Mục tiêu 1", value="ĐẶC ĐIỂM BỆNH NHÂN NGHIÊN CỨU", key="obj_1")
+                obj_input_2 = st.text_input("Mục tiêu 2", value="PHÂN TÍCH THỰC TRẠNG SỬ DỤNG THUỐC", key="obj_2")
+                
+                objectives = [
+                    StudyObjective(id="MT1", title=obj_input_1, keywords=["tuổi", "tuoi", "giới", "gioi", "bệnh", "benh", "đặc điểm", "nhân khẩu", "bmi", "SoBHYT", "NgaySinh"]),
+                    StudyObjective(id="MT2", title=obj_input_2, keywords=["thuốc", "thuoc", "phù hợp", "phu hop", "liều", "lieu", "chỉ định", "chi dinh", "hoạt chất", "icd", "TenHang"]),
+                ]
+
+            if st.button("🚀 Chạy Table Selection Engine & Lập mạch kể chuyện", type="primary", key="run_engine"):
+                if not st.session_state["result_cart"]:
+                    st.error("❌ Giỏ kết quả đang trống! Anh cần cuộn xuống dưới, bấm các nút 'Tính tần số', 'Quét Crosstab'... để nạp số liệu vào Giỏ trước.")
+                else:
+                    engine = TableSelectionEngine(objectives, st.session_state["result_cart"])
+                    decisions = engine.run()
+                    narrative_plan = NarrativePlanner.build(decisions)
+
+                    st.session_state["selection_decisions"] = decisions
+                    st.session_state["narrative_plan"] = narrative_plan
+                    st.success("✅ Đã hoàn thành tuyển chọn, lọc trùng và sắp xếp cấu trúc Chương Kết quả!")
+
+            if "selection_decisions" in st.session_state:
+                st.write("### 📊 Bảng tổng hợp đề xuất cấu trúc Chương 3")
+                display_rows = []
+                for d in st.session_state["selection_decisions"]:
+                    display_rows.append({
+                        "Thứ tự": d.recommended_order or "Phụ lục",
+                        "Mức độ": d.priority.value,
+                        "Hình thức": d.presentation.value,
+                        "Điểm": d.total_score,
+                        "Tiêu đề bảng": d.title,
+                        "Lý do đề xuất": d.reason
+                    })
+                st.dataframe(pd.DataFrame(display_rows), use_container_width=True)
+                
+                st.write("### 🖨️ XEM & COPY CÁC BẢNG ĐÃ ĐƯỢC CHỌN (Sẵn sàng đưa vào Word)")
+                st.info("Bôi đen các bảng dưới đây và bấm Ctrl+C để copy, sau đó sang Word bấm Ctrl+V để dán.")
+                
+                for d in st.session_state["selection_decisions"]:
+                    if d.priority.value in ["CORE", "SUPPORTING"] and d.result_id in st.session_state["saved_tables"]:
+                        st.markdown(f"**Bảng {d.recommended_order or '*'}. {d.title}**")
+                        st.dataframe(st.session_state["saved_tables"][d.result_id], use_container_width=True)
+
+                st.write("### 📖 Mạch kể chuyện (Result Story / Narrative Plan)")
+                st.json(st.session_state["narrative_plan"])
 
             st.write("---")
             
@@ -1808,10 +1865,12 @@ with tabs[3]:
                             st.markdown(f"**► Biến: {var}**")
                             st.dataframe(result, use_container_width=True)
                             
-                            # NẠP VÀO GIỎ KẾT QUẢ
+                            # NẠP VÀO GIỎ & LƯU BẢNG ĐỂ COPY
+                            result_id = f"DESC_{var}"
+                            st.session_state["saved_tables"][result_id] = result
                             st.session_state["result_cart"].append(
                                 CandidateResult(
-                                    id=f"DESC_{var}",
+                                    id=result_id,
                                     title=f"Đặc điểm phân bố của biến {var}",
                                     result_type="demographic",
                                     variables=[var],
@@ -1837,12 +1896,20 @@ with tabs[3]:
                             summary = numeric_summary(df, var)
                             if summary:
                                 st.markdown(f"**► Biến: {var}**")
-                                st.write(f"- N: **{summary['n']}** | Mean ± SD: **{summary['mean']:.2f} ± {summary['sd']:.2f}** | Median (IQR): **{summary['median']:.2f} ({summary['q1']:.2f} - {summary['q3']:.2f})**")
+                                num_df = pd.DataFrame([{
+                                    "N": summary['n'],
+                                    "Mean ± SD": f"{summary['mean']:.2f} ± {summary['sd']:.2f}",
+                                    "Median (IQR)": f"{summary['median']:.2f} ({summary['q1']:.2f} - {summary['q3']:.2f})",
+                                    "Min-Max": f"{summary['min']:.2f} - {summary['max']:.2f}"
+                                }])
+                                st.dataframe(num_df, use_container_width=True)
                                 
-                                # NẠP VÀO GIỎ KẾT QUẢ
+                                # NẠP VÀO GIỎ & LƯU BẢNG ĐỂ COPY
+                                result_id = f"NUM_{var}"
+                                st.session_state["saved_tables"][result_id] = num_df
                                 st.session_state["result_cart"].append(
                                     CandidateResult(
-                                        id=f"NUM_{var}",
+                                        id=result_id,
                                         title=f"Đặc điểm định lượng của biến {var}",
                                         result_type="baseline",
                                         variables=[var],
@@ -1885,10 +1952,12 @@ with tabs[3]:
                                         st.dataframe(result["table"], use_container_width=True)
                                         st.write(f"- **Kiểm định:** {result['test']} | **p-value:** `{result['p_value']:.6g}` 🟢")
                                         
-                                        # NẠP VÀO GIỎ KẾT QUẢ
+                                        # NẠP VÀO GIỎ & LƯU BẢNG ĐỂ COPY
+                                        result_id = f"CROSS_{indep}_{dep}"
+                                        st.session_state["saved_tables"][result_id] = result["table"]
                                         st.session_state["result_cart"].append(
                                             CandidateResult(
-                                                id=f"CROSS_{indep}_{dep}",
+                                                id=result_id,
                                                 title=f"Mối liên quan giữa {indep} và {dep}",
                                                 result_type="association",
                                                 variables=[indep, dep],
@@ -1932,11 +2001,17 @@ with tabs[3]:
                                         g1n, g2n = result["group_names"]
                                         st.markdown(f"**► Sự khác biệt CÓ Ý NGHĨA của [{vv}] giữa 2 nhóm [{gv}]**")
                                         st.write(f"**p-value:** `{result['p_value']:.6g}` 🟢")
+                                        comp_df = pd.DataFrame({
+                                            g1n: result["group1_stats"],
+                                            g2n: result["group2_stats"],
+                                        })
                                         
-                                        # NẠP VÀO GIỎ
+                                        # NẠP VÀO GIỎ & LƯU BẢNG ĐỂ COPY
+                                        result_id = f"COMP_{gv}_{vv}"
+                                        st.session_state["saved_tables"][result_id] = comp_df
                                         st.session_state["result_cart"].append(
                                             CandidateResult(
-                                                id=f"COMP_{gv}_{vv}",
+                                                id=result_id,
                                                 title=f"Sự khác biệt của biến {vv} giữa các nhóm {gv}",
                                                 result_type="association",
                                                 variables=[gv, vv],
@@ -1954,48 +2029,52 @@ with tabs[3]:
             st.write("---")
             
             # ==========================================
-            # 7. BỘ MÁY TUYỂN CHỌN
+            # 5. HỒI QUY LOGISTIC NHỊ PHÂN
             # ==========================================
-            st.subheader("📋 7. Chạy Bộ máy tuyển chọn & Cấu trúc luận văn")
-            st.info("Sau khi anh đã chạy các phép tính thống kê ở trên để nạp dữ liệu vào Giỏ, hãy dùng công cụ này để lọc bảng đưa vào luận văn.")
+            st.subheader("5. Hồi quy logistic nhị phân (Tìm yếu tố nguy cơ độc lập)")
+            lc1, lc2 = st.columns([1, 2])
+            with lc1:
+                outcomes = st.multiselect("Biến kết cục (Tự lọc biến nhị phân)", all_cols, key="log_outcomes")
+            with lc2:
+                predictors = st.multiselect("Các yếu tố đưa vào mô hình", all_cols, key="log_predictors")
 
-            with st.expander("🎯 Khai báo Mục tiêu nghiên cứu (Bao gồm từ khóa có dấu/không dấu để AI dễ nối bảng)"):
-                obj_input_1 = st.text_input("Mục tiêu 1", value="ĐẶC ĐIỂM BỆNH NHÂN NGHIÊN CỨU", key="obj_1")
-                obj_input_2 = st.text_input("Mục tiêu 2", value="PHÂN TÍCH THỰC TRẠNG SỬ DỤNG THUỐC", key="obj_2")
-                
-                objectives = [
-                    StudyObjective(id="MT1", title=obj_input_1, keywords=["tuổi", "tuoi", "giới", "gioi", "bệnh", "benh", "đặc điểm", "nhân khẩu", "bmi"]),
-                    StudyObjective(id="MT2", title=obj_input_2, keywords=["thuốc", "thuoc", "phù hợp", "phu hop", "liều", "lieu", "chỉ định", "chi dinh", "hoạt chất", "icd"]),
-                ]
-
-            if st.button("🚀 Chạy Table Selection Engine & Lập mạch kể chuyện", type="primary", key="run_engine"):
-                if not st.session_state["result_cart"]:
-                    st.error("❌ Giỏ kết quả đang trống! Anh cần cuộn lên trên, bấm các nút 'Tính tần số', 'Quét Crosstab'... để nạp số liệu vào Giỏ trước.")
+            if st.button("Quét Logistic Regression hàng loạt (Nạp vào Giỏ)", key="run_logistic"):
+                if not outcomes or not predictors:
+                    st.warning("Chọn ít nhất một biến ở mỗi bên.")
                 else:
-                    engine = TableSelectionEngine(objectives, st.session_state["result_cart"])
-                    decisions = engine.run()
-                    narrative_plan = NarrativePlanner.build(decisions)
-
-                    st.session_state["selection_decisions"] = decisions
-                    st.session_state["narrative_plan"] = narrative_plan
-                    st.success("✅ Đã hoàn thành tuyển chọn, lọc trùng và sắp xếp cấu trúc Chương Kết quả!")
-
-            if "selection_decisions" in st.session_state:
-                st.write("### 📊 Bảng tổng hợp đề xuất cấu trúc Chương 3")
-                display_rows = []
-                for d in st.session_state["selection_decisions"]:
-                    display_rows.append({
-                        "Thứ tự": d.recommended_order or "Phụ lục",
-                        "Mức độ": d.priority.value,
-                        "Hình thức": d.presentation.value,
-                        "Điểm": d.total_score,
-                        "Tiêu đề bảng": d.title,
-                        "Lý do đề xuất": d.reason
-                    })
-                st.dataframe(pd.DataFrame(display_rows), use_container_width=True)
-                
-                st.write("### 📖 Mạch kể chuyện (Result Story / Narrative Plan)")
-                st.json(st.session_state["narrative_plan"])
+                    found_count = 0
+                    with st.spinner("Đang chạy hàng loạt mô hình hồi quy đa biến..."):
+                        for out in outcomes:
+                            preds = [p for p in predictors if p != out]
+                            if not preds: continue
+                            try:
+                                result_df, summary = binary_logistic_regression(df, out, preds)
+                                sig_df = result_df[result_df['p-value'] < 0.05]
+                                
+                                if not sig_df.empty:
+                                    found_count += 1
+                                    st.markdown(f"**► CÁC YẾU TỐ ĐỘC LẬP có tác động tới kết cục: [{out}]**")
+                                    st.dataframe(sig_df, use_container_width=True)
+                                    
+                                    # NẠP VÀO GIỎ & LƯU BẢNG ĐỂ COPY
+                                    result_id = f"LOG_{out}"
+                                    st.session_state["saved_tables"][result_id] = sig_df
+                                    st.session_state["result_cart"].append(
+                                        CandidateResult(
+                                            id=result_id,
+                                            title=f"Mô hình hồi quy đa biến cho kết cục: {out}",
+                                            result_type="regression",
+                                            variables=[out] + preds,
+                                            scientific_value=5.0, clinical_importance=5.0, discussion_value=5.0
+                                        )
+                                    )
+                            except Exception:
+                                pass
+                                
+                    if found_count > 0:
+                        st.success(f"✅ Đã nạp {found_count} mô hình hồi quy vào Giỏ!")
+                    else:
+                        st.info("Không tìm thấy mô hình có ý nghĩa thống kê (p < 0.05).")
 
             st.write("---")
             # ==========================================
