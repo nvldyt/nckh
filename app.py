@@ -1154,7 +1154,24 @@ QUY TẮC TRÍCH DẪN & HÀN LÂM BẮT BUỘC:
     # --- SỬA LỖI LAYOUT: THỰC THI HÀM BÊN NGOÀI CÁC CỘT HẸP ---
     if btn_dat_van_de:
         query = "Đặt vấn đề, tính cấp thiết, lý do nghiên cứu, dịch tễ học, gánh nặng bệnh tật liên quan sử dụng thuốc"
-        task = f"Viết phần 'Đặt vấn đề' cho luận văn CKI Dược lâm sàng.\nNêu tính cấp thiết, dịch tễ, thực trạng sử dụng thuốc/vấn đề dược lâm sàng liên quan, khoảng trống nghiên cứu.\n{citation_rules}"
+        task = f"""Viết phần 'Đặt vấn đề' cho luận văn CKI Dược lâm sàng.
+
+YÊU CẦU BẮT BUỘC VỀ HÌNH THỨC:
+1. Viết thành MỘT MẠCH VĂN LIỀN MẠCH, khoảng 400 từ, gồm 3-4 đoạn văn
+   (paragraph) nối tiếp nhau theo trình tự logic: (i) bối cảnh chung/gánh
+   nặng bệnh tật -> (ii) tính cấp thiết và nguyên tắc dược lâm sàng liên
+   quan -> (iii) thực trạng sử dụng thuốc và khoảng trống bằng chứng hiện
+   có -> (iv) câu dẫn vào lý do thực hiện nghiên cứu này.
+2. TUYỆT ĐỐI KHÔNG dùng bất kỳ heading/tiêu đề phụ nào (không #, không
+   ##, không ###, không in đậm dòng riêng làm tiêu đề mục con). Chỉ viết
+   văn xuôi thuần túy, các đoạn cách nhau bằng một dòng trống.
+3. Các đoạn phải kết nối mạch lạc với nhau bằng từ nối/ý chuyển tiếp tự
+   nhiên (không lặp cấu trúc câu mở đầu giữa các đoạn), không viết rời
+   rạc từng đoạn như các mục riêng biệt.
+4. Văn phong khoa học Dược lâm sàng, khô khan, trực diện, không hoa mỹ,
+   không liệt kê gạch đầu dòng.
+
+{citation_rules}"""
         run_quick_task("Đặt vấn đề", query, task, k=6)
 
     if btn_tong_quan:
