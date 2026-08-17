@@ -2,51 +2,17 @@
 # ============================================================
 # HỖ TRỢ NGHIÊN CỨU KHOA HỌC – EVIDENCE-BASED RAG
 # Bản tối ưu cho luận văn Chuyên khoa cấp I – Dược lâm sàng
-#
-# Gộp từ 2 phiên bản:
-#  - Bản "evidence engine": source registry theo SOURCE_TAG, citation
-#    do hệ thống cấp (không để AI tự đặt số), thống kê tính bằng Python,
-#    audit số liệu / audit trùng lặp nội bộ.
-#  - Bản "đa nguồn": tra cứu song song PubMed (quốc tế) + tạp chí Y học
-#    Việt Nam, các nút viết nhanh cho từng phần luận văn.
-#
-# Nguyên tắc thiết kế:
-# - Tài liệu gốc (PDF tự tải lên HOẶC bài báo tra cứu được) là nguồn
-#   bằng chứng ưu tiên duy nhất; tất cả được đưa vào CÙNG MỘT
-#   Evidence Database để AI trích dẫn nhất quán.
-# - AI không tự tạo số liệu, không tự tạo [Tác giả, Năm], không tự tạo
-#   DOI/PMID. Citation số [n] do hệ thống cấp sau khi xác thực SOURCE_TAG.
-# - Thống kê (tần số, crosstab, chi-square/Fisher, hồi quy logistic,
-#   so sánh 2 nhóm) được tính bằng Python/Scipy/Statsmodels, AI chỉ
-#   được diễn giải, không được tính lại.
-# - Không có nút nào tuyên bố "không đạo văn" hay "không phải AI viết";
-#   chỉ cung cấp công cụ kiểm tra nguy cơ và dấu vết nguồn để người
-#   nghiên cứu tự đối chiếu.
-#
-# Cài đặt:
-#   pip install -r requirements.txt
-# Secrets cần có (Streamlit Secrets hoặc biến môi trường):
-#   GEMINI_API_KEY   (bắt buộc)
-#   SERPAPI_KEY      (tùy chọn - để tra cứu tạp chí Y học Việt Nam)
-#
-# Chạy:
-#   streamlit run app.py
 # ============================================================
 
 import io
 import os
 import re
 import time
-import hashlib
-from dataclasses import dataclass, asdict
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-import requests
 import streamlit as st
-import xml.etree.ElementTree as ET
-from pypdf import PdfReader
 
 # Google Gemini SDK mới: pip install google-genai
 from google import genai
@@ -55,23 +21,32 @@ from google.genai import types
 # Embedding: pip install sentence-transformers
 from sentence_transformers import SentenceTransformer
 
-# Thống kê
-from scipy import stats
-import statsmodels.api as sm
-import statsmodels.formula.api as smf
-
 # DOCX
 from docx import Document
-from docx.shared import Pt
 
-# <--- Dán đoạn import của bạn vào đúng khoảng trống này --->
-# Import bộ máy tuyển chọn bảng và lập mạch kể chuyện cho luận văn
+# ============================================================
+# IMPORT TỪ CÁC MODULE ĐÃ ĐƯỢC BÓC TÁCH
+# ============================================================
+
+# 1. Import bộ máy tuyển chọn bảng
 from table_selection_engine import (
     StudyObjective, CandidateResult,
     TableSelectionEngine, NarrativePlanner,
     Priority, Presentation
 )
 
+# 2. Import bộ máy Thống kê Toán học
+from statistical_engine import (
+    validate_dataframe, descriptive_table, numeric_summary, 
+    crosstab_test, compare_two_groups, binary_logistic_regression
+)
+
+# 3. Import bộ máy Xử lý Bằng chứng (PDF, PubMed, VN Journals)
+from evidence_engine import (
+    SourceDocument, EvidenceChunk, get_serpapi_key,
+    extract_pdf, search_pubmed, search_vn_journals, 
+    ingest_pubmed_article, ingest_vn_article, add_source_and_chunks
+)
 
 # ============================================================
 # 1. CẤU HÌNH
@@ -83,9 +58,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# Đặt 3.7-flash làm bộ não chính cho các tác vụ quan trọng (Viết, Diễn giải, Logic)
 DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
-# Khai báo riêng 3.5-flash-lite cho các tác vụ vụn vặt
 MODEL_LITE = "gemini-3.5-flash-lite"
 DEFAULT_EMBEDDING = os.getenv(
     "EMBEDDING_MODEL",
@@ -95,7 +68,6 @@ DEFAULT_EMBEDDING = os.getenv(
 DEFAULT_TOP_K = 8
 MAX_TOP_K = 20
 
-# Danh sách domain tạp chí Y học Việt Nam - có thể chỉnh lại trong Tab 5
 DEFAULT_VN_JOURNAL_DOMAINS = [
     "tapchiyhocvietnam.vn",
     "vjol.info",
@@ -103,10 +75,8 @@ DEFAULT_VN_JOURNAL_DOMAINS = [
     "jmp.huemed-univ.edu.vn",
 ]
 
-
 # ============================================================
-# 2. CSS – giao diện sặc sỡ (gradient động + glassmorphism),
-#    vẫn giữ khả năng đọc cho văn bản học thuật (justify, cỡ chữ hợp lý)
+# 2. CSS – GIAO DIỆN SẶC SỠ & TRONG SUỐT HEADER
 # ============================================================
 
 st.markdown(
@@ -288,38 +258,6 @@ st.markdown(
 
 
 # ============================================================
-# 3. DATA STRUCTURES
-# ============================================================
-
-@dataclass
-class SourceDocument:
-    source_id: str
-    file_name: str
-    file_hash: str
-    origin: str = "PDF"          # PDF | PubMed | Tạp chí VN | Thủ công
-    title: str = ""
-    authors: str = ""
-    year: str = ""
-    journal: str = ""
-    doi: str = ""
-    pmid: str = ""
-    url: str = ""
-
-
-@dataclass
-class EvidenceChunk:
-    chunk_id: str
-    source_id: str
-    file_name: str
-    page: int
-    text: str
-    char_start: int
-    char_end: int
-    section: str = ""
-    table_hint: str = ""
-
-
-# ============================================================
 # 4. SESSION STATE
 # ============================================================
 
@@ -343,9 +281,7 @@ def init_state():
         if key not in st.session_state:
             st.session_state[key] = value
 
-
 init_state()
-
 
 # ============================================================
 # 5. GEMINI CLIENT
@@ -355,20 +291,11 @@ init_state()
 def get_gemini_client(api_key: str):
     return genai.Client(api_key=api_key)
 
-
 def get_api_key() -> Optional[str]:
     try:
         return st.secrets["GEMINI_API_KEY"]
     except Exception:
         return os.getenv("GEMINI_API_KEY")
-
-
-def get_serpapi_key() -> Optional[str]:
-    try:
-        return st.secrets.get("SERPAPI_KEY", "")
-    except Exception:
-        return os.getenv("SERPAPI_KEY", "")
-
 
 def call_gemini(
     prompt: str,
@@ -421,29 +348,6 @@ def call_gemini(
 
     return None
 
-    client = get_gemini_client(api_key)
-    model_name = model or DEFAULT_MODEL
-
-    for attempt in range(max_retries):
-        try:
-            response = client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(temperature=temperature),
-            )
-            text = getattr(response, "text", None)
-            if text:
-                return text.strip()
-            return None
-        except Exception as exc:
-            if attempt == max_retries - 1:
-                st.error(f"Lỗi Gemini: {exc}")
-                return None
-            time.sleep(3 * (attempt + 1))
-
-    return None
-
-
 # ============================================================
 # 6. EMBEDDING MODEL
 # ============================================================
@@ -452,129 +356,14 @@ def call_gemini(
 def load_embedding_model(model_name: str):
     return SentenceTransformer(model_name)
 
-
 def get_embeddings(texts: List[str]) -> np.ndarray:
     model = load_embedding_model(DEFAULT_EMBEDDING)
     vectors = model.encode(texts, normalize_embeddings=True, show_progress_bar=False)
     return np.asarray(vectors, dtype=np.float32)
 
-
 # ============================================================
-# 7. TIỆN ÍCH CHUNG: HASH / SOURCE ID / CHUNK ID / CHIA ĐOẠN
+# 7. ADD PDF DOCUMENTS HELPER
 # ============================================================
-
-def sha256_bytes(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
-def sha256_text(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def make_source_id(file_name: str, file_hash: str) -> str:
-    raw = f"{file_name}|{file_hash}"
-    return "SRC-" + hashlib.sha1(raw.encode("utf-8")).hexdigest()[:10].upper()
-
-
-def make_chunk_id(source_id: str, page: int, index: int) -> str:
-    return f"{source_id}-P{page:03d}-C{index:03d}"
-
-
-def clean_text(text: str) -> str:
-    text = text.replace("\x00", " ")
-    text = re.sub(r"[ \t]+", " ", text)
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip()
-
-
-def split_text_into_chunks(
-    text: str, chunk_size: int = 1800, overlap: int = 300
-) -> List[Tuple[str, int, int]]:
-    """Trả về list (text, char_start, char_end). Cố giữ mạch đoạn văn."""
-    text = clean_text(text)
-    if not text:
-        return []
-
-    chunks = []
-    start = 0
-    n = len(text)
-
-    while start < n:
-        end = min(start + chunk_size, n)
-
-        if end < n:
-            candidate = text.rfind("\n\n", start, end)
-            if candidate > start + int(chunk_size * 0.55):
-                end = candidate
-            else:
-                candidate = text.rfind(". ", start, end)
-                if candidate > start + int(chunk_size * 0.55):
-                    end = candidate + 1
-
-        piece = text[start:end].strip()
-        if piece:
-            chunks.append((piece, start, end))
-
-        if end >= n:
-            break
-        start = max(end - overlap, start + 1)
-
-    return chunks
-
-
-def add_source_and_chunks(source: SourceDocument, chunks: List[EvidenceChunk]) -> bool:
-    """Thêm 1 nguồn + các đoạn bằng chứng vào Evidence Database.
-    Trả về False nếu nguồn đã tồn tại (không thêm trùng)."""
-    if source.source_id in st.session_state["documents"]:
-        return False
-    st.session_state["documents"][source.source_id] = asdict(source)
-    st.session_state["chunks"].extend([asdict(c) for c in chunks])
-    return True
-
-
-# ============================================================
-# 8. NẠP PDF
-# ============================================================
-
-def extract_pdf(uploaded_file) -> Tuple[SourceDocument, List[EvidenceChunk]]:
-    data = uploaded_file.getvalue()
-    file_hash = sha256_bytes(data)
-    source_id = make_source_id(uploaded_file.name, file_hash)
-
-    reader = PdfReader(io.BytesIO(data))
-    source = SourceDocument(
-        source_id=source_id,
-        file_name=uploaded_file.name,
-        file_hash=file_hash,
-        origin="PDF",
-    )
-
-    chunks: List[EvidenceChunk] = []
-    for page_no, page in enumerate(reader.pages, start=1):
-        try:
-            raw = page.extract_text() or ""
-        except Exception:
-            raw = ""
-
-        text = clean_text(raw)
-        if not text:
-            continue
-
-        for idx, (piece, start, end) in enumerate(split_text_into_chunks(text), start=1):
-            chunks.append(
-                EvidenceChunk(
-                    chunk_id=make_chunk_id(source_id, page_no, idx),
-                    source_id=source_id,
-                    file_name=uploaded_file.name,
-                    page=page_no,
-                    text=piece,
-                    char_start=start,
-                    char_end=end,
-                )
-            )
-
-    return source, chunks
-
 
 def add_pdf_documents(uploaded_files) -> Tuple[int, int, List[str]]:
     new_sources, new_chunks, errors = 0, 0, []
@@ -593,12 +382,8 @@ def add_pdf_documents(uploaded_files) -> Tuple[int, int, List[str]]:
 
     return new_sources, new_chunks, errors
 
-
 # ============================================================
-# 9. TRA CỨU ĐA NGUỒN: PUBMED (QUỐC TẾ) + TẠP CHÍ Y HỌC VIỆT NAM
-#    Kết quả tra cứu được đưa THẲNG vào Evidence Database ở trên
-#    (không phải một luồng dữ liệu riêng) để dùng chung 1 hệ thống
-#    citation/audit.
+# 8. TRA CỨU MESH (Helper)
 # ============================================================
 
 def translate_query_to_mesh(vietnamese_query: str) -> str:
@@ -613,182 +398,6 @@ def translate_query_to_mesh(vietnamese_query: str) -> str:
     if text:
         return text.strip().strip('"').strip("'")
     return vietnamese_query
-
-
-def search_pubmed(query_en: str, max_res: int = 5) -> List[Dict[str, Any]]:
-    search_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
-    params = {"db": "pubmed", "term": query_en, "retmode": "json", "retmax": max_res}
-
-    try:
-        id_list = requests.get(search_url, params=params, timeout=20).json() \
-            .get("esearchresult", {}).get("idlist", [])
-    except Exception as exc:
-        st.error(f"Lỗi tìm PubMed: {exc}")
-        return []
-
-    if not id_list:
-        return []
-
-    fetch_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
-    fetch_params = {"db": "pubmed", "id": ",".join(id_list), "retmode": "xml"}
-
-    try:
-        res = requests.get(fetch_url, params=fetch_params, timeout=20)
-    except Exception as exc:
-        st.error(f"Lỗi tải chi tiết PubMed: {exc}")
-        return []
-
-    articles = []
-    if res.status_code == 200:
-        root = ET.fromstring(res.content)
-        for article in root.findall(".//PubmedArticle"):
-            pmid_node = article.find(".//PMID")
-            title_node = article.find(".//ArticleTitle")
-            pmid = pmid_node.text if pmid_node is not None else ""
-            title = title_node.text if title_node is not None else "Không có tiêu đề"
-
-            abstracts = article.findall(".//AbstractText")
-            abs_text = " ".join([e.text for e in abstracts if e.text])
-
-            author_node = article.find(".//Author/LastName")
-            author = author_node.text if author_node is not None else "Không rõ"
-            year_node = article.find(".//PubDate/Year")
-            year = year_node.text if year_node is not None else ""
-
-            journal_node = article.find(".//Journal/Title")
-            journal = journal_node.text if journal_node is not None else ""
-
-            doi = ""
-            for eid in article.findall(".//ArticleId"):
-                if eid.get("IdType") == "doi":
-                    doi = eid.text or ""
-
-            articles.append({
-                "pmid": pmid,
-                "title": title,
-                "abstract": abs_text if abs_text else "Không có bản tóm tắt.",
-                "authors": f"{author} và cộng sự",
-                "year": year,
-                "journal": journal,
-                "doi": doi,
-                "url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/",
-            })
-
-    return articles
-
-
-def search_vn_journals(
-    vietnamese_query: str, max_res: int = 5
-) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-    """Tìm bài báo tiếng Việt qua Google Scholar (SerpAPI). Cần SERPAPI_KEY."""
-    serpapi_key = get_serpapi_key()
-    if not serpapi_key:
-        return [], "Chưa cấu hình SERPAPI_KEY trong Streamlit Secrets (bỏ qua tra cứu tạp chí VN)."
-
-    domains = st.session_state.get("vn_journal_domains", [])
-    if domains:
-        domain_filter = " OR ".join(f"site:{d}" for d in domains)
-        full_query = f"{vietnamese_query} tạp chí y học ({domain_filter})"
-    else:
-        full_query = f"{vietnamese_query} tạp chí y học site:.vn"
-
-    params = {
-        "engine": "google_scholar",
-        "q": full_query,
-        "hl": "vi",
-        "num": max_res,
-        "api_key": serpapi_key,
-    }
-
-    try:
-        res = requests.get("https://serpapi.com/search", params=params, timeout=20)
-        data = res.json()
-    except Exception as exc:
-        return [], f"Lỗi kết nối SerpAPI: {exc}"
-
-    results = []
-    for item in data.get("organic_results", [])[:max_res]:
-        results.append({
-            "title": item.get("title", "Không có tiêu đề"),
-            "link": item.get("link", ""),
-            "snippet": item.get("snippet", "Không có đoạn trích."),
-            "source": item.get("publication_info", {}).get("summary", "Không rõ nguồn"),
-        })
-    return results, None
-
-
-def ingest_pubmed_article(article: Dict[str, Any]) -> bool:
-    key = article.get("pmid") or article.get("url") or article["title"]
-    file_hash = sha256_text(key)
-    source_id = make_source_id(f"PubMed:{key}", file_hash)
-
-    source = SourceDocument(
-        source_id=source_id,
-        file_name=article["title"][:120],
-        file_hash=file_hash,
-        origin="PubMed",
-        title=article["title"],
-        authors=article.get("authors", ""),
-        year=article.get("year", ""),
-        journal=article.get("journal", ""),
-        doi=article.get("doi", ""),
-        pmid=article.get("pmid", ""),
-        url=article.get("url", ""),
-    )
-
-    chunks = []
-    for idx, (piece, start, end) in enumerate(
-        split_text_into_chunks(article.get("abstract", "")), start=1
-    ):
-        chunks.append(
-            EvidenceChunk(
-                chunk_id=make_chunk_id(source_id, 0, idx),
-                source_id=source_id,
-                file_name=source.file_name,
-                page=0,
-                text=piece,
-                char_start=start,
-                char_end=end,
-                section="Abstract (PubMed)",
-            )
-        )
-
-    return add_source_and_chunks(source, chunks)
-
-
-def ingest_vn_article(article: Dict[str, Any]) -> bool:
-    key = article.get("link") or article["title"]
-    file_hash = sha256_text(key)
-    source_id = make_source_id(f"VN:{key}", file_hash)
-
-    source = SourceDocument(
-        source_id=source_id,
-        file_name=article["title"][:120],
-        file_hash=file_hash,
-        origin="Tạp chí VN",
-        title=article["title"],
-        journal=article.get("source", ""),
-        url=article.get("link", ""),
-    )
-
-    chunks = []
-    snippet = article.get("snippet", "")
-    for idx, (piece, start, end) in enumerate(split_text_into_chunks(snippet), start=1):
-        chunks.append(
-            EvidenceChunk(
-                chunk_id=make_chunk_id(source_id, 0, idx),
-                source_id=source_id,
-                file_name=source.file_name,
-                page=0,
-                text=piece,
-                char_start=start,
-                char_end=end,
-                section="Đoạn trích (Google Scholar)",
-                table_hint="CHỈ LÀ ĐOẠN TRÍCH NGẮN - CẦN KIỂM TRA BẢN GỐC TRƯỚC KHI DÙNG SỐ LIỆU",
-            )
-        )
-
-    return add_source_and_chunks(source, chunks)
 
 
 # ============================================================
@@ -851,6 +460,7 @@ def render_evidence_database_status(context_label: str = ""):
         f'{"" if summary["index_ready"] else " &nbsp;—&nbsp; ⚠️ chưa dựng xong index, thử tải lại"}</div>'
     )
     st.markdown(status_html, unsafe_allow_html=True)
+
 def rebuild_index():
     chunks = st.session_state["chunks"]
     if not chunks:
@@ -1054,190 +664,6 @@ YÊU CẦU:
 
 
 # ============================================================
-# 13. EXCEL – VALIDATION & THỐNG KÊ MÔ TẢ
-# ============================================================
-
-def validate_dataframe(df: pd.DataFrame) -> List[str]:
-    warnings = []
-    if df.empty:
-        warnings.append("File không có dòng dữ liệu.")
-
-    duplicate_rows = int(df.duplicated().sum())
-    if duplicate_rows:
-        warnings.append(f"Có {duplicate_rows} dòng trùng hoàn toàn.")
-
-    missing_total = int(df.isna().sum().sum())
-    if missing_total:
-        warnings.append(f"Tổng số ô thiếu dữ liệu: {missing_total}.")
-
-    duplicated_columns = df.columns[df.columns.duplicated()].tolist()
-    if duplicated_columns:
-        warnings.append(f"Có tên cột trùng: {duplicated_columns}")
-
-    return warnings
-
-
-def descriptive_table(df: pd.DataFrame, column: str) -> pd.DataFrame:
-    s = df[column].dropna()
-    counts = s.value_counts(dropna=False)
-    total = len(s)
-
-    result = pd.DataFrame({"Phân loại": counts.index.astype(str), "n": counts.values})
-    result["%"] = (result["n"] / total * 100).round(2)
-    return result
-
-
-def numeric_summary(df: pd.DataFrame, column: str) -> Dict[str, Any]:
-    s = pd.to_numeric(df[column], errors="coerce").dropna()
-    if len(s) == 0:
-        return {}
-    return {
-        "n": int(len(s)),
-        "mean": float(s.mean()),
-        "sd": float(s.std(ddof=1)) if len(s) > 1 else np.nan,
-        "median": float(s.median()),
-        "q1": float(s.quantile(0.25)),
-        "q3": float(s.quantile(0.75)),
-        "min": float(s.min()),
-        "max": float(s.max()),
-    }
-
-
-# ============================================================
-# 14. CROSSTAB + CHI-SQUARE / FISHER
-# ============================================================
-
-def crosstab_test(df: pd.DataFrame, independent: str, dependent: str) -> Dict[str, Any]:
-    tmp = df[[independent, dependent]].dropna()
-    table = pd.crosstab(tmp[independent], tmp[dependent])
-
-    result = {
-        "table": table, "test": None, "statistic": None,
-        "p_value": None, "expected": None, "warning": None,
-    }
-
-    chi2, p, dof, expected = stats.chi2_contingency(table, correction=False)
-    result["test"] = "Pearson Chi-square"
-    result["statistic"] = float(chi2)
-    result["p_value"] = float(p)
-    result["expected"] = expected
-
-    if table.shape == (2, 2) and (expected < 5).any():
-        oddsratio, fisher_p = stats.fisher_exact(table)
-        result["test"] = "Fisher's exact test"
-        result["statistic"] = float(oddsratio)
-        result["p_value"] = float(fisher_p)
-        result["warning"] = "Một số tần số kỳ vọng <5; sử dụng Fisher's exact."
-    elif (expected < 5).any():
-        result["warning"] = (
-            "Có ô có tần số kỳ vọng <5. Cần cân nhắc gộp nhóm hoặc "
-            "phương pháp kiểm định phù hợp hơn."
-        )
-
-    return result
-
-
-# ============================================================
-# 15. SO SÁNH BIẾN ĐỊNH LƯỢNG GIỮA 2 NHÓM (T-TEST / MANN-WHITNEY)
-#     Rất thường dùng trong luận văn Dược lâm sàng: so sánh nồng độ
-#     thuốc, thời gian nằm viện, liều, chi phí... giữa 2 nhóm.
-# ============================================================
-
-def compare_two_groups(
-    df: pd.DataFrame, group_col: str, value_col: str
-) -> Dict[str, Any]:
-    tmp = df[[group_col, value_col]].dropna()
-    tmp[value_col] = pd.to_numeric(tmp[value_col], errors="coerce")
-    tmp = tmp.dropna()
-
-    groups = tmp[group_col].unique().tolist()
-    if len(groups) != 2:
-        raise ValueError(f"Biến nhóm phải có đúng 2 mức; hiện có {len(groups)}.")
-
-    g1 = tmp[tmp[group_col] == groups[0]][value_col]
-    g2 = tmp[tmp[group_col] == groups[1]][value_col]
-
-    def normal_ok(s):
-        if 3 <= len(s) <= 5000:
-            try:
-                return stats.shapiro(s).pvalue > 0.05
-            except Exception:
-                return False
-        return False
-
-    is_normal = normal_ok(g1) and normal_ok(g2)
-
-    if is_normal:
-        stat, p = stats.ttest_ind(g1, g2, equal_var=False)
-        test_name = "Independent t-test (Welch)"
-    else:
-        stat, p = stats.mannwhitneyu(g1, g2, alternative="two-sided")
-        test_name = "Mann-Whitney U"
-
-    def describe(s):
-        return {
-            "n": int(len(s)),
-            "mean": float(s.mean()),
-            "sd": float(s.std(ddof=1)) if len(s) > 1 else np.nan,
-            "median": float(s.median()),
-            "q1": float(s.quantile(0.25)),
-            "q3": float(s.quantile(0.75)),
-        }
-
-    return {
-        "group_names": [str(groups[0]), str(groups[1])],
-        "group1_stats": describe(g1),
-        "group2_stats": describe(g2),
-        "test": test_name,
-        "statistic": float(stat),
-        "p_value": float(p),
-        "normal_distribution_assumed": is_normal,
-    }
-
-
-# ============================================================
-# 16. HỒI QUY LOGISTIC – CƠ BẢN
-# ============================================================
-
-def binary_logistic_regression(df: pd.DataFrame, outcome: str, predictors: List[str]):
-    cols = [outcome] + predictors
-    tmp = df[cols].dropna().copy()
-
-    if tmp.empty:
-        raise ValueError("Không còn dữ liệu sau khi loại missing.")
-
-    y_levels = tmp[outcome].dropna().unique().tolist()
-    if len(y_levels) != 2:
-        raise ValueError(f"Biến kết cục phải có đúng 2 mức; hiện có {len(y_levels)}.")
-
-    mapping = {y_levels[0]: 0, y_levels[1]: 1}
-    tmp["_Y_"] = tmp[outcome].map(mapping)
-
-    formula_parts = []
-    for p in predictors:
-        if pd.api.types.is_numeric_dtype(tmp[p]):
-            formula_parts.append(p)
-        else:
-            formula_parts.append(f"C(Q('{p}'))")
-
-    formula = "_Y_ ~ " + " + ".join(formula_parts)
-    model = smf.logit(formula=formula, data=tmp).fit(disp=False)
-
-    conf = model.conf_int()
-    params = model.params
-
-    output = pd.DataFrame({
-        "Biến": params.index,
-        "OR": np.exp(params.values),
-        "CI95% thấp": np.exp(conf.iloc[:, 0].values),
-        "CI95% cao": np.exp(conf.iloc[:, 1].values),
-        "p-value": model.pvalues.values,
-    })
-
-    return output, model.summary().as_text()
-
-
-# ============================================================
 # 17. KIỂM TRA NHẤT QUÁN SỐ LIỆU + TRÙNG LẶP NỘI BỘ
 # ============================================================
 
@@ -1385,7 +811,9 @@ def create_word_document(title: str, body: str, bibliography: str = "") -> bytes
     output = io.BytesIO()
     doc.save(output)
     return output.getvalue()
-    # ============================================================
+
+
+# ============================================================
 # 18.5. CÁC HÀM XỬ LÝ CHO TAB AUDIT (NGÔN NGỮ, ĐẠO VĂN, AI-STYLE)
 # ============================================================
 
@@ -2212,8 +1640,6 @@ Similarity nội bộ: **{item['similarity']}**
                 st.warning("Chưa có văn bản.")
             else:
                 with st.spinner("Đang đối chiếu n-gram và phân tích diễn đạt..."):
-                    overlaps = internal_overlap_audit(audit_text, top_k=5)
-                    # Đã sửa lỗi: Chỉ truyền 1 tham số audit_text vào hàm
                     response = plagiarism_style_review(audit_text)
                 
                 with ket_qua_audit_container:
@@ -2245,7 +1671,6 @@ Similarity nội bộ: **{item['similarity']}**
                 st.warning("Chưa có văn bản.")
             else:
                 with st.spinner("Đang phân tích phong cách văn bản..."):
-                    # Gọi hàm backend đã cấu hình (trả về chuỗi Markdown)
                     style_analysis = heuristic_ai_style_score(audit_text)
 
                 with ket_qua_audit_container:
@@ -2291,6 +1716,7 @@ Không được tự bổ sung tài liệu hoặc số liệu.
                 response = call_gemini(prompt)
                 if response:
                     st.markdown(response)
+
 # ------------------------------------------------------------
 # TAB 6 – NGUỒN & CẤU HÌNH
 # ------------------------------------------------------------
