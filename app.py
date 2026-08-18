@@ -1244,6 +1244,7 @@ CÁC RÀNG BUỘC BẮT BUỘC:
 - BẮT BUỘC viết thành các đoạn văn xuôi y khoa liền mạch, tự nhiên (tuyệt đối không dùng gạch đầu dòng để phân ý, không xuống dòng ngắt vụn).
 - TUYỆT ĐỐI KHÔNG sử dụng các nhãn phân chia máy móc như "Dữ kiện (FACT):", "Diễn giải (INTERPRETATION):", hay "Suy luận (INFERENCE):".
 - Nếu tài liệu không có thông tin để đối chứng, hãy lướt qua hoặc diễn đạt tự nhiên (VD: "Tuy nhiên, y văn hiện tại chưa ghi nhận số liệu tương đương..."). TUYỆT ĐỐI KHÔNG dùng câu rập khuôn "Tài liệu được cung cấp chưa đủ bằng chứng để kết luận...".
+- Trích dẫn tài liệu tham khảo phải theo thứ tự xuất hiện hiện của tài liệu tham khảo.
 
 {citation_rules}"""
                 run_quick_task("Bàn luận và So sánh toàn diện", context, task, k=8)
