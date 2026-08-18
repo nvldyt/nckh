@@ -1740,9 +1740,10 @@ def auto_clean_data(raw_df: pd.DataFrame):
                 if not interpretation_request.strip():
                     st.warning("Nhập kết quả trước.")
                 else:
-                    prompt = f"""{BASE_SYSTEM_RULES}\nBạn chỉ được DIỄN GIẢI kết quả thống kê dưới đây. Không được tính lại hoặc sửa số liệu.\nKẾT QUẢ:\n{interpretation_request}"""
-                    # Gọi với model do anh đã chọn ở Tab 6
-output = call_gemini(prompt, model=st.session_state["selected_model"])
+                        prompt = f"{BASE_SYSTEM_RULES}\nBạn chỉ được DIỄN GIẢI kết quả thống kê dưới đây. Không được tính lại hoặc sửa số liệu.\nKẾT QUẢ:\n{interpretation_request}"
+                        
+                        # Gọi với model do anh đã chọn ở Tab 6
+                        output = call_gemini(prompt, model=st.session_state["selected_model"])
                     if response:
                         st.markdown(response)
 
