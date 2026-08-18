@@ -1894,6 +1894,52 @@ CÁC RÀNG BUỘC BẮT BUỘC:
         st.write(f"**SerpAPI (tra cứu tạp chí VN):** {'✅ đã cấu hình' if get_serpapi_key() else '❌ chưa cấu hình (tùy chọn)'}")
 
         st.write("---")
+        
+        # ============================================================
+        # TÍNH NĂNG MỚI: AI QUÉT VÀ LƯU METADATA HÀNG LOẠT
+        # ============================================================
+        st.subheader("🤖 AI Tự động quét và lưu Metadata hàng loạt")
+        st.info("💡 Bấm nút dưới đây để AI tự động quét trang đầu của toàn bộ file PDF trong kho và điền thông tin (Tác giả, Năm, Tên bài...).")
+        if st.button("🚀 AI Tự động đọc toàn bộ file PDF và lưu Metadata", type="primary"):
+            docs = st.session_state.get("documents", {})
+            chunks = st.session_state.get("chunks", [])
+            count_updated = 0
+            
+            if not docs:
+                st.warning("⚠️ Evidence Database đang trống, chưa có tài liệu nào!")
+            else:
+                with st.spinner("AI đang quét trang đầu của tất cả các file PDF..."):
+                    for source_id, meta in docs.items():
+                        if meta.get("origin") == "PDF":
+                            # Tìm đoạn văn bản (chunk) đầu tiên của file này để đưa cho AI đọc
+                            chunk_text = ""
+                            for c in chunks:
+                                c_sid = c.get("source_id") if isinstance(c, dict) else getattr(c, 'source_id', None)
+                                if c_sid == source_id:
+                                    chunk_text = c.get("text") if isinstance(c, dict) else c.text
+                                    break
+                            
+                            if chunk_text:
+                                meta_ai = extract_metadata_from_text_ai(chunk_text)
+                                if meta_ai:
+                                    # Cập nhật thông tin mới
+                                    meta["title"] = meta_ai.get("title") or meta.get("title", "")
+                                    meta["authors"] = meta_ai.get("authors") or meta.get("authors", "")
+                                    meta["year"] = meta_ai.get("year") or meta.get("year", "")
+                                    meta["journal"] = meta_ai.get("journal") or meta.get("journal", "")
+                                    meta["doi"] = meta_ai.get("doi") or meta.get("doi", "")
+                                    meta["pmid"] = meta_ai.get("pmid") or meta.get("pmid", "")
+                                    
+                                    st.session_state["documents"][source_id] = meta
+                                    count_updated += 1
+                                    
+                if count_updated > 0:
+                    st.success(f"✅ Đã tự động cập nhật metadata cho {count_updated} file PDF!")
+                    st.rerun()
+                else:
+                    st.warning("Không tìm thấy dữ liệu văn bản để quét.")
+
+        st.write("---")
         st.subheader("Danh sách domain tạp chí Y học Việt Nam (dùng cho Tab 2)")
         domains_text = st.text_area(
             "Mỗi domain một dòng:",
@@ -1908,7 +1954,8 @@ CÁC RÀNG BUỘC BẮT BUỘC:
             st.success("Đã cập nhật.")
 
         st.write("---")
-        st.subheader("Citation Registry")
+        st.subheader("Citation Registry & Metadata thủ công")
+        
         registry = st.session_state["citation_registry"]
         if registry:
             registry_rows = []
@@ -1929,39 +1976,30 @@ CÁC RÀNG BUỘC BẮT BUỘC:
             st.info("Citation registry chưa có dữ liệu.")
 
         st.write("---")
-        st.subheader("🤖 Metadata nguồn (AI tự động trích xuất hoặc sửa tay)")
-        st.info("💡 Đối với các tài liệu PDF tải lên từ máy, anh có thể bấm nút 'AI đọc tự động' để hệ thống tự quét trang đầu và điền tên tác giả, năm xuất bản...")
         
+        # Danh sách chi tiết từng nguồn
         for source_id, meta in list(st.session_state["documents"].items()):
             with st.expander(f"[{meta.get('origin','')}] {source_id} – {meta.get('file_name', '')}"):
                 
-                # --- Nút Nhờ AI đọc tự động ---
+                # Nút AI đọc riêng lẻ cho file này (vẫn giữ để anh sửa từng file nếu cần)
                 if meta.get("origin") == "PDF":
-                    if st.button(f"🤖 Nhờ AI đọc PDF và điền tự động", key=f"ai_meta_{source_id}"):
-                        # Tìm đoạn văn bản đầu tiên của tài liệu này để đưa cho AI đọc
+                    if st.button(f"🤖 Nhờ AI đọc lại file này", key=f"ai_meta_{source_id}"):
                         chunk_text = ""
                         for c in st.session_state["chunks"]:
                             if (isinstance(c, dict) and c.get("source_id") == source_id) or (hasattr(c, 'source_id') and c.source_id == source_id):
                                 chunk_text = c.get("text") if isinstance(c, dict) else c.text
                                 break
-                                
                         if chunk_text:
-                            with st.spinner("AI đang đọc trang đầu của tài liệu..."):
-                                meta_ai = extract_metadata_from_text_ai(chunk_text)
-                                if meta_ai:
-                                    meta["title"] = meta_ai.get("title", meta.get("title", ""))
-                                    meta["authors"] = meta_ai.get("authors", meta.get("authors", ""))
-                                    meta["year"] = meta_ai.get("year", meta.get("year", ""))
-                                    meta["journal"] = meta_ai.get("journal", meta.get("journal", ""))
-                                    meta["doi"] = meta_ai.get("doi", meta.get("doi", ""))
-                                    meta["pmid"] = meta_ai.get("pmid", meta.get("pmid", ""))
-                                    st.session_state["documents"][source_id] = meta
-                                    st.success("✅ AI đã bóc tách xong! Các ô bên dưới đã được tự động điền.")
-                                    st.rerun()
-                                else:
-                                    st.error("AI không tìm thấy thông tin trong trang đầu.")
+                            meta_ai = extract_metadata_from_text_ai(chunk_text)
+                            if meta_ai:
+                                meta.update(meta_ai)
+                                st.session_state["documents"][source_id] = meta
+                                st.success("✅ Đã cập nhật!")
+                                st.rerun()
+                            else:
+                                st.error("AI không tìm thấy thông tin.")
                 
-                # --- Khu vực nhập liệu ---
+                # --- Khu vực nhập liệu tay ---
                 mc1, mc2 = st.columns(2)
                 with mc1:
                     authors = st.text_input("Tác giả", value=meta.get("authors", ""), key=ui_key(f"authors_{source_id}"))
@@ -1978,24 +2016,19 @@ CÁC RÀNG BUỘC BẮT BUỘC:
                         "journal": journal, "doi": doi, "pmid": pmid,
                     })
                     st.session_state["documents"][source_id] = meta
-                    st.success("Đã lưu metadata.")
+                    st.success("Đã lưu.")
 
+        # ============================================================
+        # PHẦN CUỐI: NGUYÊN TẮC & EXPORT
+        # ============================================================
         st.write("---")
         st.subheader("Nguyên tắc sử dụng")
-        st.markdown(
-            """
+        st.markdown("""
             * Không xem bản nháp AI là kết quả cuối cùng.
             * Không dùng citation nếu chưa truy ngược được về nguồn.
-            * Đoạn trích từ tạp chí Việt Nam (Google Scholar) chỉ là snippet ngắn — luôn đối chiếu bản gốc trước khi dùng số liệu chi tiết.
-            * Không để AI tính p-value, OR, CI95% hoặc tỷ lệ khi Python có thể tính trực tiếp.
-            * Không suy luận quan hệ nhân quả từ nghiên cứu quan sát nếu thiết kế không cho phép.
-            * Không gọi chức năng Audit nội bộ là "chứng nhận không đạo văn".
-            * Không có công cụ nào bảo đảm tuyệt đối văn bản "không phải AI viết".
             * Người nghiên cứu phải Audit bản gốc trước khi chấp nhận số liệu và diễn giải.
-            """
-        )
+            """)
 
-        st.write("---")
         c_exp1, c_exp2 = st.columns(2)
         with c_exp1:
             if st.button("📄 Xuất bản nháp hiện tại ra Word", key="export_word", use_container_width=True):
@@ -2003,22 +2036,16 @@ CÁC RÀNG BUỘC BẮT BUỘC:
                     st.warning("Chưa có bản nháp.")
                 else:
                     docx_data = create_word_document(
-                        title="Bản nháp hỗ trợ nghiên cứu – Dược lâm sàng",
+                        title="Bản nháp hỗ trợ nghiên cứu",
                         body=st.session_state["last_generated"],
                         bibliography=citation_bibliography(),
                     )
-                    st.download_button(
-                        "📥 Tải Word", data=docx_data,
-                        file_name="Ban_nhap_NCKH_Duoc_Lam_Sang.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        use_container_width=True
-                    )
+                    st.download_button("📥 Tải Word", data=docx_data, file_name="Ban_nhap.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
         with c_exp2:
-            if st.button("🧹 Làm mới Giao diện (Giữ nguyên dữ liệu)", key=ui_key("btn_reset_ui"), use_container_width=True):
+            if st.button("🧹 Làm mới Giao diện", key=ui_key("btn_reset_ui"), use_container_width=True):
                 reset_ui_state()
-                st.success("Đã làm mới sạch sẽ giao diện. Các tập tin và kết quả phân tích vẫn được giữ nguyên!")
                 st.rerun()
-
+       
         # ============================================================
         # QUẢN LÝ CHECKPOINT & DỰ ÁN LUẬN VĂN
         # ============================================================
