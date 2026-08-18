@@ -1359,8 +1359,8 @@ with tabs[3]:
     if df_clean.shape[0] < old_rows:
         logs.append(f"🗑️ Đã xóa {old_rows - df_clean.shape[0]} dòng trống hoàn toàn.")
         
-    # 4. TRÁNH TUYỆT ĐỐI việc biến đổi chữ hoa/thường (Không dùng capitalize) để bảo vệ mã ICD-10, HbA1c, eGFR.
-    logs.append("🛡️ Đã giữ nguyên vẹn các giá trị gốc (không đổi hoa/thường) nhằm bảo vệ ký hiệu chuyên ngành (HbA1c, eGFR, ICD-10).")
+    # 4. Giữ nguyên vẹn giá trị gốc để bảo vệ mã ICD-10, HbA1c, eGFR
+    logs.append("🛡️ Đã giữ nguyên vẹn các giá trị gốc (không đổi hoa/thường) nhằm bảo vệ ký hiệu chuyên ngành.")
         
     return df_clean, logs
 
