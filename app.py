@@ -1224,19 +1224,21 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
             run_quick_task("Phương pháp nghiên cứu", query, task, k=5)
 
         if btn_ban_luan:
-            if not my_research_data.strip():
-                st.warning("Cần nhập số liệu của anh vào ô 'Số liệu nghiên cứu' trước!")
+            if not my_research_data.strip() and not my_table_remarks.strip():
+                st.warning("⚠️ Cần dán bảng số liệu (ô 1) và nhận xét (ô 2) của anh vào phía trên trước!")
             else:
-                task = f"KẾT QUẢ NGHIÊN CỨU THỰC TẾ CỦA TÔI:\n{my_research_data}\nYÊU CẦU TRÌNH BÀY:\nChia Bàn luận thành các tiểu mục...\n{citation_rules}"
-                run_quick_task("Bàn luận toàn diện", my_research_data, task, k=8)
+                context = f"SỐ LIỆU BẢNG:\n{my_research_data}\n\nNHẬN XÉT DIỄN GIẢI:\n{my_table_remarks}"
+                task = f"DỮ LIỆU NGHIÊN CỨU THỰC TẾ CỦA TÔI:\n{context}\nYÊU CẦU TRÌNH BÀY:\nTừ phần nhận xét diễn giải ở trên, hãy viết BÀN LUẬN sâu sắc. Hãy so sánh kết quả này với các nghiên cứu trong y văn, giải thích nguyên nhân có thể dẫn đến kết quả này. Chia Bàn luận thành các tiểu mục...\n{citation_rules}"
+                run_quick_task("Bàn luận toàn diện", context, task, k=8)
 
         if btn_so_sanh:
-            if not my_research_data.strip():
-                st.warning("Cần nhập số liệu của anh vào ô 'Số liệu nghiên cứu' trước!")
+            if not my_research_data.strip() and not my_table_remarks.strip():
+                st.warning("⚠️ Cần dán bảng số liệu (ô 1) và nhận xét (ô 2) của anh vào phía trên trước!")
             else:
-                task = f"KẾT QUẢ NGHIÊN CỨU THỰC TẾ CỦA TÔI:\n{my_research_data}\nTrình bày đúng cấu trúc...\n{citation_rules}"
-                run_quick_task("So sánh nghiên cứu liên quan", my_research_data, task, k=8)
-
+                context = f"SỐ LIỆU BẢNG:\n{my_research_data}\n\nNHẬN XÉT DIỄN GIẢI:\n{my_table_remarks}"
+                task = f"DỮ LIỆU NGHIÊN CỨU THỰC TẾ CỦA TÔI:\n{context}\nYÊU CẦU TRÌNH BÀY:\nTập trung vào việc SO SÁNH trực tiếp kết quả của tôi với các tác giả khác trong y văn. Trình bày giống cấu trúc của một luận văn CKI...\n{citation_rules}"
+                run_quick_task("So sánh nghiên cứu liên quan", context, task, k=8)
+                
         if btn_tltk:
             query = "Tài liệu tham khảo, tác giả, năm xuất bản, tạp chí"
             task = f"Chỉ liệt kê các SOURCE_TAG bạn thấy phù hợp là tài liệu tham khảo chính...\n{citation_rules}"
