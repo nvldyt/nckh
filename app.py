@@ -888,7 +888,7 @@ def main():
         "🔍 2. Tra cứu TLTK",
         "✍️ 3. Viết luận văn",
         "📊 4. Phân tích số liệu",
-        "🔎 5. Kiểm tra",
+        "🔎 5. Kiểm tra luận văn",
         "⚙️ 6. Nguồn & cấu hình",
     ])
 
