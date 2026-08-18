@@ -13,3 +13,4 @@ scipy
 statsmodels
 rank-bm25
 tabulate
+google-search-results
