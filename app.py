@@ -373,6 +373,21 @@ def translate_query_to_mesh(vietnamese_query: str) -> str:
         return text.strip().strip('"').strip("'").replace("\n", " ")
     
     return vietnamese_query
+def extract_vn_keywords(vietnamese_query: str) -> str:
+    """Rút gọn câu dài thành từ khóa tiếng Việt cốt lõi để tìm Google Scholar dễ ra bài hơn"""
+    prompt = f"""
+    Bạn là chuyên gia tra cứu tài liệu. 
+    Nhiệm vụ: Rút gọn tên đề tài sau thành 1-2 từ khóa quan trọng nhất bằng tiếng Việt.
+    KHÔNG dùng câu dài. CHỈ giữ lại danh từ cốt lõi (hoạt chất, tên bệnh).
+    
+    Đề tài: "{vietnamese_query}"
+    
+    Chỉ trả về từ khóa rút gọn, không giải thích.
+    """
+    text = call_gemini(prompt, model=MODEL_LITE)
+    if text:
+        return text.strip().strip('"').strip("'").replace("\n", " ")
+    return vietnamese_query
 
 # ============================================================
 # 10. INDEX / VECTOR RETRIEVAL (HYBRID: EMBEDDING + BM25)
@@ -1046,15 +1061,19 @@ with tabs[1]:
         else:
             st.session_state["t3_query"] = t3_query
 
-            with st.spinner("Đang dịch & chuẩn hoá từ khoá sang MeSH..."):
+            with st.spinner("Đang dịch & chuẩn hoá từ khoá sang MeSH (PubMed)..."):
                 en_query = translate_query_to_mesh(t3_query)
                 st.session_state["t3_en_keyword"] = en_query
 
             with st.spinner("Đang tìm & tải Abstract từ PubMed..."):
                 st.session_state["t3_pm_data"] = search_pubmed(en_query, max_res)
 
-            with st.spinner("Đang tìm bài báo trên tạp chí Y học Việt Nam..."):
-                vn_results, vn_err = search_vn_journals(t3_query, max_res)
+            # --- PHẦN ĐÃ NÂNG CẤP DÀNH CHO TẠP CHÍ VN ---
+            with st.spinner("Đang rút gọn từ khóa & tìm trên tạp chí Y học Việt Nam..."):
+                vn_short_query = extract_vn_keywords(t3_query)
+                st.session_state["t3_vn_keyword"] = vn_short_query # Lưu lại để hiện lên UI
+                
+                vn_results, vn_err = search_vn_journals(vn_short_query, max_res)
                 st.session_state["t3_vn_data"] = vn_results
                 if vn_err:
                     st.warning(vn_err)
@@ -1065,6 +1084,10 @@ with tabs[1]:
 
         with col_vn:
             st.markdown("### 🇻🇳 Tạp chí Y học Việt Nam")
+            # Hiện từ khóa VN đã rút gọn để anh biết AI đang tìm chữ gì
+            if st.session_state.get("t3_vn_keyword"):
+                st.success(f"🔑 Từ khoá đã rút gọn: **{st.session_state['t3_vn_keyword']}**")
+                
             if not st.session_state["t3_vn_data"]:
                 st.info("Chưa có dữ liệu / không tìm thấy kết quả phù hợp.")
             else:
@@ -1076,7 +1099,8 @@ with tabs[1]:
                         if st.button("➕ Nạp vào Evidence Database", key=f"vn_ingest_{i}"):
                             added = ingest_vn_article(art)
                             if added:
-                                rebuild_index()
+                                # Update index incrementally cho RAG
+                                rebuild_index(new_chunks=[added]) if isinstance(added, dict) else rebuild_index()
                                 st.success("Đã nạp. Nhớ kiểm tra bản gốc trước khi dùng số liệu chi tiết.")
                             else:
                                 st.info("Nguồn này đã có trong Evidence Database.")
