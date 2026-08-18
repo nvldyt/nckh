@@ -1746,8 +1746,8 @@ def auto_clean_data(raw_df: pd.DataFrame):
                         output = call_gemini(prompt, model=st.session_state.get("selected_model", "gemini-3.6-flash"))
                         if output:
                             st.markdown(output)
-                except Exception as exc:
-                    st.error(f"Lỗi diễn giải: {exc}")             
+                 except Exception as exc:
+                     st.error(f"Lỗi diễn giải: {exc}")             
         
 # ------------------------------------------------------------
 # TAB 5 – AUDIT (1 HÀNG GỌN GÀNG - 6 CHỨC NĂNG)
