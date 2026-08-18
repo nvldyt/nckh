@@ -4,6 +4,7 @@ import io
 import re
 import os
 import hashlib
+from serpapi import GoogleSearch
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, List, Tuple, Optional
 
