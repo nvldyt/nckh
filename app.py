@@ -32,7 +32,7 @@ from docx import Document
 # ============================================================
 # 1. Import bộ máy tuyển chọn bảng
 from table_selection_engine import (
-    StudyObjective, CandidateResult,
+    StudyObjective, CandidateResult,
     TableSelectionEngine, NarrativePlanner,
     Priority, Presentation
 )
