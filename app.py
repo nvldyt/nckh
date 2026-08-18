@@ -650,7 +650,7 @@ def generate_evidence_based(
     - Chỉ sử dụng thông tin có thể truy về các tài liệu ở trên.
     """
 
-    output = call_gemini(prompt)
+    output = # Gọi với model do anh đã chọn ở Tab 6 output = call_gemini(prompt, model=st.session_state["selected_model"])
     if output is None:
         return None, evidence, []
 
@@ -906,7 +906,7 @@ def plagiarism_style_review(text: str) -> Optional[str]:
     ĐOẠN VĂN GỐC:
     {text}
     """
-    return call_gemini(prompt)
+    return # Gọi với model do anh đã chọn ở Tab 6 output = call_gemini(prompt, model=st.session_state["selected_model"])
 
 def heuristic_ai_style_score(text: str) -> Optional[str]:
     if not text.strip(): return None
@@ -1741,7 +1741,7 @@ def auto_clean_data(raw_df: pd.DataFrame):
                     st.warning("Nhập kết quả trước.")
                 else:
                     prompt = f"""{BASE_SYSTEM_RULES}\nBạn chỉ được DIỄN GIẢI kết quả thống kê dưới đây. Không được tính lại hoặc sửa số liệu.\nKẾT QUẢ:\n{interpretation_request}"""
-                    response = call_gemini(prompt)
+                    response = # Gọi với model do anh đã chọn ở Tab 6 output = call_gemini(prompt, model=st.session_state["selected_model"])
                     if response:
                         st.markdown(response)
 
@@ -1871,88 +1871,142 @@ with tabs[4]:
                     3. Kết luận có vượt quá giới hạn thiết kế nghiên cứu không?
                     ĐOẠN VĂN GỐC: {audit_text}
                     """
-                    response = call_gemini(prompt)
+                    response = # Gọi với model do anh đã chọn ở Tab 6 output = call_gemini(prompt, model=st.session_state["selected_model"])
                 with ket_qua_audit_container:
                     st.markdown("### ⚖️ Kết quả Phản biện Logic")
                     st.markdown(response if response else "Không nhận được phản hồi từ AI.")
 # ------------------------------------------------------------
-# TAB 6 – NGUỒN & CẤU HÌNH
+# TAB 6 – NGUỒN & CẤU HÌNH HỆ THỐNG
 # ------------------------------------------------------------
 with tabs[5]:
-    st.header("⚙️ Nguồn, citation và cấu hình")
+    st.header("⚙️ Nguồn, Citation và Cấu hình Hệ thống")
 
-    st.write(f"**Gemini model:** `{DEFAULT_MODEL}`")
+    # ==========================================
+    # 1. CẤU HÌNH MODEL AI & THÔNG TIN HỆ THỐNG
+    # ==========================================
+    st.subheader("1. Lựa chọn Model AI")
+    st.info("💡 **Gemini 3.5 Flash-Lite:** Nhanh, tiết kiệm, phù hợp tra cứu & kiểm tra chính tả.\n"
+            "💡 **Gemini 3.6 Flash:** Cân bằng giữa tốc độ & thông minh, phù hợp viết luận văn.\n"
+            "💡 **Gemini 1.5 Pro:** Đỉnh cao về logic & bàn luận chuyên sâu.")
+
+    if "selected_model" not in st.session_state:
+        st.session_state["selected_model"] = "gemini-3.6-flash"
+
+    selected_model_tuple = st.selectbox(
+        "Chọn Model AI cho toàn bộ hệ thống:",
+        options=[
+            ("gemini-3.5-flash-lite", "Gemini 3.5 Flash-Lite"),
+            ("gemini-3.6-flash", "Gemini 3.6 Flash (Khuyên dùng)"),
+            ("gemini-1.5-pro-002", "Gemini 1.5 Pro (Phản biện chuyên sâu)")
+        ],
+        format_func=lambda x: x[1],
+        key="model_selector"
+    )
+    st.session_state["selected_model"] = selected_model_tuple[0]
+
+    st.write("")
     st.write(f"**Embedding model:** `{DEFAULT_EMBEDDING}`")
     st.write(f"**SerpAPI (tra cứu tạp chí VN):** {'✅ đã cấu hình' if get_serpapi_key() else '❌ chưa cấu hình (tùy chọn)'}")
 
     st.write("---")
-    st.subheader("Danh sách domain tạp chí Y học Việt Nam (dùng cho Tab 2)")
+
+    # ==========================================
+    # 2. QUẢN LÝ DOMAIN TẠP CHÍ VIỆT NAM
+    # ==========================================
+    st.subheader("2. Danh sách domain tạp chí Y học Việt Nam (dùng cho Tab 2)")
 
     domains_text = st.text_area(
         "Mỗi domain một dòng:",
-        value="\n".join(st.session_state["vn_journal_domains"]),
+        value="\n".join(st.session_state.get("vn_journal_domains", [])),
         height=120,
+        key="config_domains_text"
     )
-    if st.button("💾 Lưu danh sách domain"):
+    if st.button("💾 Lưu danh sách domain", key="save_domains_btn"):
         st.session_state["vn_journal_domains"] = [
             d.strip() for d in domains_text.splitlines() if d.strip()
         ]
-        st.success("Đã cập nhật.")
+        st.success("Đã cập nhật danh sách domain.")
 
     st.write("---")
-    st.subheader("Citation Registry")
 
-    registry = st.session_state["citation_registry"]
-    if registry:
+    # ==========================================
+    # 3. CITATION REGISTRY (ĐÃ CHUYỂN SANG CURRENT_REFERENCES)
+    # ==========================================
+    st.subheader("3. Danh mục Trích dẫn & Tài liệu tham khảo hiện tại")
+
+    current_refs = st.session_state.get("current_references", [])
+    if current_refs:
         registry_rows = []
-        for source_id, number in sorted(registry.items(), key=lambda x: x[1]):
-            meta = source_metadata(source_id)
+        # Sắp xếp theo số thứ tự Vancouver [1], [2], [3]...
+        sorted_refs = sorted(current_refs, key=lambda x: x.get("vancouver_index", 999))
+        
+        for ref in sorted_refs:
+            number = ref.get("vancouver_index")
+            meta = ref.get("metadata", {})
+            source_id = ref.get("ref_id", "")
+            
             registry_rows.append({
-                "Citation": f"[{number}]", "Source ID": source_id,
-                "Nguồn gốc": meta.get("origin", ""), "File/Tiêu đề": meta.get("file_name", ""),
-                "Tác giả": meta.get("authors", ""), "Năm": meta.get("year", ""),
-                "Tạp chí": meta.get("journal", ""), "DOI": meta.get("doi", ""),
+                "Citation": f"[{number}]", 
+                "Source ID": source_id,
+                "Nguồn gốc": meta.get("origin", ""), 
+                "File/Tiêu đề": meta.get("file_name", meta.get("title", "")),
+                "Tác giả": meta.get("authors", ""), 
+                "Năm": meta.get("year", ""),
+                "Tạp chí": meta.get("journal", ""), 
+                "DOI": meta.get("doi", ""),
                 "PMID": meta.get("pmid", ""),
             })
-        st.dataframe(pd.DataFrame(registry_rows))
+            
+        st.dataframe(pd.DataFrame(registry_rows), use_container_width=True)
 
-        st.subheader("Danh mục tham khảo hiện tại")
+        st.subheader("📖 Định dạng Vancouver Bibliography")
         st.code(citation_bibliography(), language="text")
     else:
-        st.info("Citation registry chưa có dữ liệu.")
+        st.info("Citation registry chưa có dữ liệu cho bản nháp hiện tại.")
 
     st.write("---")
-    st.subheader("Metadata nguồn (bổ sung tay - AI không tự điền)")
 
-    for source_id, meta in list(st.session_state["documents"].items()):
-        with st.expander(f"[{meta.get('origin','')}] {source_id} – {meta['file_name']}"):
-            mc1, mc2 = st.columns(2)
-            with mc1:
-                authors = st.text_input("Tác giả", value=meta.get("authors", ""), key=f"authors_{source_id}")
-                title = st.text_input("Tên bài/tài liệu", value=meta.get("title", ""), key=f"title_{source_id}")
-                year = st.text_input("Năm", value=meta.get("year", ""), key=f"year_{source_id}")
-            with mc2:
-                journal = st.text_input("Tạp chí", value=meta.get("journal", ""), key=f"journal_{source_id}")
-                doi = st.text_input("DOI", value=meta.get("doi", ""), key=f"doi_{source_id}")
-                pmid = st.text_input("PMID", value=meta.get("pmid", ""), key=f"pmid_{source_id}")
+    # ==========================================
+    # 4. METADATA NGUỒN (BỔ SUNG THỦ CÔNG)
+    # ==========================================
+    st.subheader("4. Metadata nguồn (Bổ sung tay)")
 
-            if st.button("💾 Lưu metadata", key=f"save_{source_id}"):
-                meta.update({
-                    "authors": authors, "title": title, "year": year,
-                    "journal": journal, "doi": doi, "pmid": pmid,
-                })
-                st.session_state["documents"][source_id] = meta
-                st.success("Đã lưu metadata.")
+    documents = st.session_state.get("documents", {})
+    if documents:
+        for source_id, meta in list(documents.items()):
+            with st.expander(f"[{meta.get('origin','')}] {source_id} – {meta.get('file_name', 'N/A')}"):
+                mc1, mc2 = st.columns(2)
+                with mc1:
+                    authors = st.text_input("Tác giả", value=meta.get("authors", ""), key=f"authors_{source_id}")
+                    title = st.text_input("Tên bài/tài liệu", value=meta.get("title", ""), key=f"title_{source_id}")
+                    year = st.text_input("Năm", value=meta.get("year", ""), key=f"year_{source_id}")
+                with mc2:
+                    journal = st.text_input("Tạp chí", value=meta.get("journal", ""), key=f"journal_{source_id}")
+                    doi = st.text_input("DOI", value=meta.get("doi", ""), key=f"doi_{source_id}")
+                    pmid = st.text_input("PMID", value=meta.get("pmid", ""), key=f"pmid_{source_id}")
+
+                if st.button("💾 Lưu metadata", key=f"save_{source_id}"):
+                    meta.update({
+                        "authors": authors, "title": title, "year": year,
+                        "journal": journal, "doi": doi, "pmid": pmid,
+                    })
+                    st.session_state["documents"][source_id] = meta
+                    st.success("Đã lưu metadata thành công.")
+    else:
+        st.info("Chưa có tài liệu nào trong Evidence Database để chỉnh sửa metadata.")
 
     st.write("---")
-    st.subheader("Nguyên tắc sử dụng")
+
+    # ==========================================
+    # 5. NGUYÊN TẮC SỬ DỤNG HỆ THỐNG
+    # ==========================================
+    st.subheader("5. Nguyên tắc sử dụng hệ thống")
     st.markdown(
         """
 - Không xem bản nháp AI là kết quả cuối cùng.
-- Không dùng citation nếu chưa truy ngược được về nguồn.
-- Đoạn trích từ tạp chí Việt Nam (Google Scholar) chỉ là snippet ngắn —
-  luôn đối chiếu bản gốc trước khi dùng số liệu chi tiết.
-- Không để AI tính p-value, OR, CI95% hoặc tỷ lệ khi Python có thể tính trực tiếp.
+- Không dùng citation nếu chưa truy ngược được về nguồn gốc.
+- Đoạn trích từ tạp chí Việt Nam (Google Scholar) chỉ là snippet ngắn — luôn đối chiếu bản gốc trước khi dùng số liệu chi tiết.
+- Không để AI tự tính toán p-value, OR, CI95% hoặc tỷ lệ khi Python có thể tính trực tiếp.
 - Không suy luận quan hệ nhân quả từ nghiên cứu quan sát nếu thiết kế không cho phép.
 - Không gọi chức năng audit nội bộ là "chứng nhận không đạo văn".
 - Không có công cụ nào bảo đảm tuyệt đối văn bản "không phải AI viết".
@@ -1961,20 +2015,33 @@ with tabs[5]:
     )
 
     st.write("---")
-    if st.button("📄 Xuất bản nháp hiện tại ra Word", key="export_word"):
-        if not st.session_state["last_generated"]:
-            st.warning("Chưa có bản nháp.")
-        else:
-            docx_data = create_word_document(
-                title="Bản nháp hỗ trợ nghiên cứu – Dược lâm sàng",
-                body=st.session_state["last_generated"],
-                bibliography=citation_bibliography(),
-            )
-            st.download_button(
-                "📥 Tải Word", data=docx_data,
-                file_name="Ban_nhap_NCKH_Duoc_Lam_Sang.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            )
+
+    # ==========================================
+    # 6. XUẤT FILE WORD & RESET SESSION
+    # ==========================================
+    sc1, sc2 = st.columns(2)
+    with sc1:
+        if st.button("📄 Xuất bản nháp hiện tại ra Word", key="export_word_btn", use_container_width=True):
+            last_gen = st.session_state.get("last_generated", "")
+            if not last_gen:
+                st.warning("Chưa có bản nháp nào được tạo.")
+            else:
+                docx_data = create_word_document(
+                    title="Bản nháp hỗ trợ nghiên cứu – Dược lâm sàng",
+                    body=last_gen,
+                    bibliography=citation_bibliography(),
+                )
+                st.download_button(
+                    "📥 Tải file Word (.docx)", data=docx_data,
+                    file_name="Ban_nhap_NCKH_Duoc_Lam_Sang.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    use_container_width=True,
+                )
+    with sc2:
+        if st.button("🗑️ Xóa sạch toàn bộ dữ liệu & Reset Session", key="hard_reset_btn", use_container_width=True):
+            reset_evidence_session()
+            st.success("✅ Đã làm sạch toàn bộ bộ nhớ tạm (Stale State).")
+            st.rerun()
 
     # ============================================================
     # QUẢN LÝ CHECKPOINT & DỰ ÁN LUẬN VĂN (LƯU/TẢI XUỐNG ĐĨA)
