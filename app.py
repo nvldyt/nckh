@@ -1735,20 +1735,20 @@ def auto_clean_data(raw_df: pd.DataFrame):
             # ==========================================
             st.subheader("8. Diễn giải kết quả bằng AI (không tính lại số liệu)")
             interpretation_request = st.text_area("Dán bảng kết quả thô vào đây", height=160, key="interpretation_request")
+            
             if st.button("AI diễn giải", key="ai_interpret"):
-            if not interpretation_request.strip():
-                st.warning("Nhập kết quả trước.")
-            else:
-                try:
-                    prompt = f"{BASE_SYSTEM_RULES}\nBạn chỉ được DIỄN GIẢI kết quả thống kê dưới đây. Không được tính lại hoặc sửa số liệu.\nKẾT QUẢ:\n{interpretation_request}"
-                    
-                    # Gọi với model do anh đã chọn ở Tab 6
-                    output = call_gemini(prompt, model=st.session_state.get("selected_model", "gemini-3.6-flash"))
-                    if output:
-                        st.markdown(output)
-                except Exception as exc:
-                    st.error(f"Lỗi diễn giải: {exc}")        
-        
+                if not interpretation_request.strip():
+                    st.warning("Nhập kết quả trước.")
+                else:
+                    try:
+                        prompt = f"{BASE_SYSTEM_RULES}\nBạn chỉ được DIỄN GIẢI kết quả thống kê dưới đây. Không được tính lại hoặc sửa số liệu.\nKẾT QUẢ:\n{interpretation_request}"
+                        
+                        # Gọi với model do anh đã chọn ở Tab 6
+                        output = call_gemini(prompt, model=st.session_state.get("selected_model", "gemini-3.6-flash"))
+                        if output:
+                            st.markdown(output)
+                    except Exception as exc:
+                        st.error(f"Lỗi diễn giải: {exc}")
 # ------------------------------------------------------------
 # TAB 5 – AUDIT (1 HÀNG GỌN GÀNG - 6 CHỨC NĂNG)
 # ------------------------------------------------------------
