@@ -829,10 +829,20 @@ with tabs[0]:
     st.header("📚 Ngân hàng tài liệu gốc (PDF)")
     render_evidence_database_status()
     
-    uploaded_files = st.file_uploader(
-        "Tải PDF nghiên cứu / guideline / bài báo",
-        type=["pdf"], accept_multiple_files=True,
-    )
+    # Cập nhật File Uploader
+uploaded_files = st.file_uploader(
+    "Tải PDF nghiên cứu / guideline / bài báo",
+    type=["pdf"], accept_multiple_files=True,
+    key=ui_key("pdf_uploader")
+)
+
+# Cập nhật Text Area & Slider
+evidence_query = st.text_area(
+    "Nhập vấn đề cần tìm trong tài liệu:",
+    placeholder="Ví dụ: tỷ lệ bệnh nhân đạt huyết áp mục tiêu...",
+    key=ui_key("evidence_query")
+)
+top_k = st.slider("Số đoạn bằng chứng", 3, MAX_TOP_K, DEFAULT_TOP_K, key=ui_key("top_k_tab1"))
 
     col1, col2 = st.columns([1, 1])
     with col1:
@@ -901,7 +911,12 @@ with tabs[1]:
     
     col_search, col_btn = st.columns([4, 1])
     with col_search:
-        t3_query = st.text_input("Tên đề tài nghiên cứu (tiếng Việt):", key="t3_query_input")
+        # Cập nhật Input
+t3_query = st.text_input(
+    "Tên đề tài nghiên cứu (tiếng Việt):",
+    key=ui_key("t3_query_input"),
+)
+max_res = st.number_input("Số bài/nguồn", min_value=2, max_value=10, value=5, key=ui_key("t3_max_res"))
     with col_btn:
         max_res = st.number_input("Số bài/nguồn", min_value=2, max_value=10, value=5, key="t3_max_res")
 
@@ -991,11 +1006,17 @@ with tabs[2]:
     st.warning("Đây là công cụ tạo bản nháp. Mọi citation và số liệu phải được kiểm tra lại (đối chiếu bản gốc) trước khi đưa vào luận văn chính thức.")
     render_evidence_database_status("dùng cho các nút viết nhanh bên dưới")
     
-    my_research_data = st.text_area(
-        "🌉 Số liệu nghiên cứu của riêng anh (dùng cho Bàn luận / So sánh):",
-        placeholder="VD: dán bảng crosstab/kết quả logistic regression từ Tab 4 vào đây...",
-        height=140,
-    )
+    # Cập nhật Text Area số liệu cá nhân
+my_research_data = st.text_area(
+    "🌉 Số liệu nghiên cứu của riêng anh (dùng cho Bàn luận / So sánh):",
+    placeholder="VD: dán bảng crosstab/kết quả logistic regression...",
+    height=140,
+    key=ui_key("my_research_data")
+)
+
+# Cập nhật phần Lệnh tùy chỉnh
+custom_prompt = st.text_area("Nhập câu lệnh khác:", key=ui_key("custom_prompt_tab3"))
+k_custom = st.slider("Số nguồn bằng chứng truy xuất", 3, MAX_TOP_K, DEFAULT_TOP_K, key=ui_key("top_k_tab3"))
 
     citation_rules = """QUY TẮC TRÍCH DẪN & HÀN LÂM BẮT BUỘC:
 Chỉ dùng SOURCE_TAG thật để hệ thống tự chuyển thành [n].
@@ -1164,8 +1185,7 @@ with tabs[3]:
             
         return df_clean, logs
 
-    excel_file = st.file_uploader("Tải file Excel", type=["xlsx", "xls"], key="excel_data")
-
+    excel_file = st.file_uploader("Tải file Excel", type=["xlsx", "xls"], key=ui_key("excel_data"))
     if excel_file is not None:
         try:
             raw_df = pd.read_excel(excel_file)
@@ -1201,8 +1221,8 @@ with tabs[3]:
             # 0. BỘ MÁY TUYỂN CHỌN
             st.subheader("📋 Bộ máy tuyển chọn & Sắp xếp bảng cho Chương Kết quả")
             with st.expander("🎯 Khai báo Mục tiêu nghiên cứu (Gợi ý: Dùng chính xác tên cột trong Excel làm từ khóa)"):
-                obj_input_1 = st.text_input("Mục tiêu 1", value="ĐẶC ĐIỂM BỆNH NHÂN NGHIÊN CỨU", key="obj_1")
-                obj_input_2 = st.text_input("Mục tiêu 2", value="PHÂN TÍCH THỰC TRẠNG SỬ DỤNG THUỐC", key="obj_2")
+                obj_input_1 = st.text_input("Mục tiêu 1", value="ĐẶC ĐIỂM BỆNH NHÂN NGHIÊN CỨU", key=ui_key("obj_1"))
+                obj_input_2 = st.text_input("Mục tiêu 2", value="PHÂN TÍCH THỰC TRẠNG SỬ DỤNG THUỐC", key=ui_key("obj_2"))
 
                 objectives = [
                     StudyObjective(id="MT1", title=obj_input_1, keywords=["tuổi", "tuoi", "giới", "gioi", "bệnh", "benh", "đặc điểm", "nhân khẩu", "bmi", "SoBHYT", "NgaySinh"]),
@@ -1252,7 +1272,7 @@ with tabs[3]:
             # 1. THỐNG KÊ MÔ TẢ
             st.subheader("1. Thống kê mô tả (biến phân loại)")
             all_cols = df.columns.tolist()
-            desc_vars = st.multiselect("Chọn biến phân loại", all_cols, key="desc_vars")
+            desc_vars = st.multiselect("Chọn biến phân loại", all_cols, key=ui_key("desc_vars"))
 
             if st.button("Tính tần số và tỷ lệ (Tự động nạp vào Giỏ)", key="calc_desc"):
                 if not desc_vars:
@@ -1281,7 +1301,7 @@ with tabs[3]:
             st.subheader("2. Biến định lượng — Mô tả")
             numeric_candidates = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
             if numeric_candidates:
-                num_vars = st.multiselect("Chọn biến định lượng", numeric_candidates, key="num_vars")
+                num_vars = st.multiselect("Chọn biến định lượng", numeric_candidates, key=ui_key("num_vars"))
                 if st.button("Tính Mean/SD và Median/IQR (Tự động nạp vào Giỏ)", key="calc_num"):
                     if not num_vars:
                         st.warning("Vui lòng chọn ít nhất 1 biến.")
@@ -1315,15 +1335,15 @@ with tabs[3]:
             st.subheader("3. Bảng chéo và kiểm định (Chi-square / Fisher / OR)")
             cc1, cc2 = st.columns(2)
             with cc1:
-                if st.checkbox("✅ Chọn tất cả biến phụ thuộc", key="chk_all_deps"):
-                    deps = st.multiselect("Các biến phụ thuộc", all_cols, default=all_cols, key="cross_deps")
-                else:
-                    deps = st.multiselect("Các biến phụ thuộc", all_cols, key="cross_deps")
+                if st.checkbox("✅ Chọn tất cả biến phụ thuộc", key=ui_key("chk_all_deps")):
+    deps = st.multiselect("Các biến phụ thuộc", all_cols, default=all_cols, key=ui_key("cross_deps"))
+else:
+    deps = st.multiselect("Các biến phụ thuộc", all_cols, key=ui_key("cross_deps"))
             with cc2:
-                if st.checkbox("✅ Chọn tất cả biến độc lập", key="chk_all_indeps"):
-                    indeps = st.multiselect("Các biến độc lập cần đối chiếu", all_cols, default=all_cols, key="cross_indeps")
-                else:
-                    indeps = st.multiselect("Các biến độc lập cần đối chiếu", all_cols, key="cross_indeps")
+                if st.checkbox("✅ Chọn tất cả biến độc lập", key=ui_key("chk_all_indeps")):
+    indeps = st.multiselect("Các biến độc lập cần đối chiếu", all_cols, default=all_cols, key=ui_key("cross_indeps"))
+else:
+    indeps = st.multiselect("Các biến độc lập cần đối chiếu", all_cols, key=ui_key("cross_indeps"))
 
             if st.button("Quét Crosstab + Kiểm định (Nạp TẤT CẢ vào Giỏ)", key="calc_cross"):
                 if not deps or not indeps:
@@ -1373,17 +1393,16 @@ with tabs[3]:
             st.subheader("4. So sánh biến định lượng giữa 2 nhóm (T-test / Mann-Whitney)")
             gc1, gc2 = st.columns(2)
             with gc1:
-                if st.checkbox("✅ Chọn tất cả biến nhóm", key="chk_all_groups"):
-                    group_vars = st.multiselect("Biến nhóm (Tự lọc biến 2 mức)", all_cols, default=all_cols, key="group_vars")
-                else:
-                    group_vars = st.multiselect("Biến nhóm (Tự lọc biến 2 mức)", all_cols, key="group_vars")
+                if st.checkbox("✅ Chọn tất cả biến nhóm", key=ui_key("chk_all_groups")):
+    group_vars = st.multiselect("Biến nhóm (Tự lọc biến 2 mức)", all_cols, default=all_cols, key=ui_key("group_vars"))
+else:
+    group_vars = st.multiselect("Biến nhóm (Tự lọc biến 2 mức)", all_cols, key=ui_key("group_vars"))
             with gc2:
-                valid_num_cols = numeric_candidates if 'numeric_candidates' in locals() and numeric_candidates else all_cols
-                if st.checkbox("✅ Chọn tất cả biến định lượng", key="chk_all_vals"):
-                    val_vars = st.multiselect("Biến định lượng cần so sánh", valid_num_cols, default=valid_num_cols, key="val_vars")
-                else:
-                    val_vars = st.multiselect("Biến định lượng cần so sánh", valid_num_cols, key="val_vars")
-
+                if st.checkbox("✅ Chọn tất cả biến định lượng", key=ui_key("chk_all_vals")):
+    val_vars = st.multiselect("Biến định lượng cần so sánh", valid_num_cols, default=valid_num_cols, key=ui_key("val_vars"))
+else:
+    val_vars = st.multiselect("Biến định lượng cần so sánh", valid_num_cols, key=ui_key("val_vars"))
+            
             if st.button("Quét kiểm định so sánh (Nạp TẤT CẢ vào Giỏ)", key="run_group_compare"):
                 if not group_vars or not val_vars:
                     st.warning("Vui lòng chọn ít nhất 1 biến ở mỗi mục.")
