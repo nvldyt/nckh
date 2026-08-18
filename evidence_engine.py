@@ -212,103 +212,116 @@ def search_pubmed(query_en: str, max_res: int = 5) -> List[Dict[str, Any]]:
             })
     return articles
 
+def _classify_vn_source(link: str) -> str:
+    """Nhận diện tên nguồn hiển thị cho đẹp mắt dựa trên domain trong link."""
+    lower_link = (link or "").lower()
+    if "vjol.info" in lower_link:
+        return "Vietnam Journals Online (VJOL)"
+    if "tapchiyhocvietnam.vn" in lower_link:
+        return "Tạp chí Y học Việt Nam"
+    if "jmpm.vn" in lower_link:
+        return "Tạp chí Y Dược học Quân sự"
+    if "huejmp.vn" in lower_link:
+        return "Tạp chí Y Dược Huế"
+    if "benhvien108" in lower_link:
+        return "Tạp chí Y Dược lâm sàng 108"
+    if "hup.edu.vn" in lower_link:
+        return "Đại học Dược Hà Nội"
+    return "Nghiên cứu Y học Việt Nam"
+
+def _run_google_search(params: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """
+    Gọi SerpAPI (engine Google Search thường) và trả về (organic_results, error_message).
+    Bắt cả lỗi network (exception) lẫn lỗi SerpAPI trả về trong JSON (field "error"),
+    vì SerpAPI thường KHÔNG raise exception khi key sai/hết quota - nó trả JSON có "error".
+    """
+    try:
+        search = GoogleSearch(params)
+        results = search.get_dict()
+    except Exception as e:
+        return [], f"Lỗi kết nối SerpAPI: {str(e)}"
+
+    if "error" in results:
+        return [], f"SerpAPI báo lỗi: {results['error']}"
+
+    return results.get("organic_results", []), None
+
 def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
     Tìm kiếm bài báo tiếng Việt trực tiếp trên Google Search thông qua SerpAPI,
     tập trung vào các tài liệu nghiên cứu khoa học và tạp chí y dược.
+
+    LƯU Ý (đã sửa lỗi): trước đây tầng dự phòng (fallback site:vn) được đặt SAU
+    khối try/except, trong khi khối try/except luôn return ở mọi nhánh (thành
+    công, rỗng, hoặc lỗi) -> fallback là dead code, không bao giờ chạy tới, và
+    các biến collected_results/seen_links cũng không tồn tại ở phạm vi đó nếu
+    lỡ chạy tới. Nay toàn bộ luồng (tìm chính -> fallback nếu rỗng -> trả kết
+    quả) được gộp về MỘT hàm tuyến tính duy nhất, không return sớm ở giữa.
     """
     api_key = get_serpapi_key()
     if not api_key:
         return [], "⚠️ Chưa cấu hình SerpAPI Key."
 
-    # Xây dựng câu truy vấn tìm kiếm trực tiếp tự nhiên, kết hợp từ khóa người dùng với các thuật ngữ y học Việt Nam
-    search_query = f"nghiên cứu {query} (tạp chí OR y học OR dược OR vjol OR pdf)"
+    seen_links: set = set()
+    collected_results: List[Dict[str, Any]] = []
 
-    params = {
+    # ---------- Tầng 1: tìm trực tiếp theo từ khóa + thuật ngữ y học ----------
+    search_query = f"nghiên cứu {query} (tạp chí OR y học OR dược OR vjol OR pdf)"
+    params_main = {
         "engine": "google",
         "q": search_query,
         "api_key": api_key,
         "hl": "vi",
         "gl": "vn",
-        "num": max_results
+        "num": max_results,
     }
 
-    try:
-        search = GoogleSearch(params)
-        results = search.get_dict()
-        organic_results = results.get("organic_results", [])
+    organic_results, error_msg = _run_google_search(params_main)
+    if error_msg:
+        return [], error_msg
 
-        collected_results = []
-        seen_links = set()
+    for item in organic_results:
+        link = item.get("link", "")
+        if not link or link in seen_links:
+            continue
+        seen_links.add(link)
 
-        for item in organic_results:
-            link = item.get("link", "")
-            if link in seen_links:
-                continue
-            seen_links.add(link)
+        collected_results.append({
+            "title": item.get("title", "Không có tiêu đề"),
+            "link": link,
+            "snippet": item.get("snippet", "Không có tóm tắt."),
+            "source": _classify_vn_source(link),
+            "origin": "Tạp chí VN",
+        })
 
-            title = item.get("title", "Không có tiêu đề")
-            snippet = item.get("snippet", "Không có tóm tắt.")
-            
-            # Tự động nhận diện nguồn hiển thị cho đẹp mắt
-            source_name = "Nghiên cứu Y học Việt Nam"
-            lower_link = link.lower()
-            if "vjol.info" in lower_link:
-                source_name = "Vietnam Journals Online (VJOL)"
-            elif "tapchiyhocvietnam.vn" in lower_link:
-                source_name = "Tạp chí Y học Việt Nam"
-            elif "jmpm.vn" in lower_link:
-                source_name = "Tạp chí Y Dược học Quân sự"
-            elif "huejmp.vn" in lower_link:
-                source_name = "Tạp chí Y Dược Huế"
-            elif "benhvien108" in lower_link:
-                source_name = "Tạp chí Y Dược lâm sàng 108"
-            elif "hup.edu.vn" in lower_link:
-                source_name = "Đại học Dược Hà Nội"
-
-            collected_results.append({
-                "title": title,
-                "link": link,
-                "snippet": snippet,
-                "source": source_name,
-                "origin": "Tạp chí VN"
-            })
-
-        if not collected_results:
-            return [], "Không tìm thấy bài báo tiếng Việt phù hợp. Bạn hãy thử đổi tên đề tài ngắn gọn hơn."
-
-        return collected_results, None
-
-    except Exception as e:
-        return [], f"Lỗi kết nối SerpAPI: {str(e)}"
-
-    # Tầng dự phòng toàn cầu nếu các trang chuyên ngành chưa đủ bài
+    # ---------- Tầng 2 (fallback): chỉ chạy khi tầng 1 không ra kết quả ----------
     if not collected_results:
-        try:
-            fallback_params = {
-                "engine": "google",
-                "q": f"nghiên cứu y học {query} site:vn",
-                "api_key": api_key,
-                "hl": "vi",
-                "gl": "vn",
-                "num": max_results
-            }
-            fb_search = GoogleSearch(fallback_params)
-            fb_results = fb_search.get_dict().get("organic_results", [])
+        params_fallback = {
+            "engine": "google",
+            "q": f"nghiên cứu y học {query} site:vn",
+            "api_key": api_key,
+            "hl": "vi",
+            "gl": "vn",
+            "num": max_results,
+        }
+        fb_results, fb_error = _run_google_search(params_fallback)
+
+        # Lỗi ở tầng fallback không nên che mất việc tầng 1 đã chạy được -
+        # chỉ báo lỗi nếu thật sự không thu được gì.
+        if not fb_error:
             for item in fb_results:
                 link = item.get("link", "")
-                if link in seen_links: continue
+                if not link or link in seen_links:
+                    continue
                 seen_links.add(link)
-                
+
                 collected_results.append({
-                    "title": item.get("title", ""),
+                    "title": item.get("title", "Không có tiêu đề"),
                     "link": link,
-                    "snippet": item.get("snippet", ""),
-                    "source": "Google Scholar / VN Research",
-                    "origin": "Tạp chí VN"
+                    "snippet": item.get("snippet", "Không có tóm tắt."),
+                    "source": "Google / VN Research (mở rộng)",
+                    "origin": "Tạp chí VN",
                 })
-        except Exception:
-            pass
 
     if not collected_results:
         return [], "Không tìm thấy bài báo tiếng Việt phù hợp. Bạn có thể thử đổi tên đề tài ngắn gọn hơn."
