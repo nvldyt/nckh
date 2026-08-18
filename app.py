@@ -1495,19 +1495,51 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                 
                 # 8. DIỄN GIẢI BẰNG AI
                 st.subheader("8. Diễn giải kết quả bằng AI (không tính lại số liệu)")
-                interpretation_request = st.text_area("Dán bảng kết quả thô vào đây", height=160, key=ui_key("interpretation_request"))
+                st.info("💡 **Không cần copy/paste thủ công!** Anh chỉ cần chọn bảng đã tính ở trên từ danh sách, hệ thống sẽ tự động rút số liệu chuyển cho AI.")
+                
+                # Tạo danh sách các bảng đang có trong Giỏ
+                saved_tables = st.session_state.get("saved_tables", {})
+                table_options = ["-- Chỉ dùng số liệu dán tay bên dưới --"] + list(saved_tables.keys())
+                
+                selected_table_key = st.selectbox(
+                    "Lựa chọn bảng từ Giỏ kết quả:", 
+                    options=table_options, 
+                    key=ui_key("select_ai_table")
+                )
+                
+                interpretation_request = st.text_area(
+                    "Hoặc dán số liệu bổ sung vào đây (nếu có):", 
+                    height=120, 
+                    key=ui_key("interpretation_request")
+                )
 
-                if st.button("AI diễn giải", key="ai_interpret"):
-                    if not interpretation_request.strip():
-                        st.warning("Nhập kết quả trước.")
+                if st.button("🤖 AI diễn giải", type="primary", key="ai_interpret"):
+                    final_data = ""
+                    
+                    # 1. Hút dữ liệu từ bảng anh đã chọn
+                    if selected_table_key != "-- Chỉ dùng số liệu dán tay bên dưới --":
+                        df_target = saved_tables[selected_table_key]
+                        final_data += f"TÊN BẢNG: {selected_table_key}\n"
+                        final_data += df_target.to_markdown(index=False) + "\n\n"
+                        
+                    # 2. Hút dữ liệu từ ô nhập tay (nếu anh có gõ thêm)
+                    if interpretation_request.strip():
+                        final_data += f"SỐ LIỆU BỔ SUNG:\n{interpretation_request.strip()}"
+                        
+                    # 3. Bẫy lỗi và gọi AI
+                    if not final_data.strip():
+                        st.warning("⚠️ Anh chưa chọn bảng nào hoặc chưa dán số liệu!")
                     else:
-                        prompt = f"""{BASE_SYSTEM_RULES}\nBạn chỉ được DIỄN GIẢI kết quả thống kê dưới đây. Không được tính lại hoặc sửa số liệu.\nKẾT QUẢ:\n{interpretation_request}"""
-                        response = call_gemini(prompt)
-                        if response:
-                            st.markdown(response)
-
-            except Exception as exc:
-                st.error(f"Lỗi đọc file Excel: {exc}")
+                        try:
+                            prompt = f"{BASE_SYSTEM_RULES}\nBạn chỉ được DIỄN GIẢI kết quả thống kê dưới đây. Không được tính lại hoặc sửa số liệu.\nKẾT QUẢ:\n{final_data}"
+                            
+                            with st.spinner("AI đang đọc và diễn giải số liệu..."):
+                                output = call_gemini(prompt, model=st.session_state.get("selected_model", "gemini-3.6-flash"))
+                                if output:
+                                    st.markdown(output)
+                        except Exception as exc:
+                            st.error(f"Lỗi diễn giải: {exc}")
+                st.write("---")
 
     # ------------------------------------------------------------
     # TAB 5 – AUDIT
