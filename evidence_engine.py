@@ -214,114 +214,88 @@ def search_pubmed(query_en: str, max_res: int = 5) -> List[Dict[str, Any]]:
 
 def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
-    Tìm kiếm bài báo tiếng Việt qua SerpAPI với cơ chế vét cạn thông minh,
-    đảm bảo luôn tìm thấy kết quả từ các tạp chí y học Việt Nam và Google.
+    Tìm kiếm bài báo tiếng Việt qua SerpAPI dựa trên danh sách domain chuẩn,
+    có fallback mở rộng sang toàn bộ site:vn nếu không tìm thấy.
     """
     api_key = get_serpapi_key()
     if not api_key:
         return [], "⚠️ Chưa cấu hình SerpAPI Key."
 
-    # Lấy danh sách domain từ session state hoặc dùng danh sách mặc định đầy đủ
     domains = st.session_state.get("vn_journal_domains", [])
     if not domains:
         domains = [
-            "tapchiyhocvietnam.vn", "vjol.info", "tapchinghiencuuyhoc.vn", 
-            "jmp.huemed-univ.edu.vn", "jmpm.vn", "huejmp.vn", 
+            "tapchiyhocvietnam.vn", "vjol.info", "tapchinghiencuuyhoc.vn",
+            "jmp.huemed-univ.edu.vn", "jmpm.vn", "huejmp.vn",
             "tcydls108.benhvien108.vn", "tapchiyhcd.vn", "thaibinhjmp.vn", "hup.edu.vn"
         ]
 
     site_query = " OR ".join([f"site:{d}" for d in domains])
-    
-    # Danh sách các từ khóa dự phòng từ chi tiết đến rộng rãi để không bao giờ bị rỗng
-    search_queries = [
-        query,                               # Từ khóa đầy đủ người dùng nhập
-        f"nghiên cứu {query}",                # Thêm từ bổ trợ nghiên cứu
-        query.split()[-1] if query.split() else query # Lấy từ khóa chính (vd: vancomycin)
-    ]
+    full_query = f"({site_query}) {query}"
+
+    params = {
+        "engine": "google",
+        "q": full_query,
+        "api_key": api_key,
+        "hl": "vi",
+        "gl": "vn",
+        "num": max_results
+    }
 
     collected_results = []
-    seen_links = set()
 
-    # Tầng 1: Tìm quét trực tiếp bên trong các trang tạp chí y học chuyên ngành
-    for q_text in search_queries:
-        if len(collected_results) >= max_results:
-            break
-            
-        full_query = f"({site_query}) {q_text}"
-        
-        params = {
-            "engine": "google",
-            "q": full_query,
-            "api_key": api_key,
-            "hl": "vi",
-            "gl": "vn",
-            "num": max_results
-        }
+    try:
+        search = GoogleSearch(params)
+        results = search.get_dict()
+        organic_results = results.get("organic_results", [])
 
-        try:
-            search = GoogleSearch(params)
-            results = search.get_dict()
-            organic_results = results.get("organic_results", [])
+        for item in organic_results:
+            link = item.get("link", "")
+            title = item.get("title", "Không có tiêu đề")
+            snippet = item.get("snippet", "Không có tóm tắt.")
 
-            for item in organic_results:
-                link = item.get("link", "")
-                if link in seen_links:
-                    continue
-                seen_links.add(link)
-
-                title = item.get("title", "Không có tiêu đề")
-                snippet = item.get("snippet", "Không có tóm tắt.")
-                
-                source_name = "Tạp chí Y học Việt Nam"
-                for d in domains:
-                    if d in link:
-                        source_name = d.upper()
-                        break
-
-                collected_results.append({
-                    "title": title,
-                    "link": link,
-                    "snippet": snippet,
-                    "source": source_name,
-                    "origin": "Tạp chí VN"
-                })
-                
-                if len(collected_results) >= max_results:
+            source_name = "Tạp chí Y học Việt Nam"
+            for d in domains:
+                if d in link:
+                    source_name = d.upper()
                     break
-        except Exception:
-            continue
 
-    # Tầng 2 (Dự phòng): Nếu quét các domain chuyên ngành vẫn chưa đủ số lượng, mở rộng sang toàn bộ Google Việt Nam
-    if len(collected_results) < max_results:
+            collected_results.append({
+                "title": title,
+                "link": link,
+                "snippet": snippet,
+                "source": source_name,
+                "origin": "Tạp chí VN"
+            })
+
+    except Exception as e:
+        return [], f"Lỗi kết nối SerpAPI: {str(e)}"
+
+    # === FALLBACK: chỉ chạy khi tìm site-restricted không ra gì ===
+    if not collected_results:
         try:
             fallback_params = {
                 "engine": "google",
-                "q": f"nghiên cứu y học {query} site:vn",
+                "q": f"nghiên cứu {query} site:vn",
                 "api_key": api_key,
                 "hl": "vi",
                 "gl": "vn",
-                "num": max_results - len(collected_results)
+                "num": max_results
             }
             fb_search = GoogleSearch(fallback_params)
             fb_results = fb_search.get_dict().get("organic_results", [])
             for item in fb_results:
-                link = item.get("link", "")
-                if link in seen_links:
-                    continue
-                seen_links.add(link)
-                
                 collected_results.append({
-                    "title": item.get("title", "Không có tiêu đề"),
-                    "link": link,
-                    "snippet": item.get("snippet", "Không có tóm tắt."),
-                    "source": "Google VN / Nghiên cứu Y học",
+                    "title": item.get("title", ""),
+                    "link": item.get("link", ""),
+                    "snippet": item.get("snippet", ""),
+                    "source": "Google / VN Research",
                     "origin": "Tạp chí VN"
                 })
         except Exception:
             pass
 
     if not collected_results:
-        return [], "Không tìm thấy bài báo tiếng Việt phù hợp. Bạn hãy thử nhập từ khóa ngắn hơn (ví dụ: 'vancomycin' hoặc 'tăng huyết áp')."
+        return [], "Không tìm thấy bài báo tiếng Việt phù hợp. Bạn có thể thử đổi tên đề tài ngắn gọn hơn."
 
     return collected_results, None
 
