@@ -214,80 +214,67 @@ def search_pubmed(query_en: str, max_res: int = 5) -> List[Dict[str, Any]]:
 
 def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
-    Tìm kiếm bài báo trên các tạp chí y học Việt Nam thông qua SerpAPI.
-    Mở rộng từ khóa linh hoạt để đảm bảo không bao giờ bị rỗng kết quả.
+    Tìm kiếm bài báo tiếng Việt qua SerpAPI dựa trên danh sách domain chuẩn.
     """
     api_key = get_serpapi_key()
     if not api_key:
         return [], "⚠️ Chưa cấu hình SerpAPI Key."
 
+    # Lấy danh sách domain từ session state, nếu trống thì dùng danh sách mặc định đầy đủ
     domains = st.session_state.get("vn_journal_domains", [])
     if not domains:
-        domains = ["tapchiyhocvietnam.vn", "vjol.info", "tapchinghiencuuyhoc.vn", "jmp.huemed-univ.edu.vn"]
+        domains = [
+            "tapchiyhocvietnam.vn", "vjol.info", "tapchinghiencuuyhoc.vn", 
+            "jmp.huemed-univ.edu.vn", "jmpm.vn", "huejmp.vn", 
+            "tcydls108.benhvien108.vn", "tapchiyhcd.vn", "thaibinhjmp.vn", "hup.edu.vn"
+        ]
 
     site_query = " OR ".join([f"site:{d}" for d in domains])
     
-    # Xử lý thông minh từ khóa tiếng Việt: lấy tối đa 3-4 từ quan trọng thay vì chỉ 1 từ
-    words = [w for w in query.split() if len(w) > 2] # Lọc bỏ các từ nối ngắn như "tại", "và", "của"
-    core_keyword = " ".join(words[:4]) if words else query
+    # Tạo câu truy vấn: tìm trực tiếp cụm từ của anh kết hợp trong các trang y khoa
+    full_query = f"({site_query}) {query}"
+    
+    params = {
+        "engine": "google",
+        "q": full_query,
+        "api_key": api_key,
+        "hl": "vi",
+        "gl": "vn",
+        "num": max_results
+    }
 
-    # Các tầng từ khóa dự phòng từ chi tiết đến rộng rãi
-    search_queries = [
-        query,                                       # Tên đề tài gốc của anh
-        core_keyword,                                # Cụm từ khóa cốt lõi
-        f"sử dụng {core_keyword.split()[-1] if words else query}" # Dự phòng tìm theo dạng "sử dụng [tên thuốc]"
-    ]
+    try:
+        search = GoogleSearch(params)
+        results = search.get_dict()
+        organic_results = results.get("organic_results", [])
 
-    collected_results = []
-    seen_links = set()
-
-    for q_text in search_queries:
-        if len(collected_results) >= max_results:
-            break
+        collected_results = []
+        for item in organic_results:
+            link = item.get("link", "")
+            title = item.get("title", "Không có tiêu đề")
+            snippet = item.get("snippet", "Không có tóm tắt.")
             
-        full_query = f"({site_query}) {q_text}"
-        
-        params = {
-            "engine": "google",
-            "q": full_query,
-            "api_key": api_key,
-            "hl": "vi",
-            "gl": "vn",
-            "num": max_results
-        }
-
-        try:
-            search = GoogleSearch(params)
-            results = search.get_dict()
-            organic_results = results.get("organic_results", [])
-
-            for item in organic_results:
-                link = item.get("link", "")
-                if link in seen_links:
-                    continue
-                seen_links.add(link)
-
-                title = item.get("title", "Không có tiêu đề")
-                snippet = item.get("snippet", "Không có tóm tắt.")
-                
-                source_name = "Tạp chí Y học Việt Nam"
-                for d in domains:
-                    if d in link:
-                        source_name = d.upper()
-                        break
-
-                collected_results.append({
-                    "title": title,
-                    "link": link,
-                    "snippet": snippet,
-                    "source": source_name,
-                    "origin": "Tạp chí VN"
-                })
-                
-                if len(collected_results) >= max_results:
+            source_name = "Tạp chí Y học Việt Nam"
+            for d in domains:
+                if d in link:
+                    source_name = d.upper()
                     break
-        except Exception as e:
-            return [], f"Lỗi kết nối SerpAPI: {str(e)}"
+
+            collected_results.append({
+                "title": title,
+                "link": link,
+                "snippet": snippet,
+                "source": source_name,
+                "origin": "Tạp chí VN"
+            })
+
+        if not collected_results:
+            return [], "Không tìm thấy bài báo tiếng Việt phù hợp với từ khóa này."
+
+        return collected_results, None
+
+    except Exception as e:
+        return [], f"Lỗi kết nối SerpAPI: {str(e)}"
 
     if not collected_results:
         # Nếu vẫn không tìm thấy trong các tạp chí y khoa chuyên ngành, mở rộng tìm kiếm toàn bộ Google Việt Nam có chứa từ khóa
