@@ -207,3 +207,81 @@ def extract_pdf(uploaded_file) -> Tuple[SourceDocument, List[EvidenceChunk]]:
             )
 
     return source, chunks
+# Bổ sung vào cuối file evidence_engine.py
+
+DEFAULT_TOP_K = 8
+MAX_CHUNKS_PER_SOURCE = 2
+
+def retrieve_evidence_with_vector(query: str, query_vector: np.ndarray, k: int = DEFAULT_TOP_K) -> List[Dict[str, Any]]:
+    """
+    Thuật toán Hybrid Retrieval sử dụng RRF (Reciprocal Rank Fusion)
+    kết hợp với Source Diversity (Giới hạn số lượng chunk từ một nguồn).
+    """
+    chunks = st.session_state.get("chunks", [])
+    matrix = st.session_state.get("embeddings")
+    bm25 = st.session_state.get("bm25")
+
+    if not chunks or matrix is None or bm25 is None: 
+        return []
+
+    # 1. SEMANTIC SEARCH (Tìm kiếm theo ngữ nghĩa bằng Vector)
+    # Sử dụng tích vô hướng (dot product) vì vector đã được normalize
+    semantic_scores = matrix @ query_vector
+    sem_indices = np.argsort(semantic_scores)[::-1][:30] # Lấy top 30
+    
+    # 2. KEYWORD SEARCH (Tìm kiếm từ khóa bằng BM25)
+    tokenized_query = medical_tokenize(query)
+    bm25_scores = np.array(bm25.get_scores(tokenized_query))
+    bm25_indices = np.argsort(bm25_scores)[::-1][:30] # Lấy top 30
+
+    # 3. RECIPROCAL RANK FUSION (RRF) - Trộn điểm số
+    # Trọng số: Semantic 65% - Keyword 35%
+    rrf_scores = {}
+    c = 60.0
+    for rank, idx in enumerate(sem_indices): 
+        rrf_scores[idx] = rrf_scores.get(idx, 0.0) + (0.65 / (c + rank + 1))
+    for rank, idx in enumerate(bm25_indices): 
+        rrf_scores[idx] = rrf_scores.get(idx, 0.0) + (0.35 / (c + rank + 1))
+
+    # Sắp xếp lại danh sách index theo điểm RRF
+    sorted_indices = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
+    
+    # 4. SOURCE DIVERSITY (Đa dạng hóa nguồn gốc)
+    source_counts = {}
+    final_indices = []
+    
+    # Vòng 1: Lấy đa dạng nguồn (Tối đa MAX_CHUNKS_PER_SOURCE cho mỗi bài báo)
+    for idx in sorted_indices:
+        sid = chunks[idx].get("source_id")
+        count = source_counts.get(sid, 0)
+        if count < MAX_CHUNKS_PER_SOURCE:
+            source_counts[sid] = count + 1
+            final_indices.append(idx)
+        if len(final_indices) >= k:
+            break
+
+    # Vòng 2: Fallback (Nếu chưa đủ K kết quả, vét nốt các chunk còn lại từ trên xuống)
+    if len(final_indices) < k:
+        for idx in sorted_indices:
+            if idx not in final_indices:
+                final_indices.append(idx)
+            if len(final_indices) >= k:
+                break
+
+    # 5. Format kết quả trả về
+    results = []
+    for idx in final_indices:
+        item = dict(chunks[idx])
+        item["score"] = float(rrf_scores[idx])
+        results.append(item)
+        
+    return results
+
+def retrieve_evidence(query: str, k: int = DEFAULT_TOP_K) -> List[Dict[str, Any]]:
+    """Hàm bọc (Wrapper) tiện ích để gọi từ giao diện."""
+    chunks = st.session_state.get("chunks", [])
+    if not chunks: 
+        return []
+    
+    query_vector = get_embeddings([query])[0]
+    return retrieve_evidence_with_vector(query, query_vector, k=k)
