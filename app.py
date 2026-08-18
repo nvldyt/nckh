@@ -1749,7 +1749,7 @@ def auto_clean_data(raw_df: pd.DataFrame):
                             st.markdown(output)
                     except Exception as exc:
                         st.error(f"Lỗi diễn giải: {exc}")
-st.write("---")
+            st.write("---")
 # ------------------------------------------------------------
 # TAB 5 – AUDIT (1 HÀNG GỌN GÀNG - 6 CHỨC NĂNG)
 # ------------------------------------------------------------
