@@ -8,6 +8,7 @@ import io
 import os
 import re
 import time
+import math
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -20,6 +21,7 @@ from google.genai import types
 
 # Embedding: pip install sentence-transformers
 from sentence_transformers import SentenceTransformer
+from rank_bm25 import BM25Okapi
 
 # DOCX
 from docx import Document
@@ -50,6 +52,9 @@ from evidence_engine import (
 
 # 4. Import bộ máy Quản lý Checkpoint / Dự án (lưu & khôi phục xuống đĩa)
 from project_storage import save_project, load_project, list_projects, delete_project
+
+# 5. Import Citation Engine
+from citation_engine import CitationEngine
 
 # ============================================================
 # 1. CẤU HÌNH
@@ -242,6 +247,19 @@ def init_state():
         if key not in st.session_state:
             st.session_state[key] = value
 
+def reset_evidence_session():
+    """Hàm dọn dẹp toàn bộ dữ liệu trong phiên làm việc."""
+    keys_to_clear = [
+        "documents", "chunks", "embeddings", "citation_registry", 
+        "audit_log", "last_generated", "last_evidence", "t3_pm_data", 
+        "t3_vn_data", "result_cart", "saved_tables", "current_references",
+        "citation_engine", "selection_decisions", "narrative_plan"
+    ]
+    for key in keys_to_clear:
+        if key in st.session_state:
+            del st.session_state[key]
+    init_state()
+
 init_state()
 
 # ============================================================
@@ -373,6 +391,7 @@ def translate_query_to_mesh(vietnamese_query: str) -> str:
         return text.strip().strip('"').strip("'").replace("\n", " ")
     
     return vietnamese_query
+
 def extract_vn_keywords(vietnamese_query: str) -> str:
     """Rút gọn câu dài thành từ khóa tiếng Việt cốt lõi để tìm Google Scholar dễ ra bài hơn"""
     prompt = f"""
@@ -392,10 +411,6 @@ def extract_vn_keywords(vietnamese_query: str) -> str:
 # ============================================================
 # 10. INDEX / VECTOR RETRIEVAL (HYBRID: EMBEDDING + BM25)
 # ============================================================
-import numpy as np
-from rank_bm25 import BM25Okapi
-from typing import Any, Dict, List
-import streamlit as st
 
 def evidence_database_summary() -> Dict[str, Any]:
     """Đếm số nguồn/số đoạn bằng chứng theo từng nguồn gốc (PDF/PubMed/VN/Thủ công)."""
@@ -553,7 +568,6 @@ NỘI DUNG GỐC:
 # ============================================================
 # 11. CITATION ENGINE (CẤU TRÚC MỚI CHUẨN VANCOUVER)
 # ============================================================
-from citation_engine import CitationEngine
 
 def get_citation_engine() -> CitationEngine:
     """Khởi tạo và lấy bộ máy Citation Engine từ Session State"""
@@ -650,7 +664,9 @@ def generate_evidence_based(
     - Chỉ sử dụng thông tin có thể truy về các tài liệu ở trên.
     """
 
-    # Gọi với model do anh đã chọn ở Tab 6 output = call_gemini(prompt, model=st.session_state["selected_model"])
+    # Gọi với model do người dùng chọn ở Tab 6
+    output = call_gemini(prompt, model=st.session_state.get("selected_model", DEFAULT_MODEL))
+    
     if output is None:
         return None, evidence, []
 
@@ -670,10 +686,10 @@ def generate_evidence_based(
     st.session_state["current_references"] = references  # Lưu để hàm citation_bibliography() đọc
 
     return final_text, evidence, invalid_tags
+
 # ============================================================
-# 17. KIỂM TRA NHẤT QUÁN SỐ LIỆU + TRÙNG LẶP NỘI BỘ (ĐÃ SỬA LỖI P0)
+# 17. KIỂM TRA NHẤT QUÁN SỐ LIỆU + TRÙNG LẶP NỘI BỘ
 # ============================================================
-import math
 
 def extract_numeric_tokens(text: str) -> List[str]:
     if not text:
@@ -798,6 +814,7 @@ def internal_overlap_audit(text: str, top_k: int = 5) -> List[Dict[str, Any]]:
 
     results.sort(key=lambda x: x["similarity"], reverse=True)
     return results[:top_k]
+
 # ============================================================
 # 18. XUẤT WORD (có phân tích heading/markdown cơ bản)
 # ============================================================
@@ -906,7 +923,8 @@ def plagiarism_style_review(text: str) -> Optional[str]:
     ĐOẠN VĂN GỐC:
     {text}
     """
-    return # Gọi với model do anh đã chọn ở Tab 6 output = call_gemini(prompt, model=st.session_state["selected_model"])
+    # Gọi với model do người dùng chọn ở Tab 6
+    return call_gemini(prompt, model=st.session_state.get("selected_model", DEFAULT_MODEL))
 
 def heuristic_ai_style_score(text: str) -> Optional[str]:
     if not text.strip(): return None
@@ -924,6 +942,36 @@ def heuristic_ai_style_score(text: str) -> Optional[str]:
     """
     # ÉP CHẠY LITE: Kiểm tra dấu hiệu AI là form mẫu cơ bản
     return call_gemini(prompt, model=MODEL_LITE)
+
+
+# ============================================================
+# CÁC HÀM TIỆN ÍCH DỮ LIỆU DÙNG CHO TAB 4
+# ============================================================
+
+def auto_clean_data(raw_df: pd.DataFrame):
+    """Bộ dọn rác tự động (Auto-Clean) cho DataFrame"""
+    logs = []
+    df_clean = raw_df.copy()
+    old_rows = df_clean.shape[0]
+    
+    # 1. Cắt khoảng trắng tên cột
+    df_clean.columns = df_clean.columns.str.strip()
+    
+    # 2. Xóa cột rác Unnamed
+    unnamed_cols = [c for c in df_clean.columns if "unnamed" in str(c).lower()]
+    if unnamed_cols:
+        df_clean = df_clean.drop(columns=unnamed_cols)
+        logs.append(f"🗑️ Đã xóa {len(unnamed_cols)} cột rác (Unnamed) do phần mềm xuất dư.")
+        
+    # 3. Xóa dòng rỗng hoàn toàn
+    df_clean = df_clean.dropna(how='all')
+    if df_clean.shape[0] < old_rows:
+        logs.append(f"🗑️ Đã xóa {old_rows - df_clean.shape[0]} dòng trống hoàn toàn.")
+        
+    # 4. Giữ nguyên vẹn giá trị gốc để bảo vệ mã ICD-10, HbA1c, eGFR
+    logs.append("🛡️ Đã giữ nguyên vẹn các giá trị gốc (không đổi hoa/thường) nhằm bảo vệ ký hiệu chuyên ngành.")
+    
+    return df_clean, logs
 
 
 # ============================================================
@@ -1077,7 +1125,7 @@ with tabs[1]:
 
         with col_vn:
             st.markdown("### 🇻🇳 Tạp chí Y học Việt Nam")
-            # Hiện từ khóa VN đã rút gọn để anh biết AI đang tìm chữ gì
+            # Hiện từ khóa VN đã rút gọn để biết AI đang tìm chữ gì
             if st.session_state.get("t3_vn_keyword"):
                 st.success(f"🔑 Từ khoá đã rút gọn: **{st.session_state['t3_vn_keyword']}**")
                 
@@ -1100,7 +1148,7 @@ with tabs[1]:
 
         with col_pm:
             st.markdown("### 🌍 PubMed (Quốc tế)")
-            if st.session_state["t3_en_keyword"]:
+            if st.session_state.get("t3_en_keyword"):
                 st.success(f"🔑 Từ khoá MeSH: **{st.session_state['t3_en_keyword']}**")
             if not st.session_state["t3_pm_data"]:
                 st.info("Chưa có dữ liệu / không tìm thấy kết quả phù hợp.")
@@ -1337,33 +1385,6 @@ with tabs[3]:
     if "saved_tables" not in st.session_state:
         st.session_state["saved_tables"] = {}
 
-    # ==========================================
-    # BỘ DỌN RÁC TỰ ĐỘNG (AUTO-CLEAN)
-    # ==========================================
-def auto_clean_data(raw_df: pd.DataFrame):
-    logs = []
-    df_clean = raw_df.copy()
-    old_rows = df_clean.shape[0]
-    
-    # 1. Cắt khoảng trắng tên cột
-    df_clean.columns = df_clean.columns.str.strip()
-    
-    # 2. Xóa cột rác Unnamed
-    unnamed_cols = [c for c in df_clean.columns if "unnamed" in str(c).lower()]
-    if unnamed_cols:
-        df_clean = df_clean.drop(columns=unnamed_cols)
-        logs.append(f"🗑️ Đã xóa {len(unnamed_cols)} cột rác (Unnamed) do phần mềm xuất dư.")
-        
-    # 3. Xóa dòng rỗng hoàn toàn
-    df_clean = df_clean.dropna(how='all')
-    if df_clean.shape[0] < old_rows:
-        logs.append(f"🗑️ Đã xóa {old_rows - df_clean.shape[0]} dòng trống hoàn toàn.")
-        
-    # 4. Giữ nguyên vẹn giá trị gốc để bảo vệ mã ICD-10, HbA1c, eGFR
-    logs.append("🛡️ Đã giữ nguyên vẹn các giá trị gốc (không đổi hoa/thường) nhằm bảo vệ ký hiệu chuyên ngành.")
-    
-    return df_clean, logs
-
     excel_file = st.file_uploader("Tải file Excel", type=["xlsx", "xls"], key="excel_data")
 
     if excel_file is not None:
@@ -1392,7 +1413,6 @@ def auto_clean_data(raw_df: pd.DataFrame):
                 st.dataframe(df)
 
             st.write("---")
-            # --- HIỂN THỊ GIỎ KẾT QUẢ ---
             # --- HIỂN THỊ GIỎ KẾT QUẢ ---
             st.markdown(f"### 🛒 Giỏ kết quả: **{len(st.session_state['result_cart'])}** bảng đã lưu")
             st.info("💡 Mỗi khi anh bấm các nút thống kê bên dưới, kết quả sẽ tự động được nạp vào Giỏ này để lát nữa AI tuyển chọn.")
@@ -1743,13 +1763,16 @@ def auto_clean_data(raw_df: pd.DataFrame):
                     try:
                         prompt = f"{BASE_SYSTEM_RULES}\nBạn chỉ được DIỄN GIẢI kết quả thống kê dưới đây. Không được tính lại hoặc sửa số liệu.\nKẾT QUẢ:\n{interpretation_request}"
                         
-                        # Gọi với model do anh đã chọn ở Tab 6
-                        output = call_gemini(prompt, model=st.session_state.get("selected_model", "gemini-3.6-flash"))
+                        # Gọi với model do người dùng chọn ở Tab 6
+                        output = call_gemini(prompt, model=st.session_state.get("selected_model", DEFAULT_MODEL))
                         if output:
                             st.markdown(output)
                     except Exception as exc:
                         st.error(f"Lỗi diễn giải: {exc}")
             st.write("---")
+        except Exception as file_exc:
+            st.error(f"Đã xảy ra lỗi khi đọc File Excel: {file_exc}")
+
 # ------------------------------------------------------------
 # TAB 5 – AUDIT (1 HÀNG GỌN GÀNG - 6 CHỨC NĂNG)
 # ------------------------------------------------------------
@@ -1871,12 +1894,13 @@ with tabs[4]:
                 try:
                     with st.spinner("Đang soi logic..."):
                         prompt = f"Bạn là phản biện luận văn. Đánh giá logic đoạn văn sau: {audit_text}"
-                        response = call_gemini(prompt, model=st.session_state.get("selected_model", "gemini-3.6-flash"))
+                        response = call_gemini(prompt, model=st.session_state.get("selected_model", DEFAULT_MODEL))
                     with ket_qua_audit_container:
                         st.markdown("### ⚖️ Phản biện Logic")
                         st.markdown(response)
                 except Exception as e:
                     st.error(f"Lỗi: {e}")
+
 # ------------------------------------------------------------
 # TAB 6 – NGUỒN & CẤU HÌNH HỆ THỐNG
 # ------------------------------------------------------------
