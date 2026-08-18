@@ -1079,6 +1079,12 @@ def main():
         # KHU VỰC NHẬP DỮ LIỆU NGHIÊN CỨU & NHẬN XÉT BẢNG
         # ------------------------------------------------------------
         st.markdown("### 📊 Dữ liệu nghiên cứu của riêng anh")
+        
+        # MẸO XỬ LÝ LỖI STREAMLIT: Nhồi dữ liệu AI vào state TRƯỚC khi vẽ widget
+        if "ai_pending_remark" in st.session_state:
+            st.session_state[ui_key("my_table_remarks")] = st.session_state["ai_pending_remark"]
+            del st.session_state["ai_pending_remark"]
+
         col_data_1, col_data_2 = st.columns(2)
         
         with col_data_1:
@@ -1109,13 +1115,11 @@ YÊU CẦU TỐI THƯỢNG:
 - TUYỆT ĐỐI KHÔNG giải thích nguyên nhân, KHÔNG so sánh với y văn, KHÔNG bàn luận."""
                     prompt = f"{BASE_SYSTEM_RULES}\nNHIỆM VỤ:\n{task}\n\nBẢNG SỐ LIỆU:\n{my_research_data}"
                     
-                    # Gọi AI trực tiếp thay vì qua run_quick_task (vì phần này không cần chèn Reference)
                     generated_remark = call_gemini(prompt)
                     
                     if generated_remark:
-                        # Bắn trực tiếp kết quả vào bộ nhớ của ô text_area số 2
-                        st.session_state[ui_key("my_table_remarks")] = generated_remark
-                        # Ép giao diện tải lại lập tức để chữ hiện lên ô 2
+                        # Lưu vào biến tạm rồi ép tải lại giao diện
+                        st.session_state["ai_pending_remark"] = generated_remark
                         st.rerun()
 
         st.write("---")
