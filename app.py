@@ -1001,9 +1001,8 @@ def main():
                     st.session_state["t3_pm_data"] = search_pubmed(en_query, max_res)
 
                 with st.spinner("Đang rút gọn từ khóa & tìm trên tạp chí Y học Việt Nam..."):
-                    vn_short_query = extract_vn_keywords(t3_query)
-                    st.session_state["t3_vn_keyword"] = vn_short_query
-                    vn_results, vn_err = search_vn_journals(vn_short_query, max_res)
+                    st.session_state["t3_vn_keyword"] = t3_query 
+                    vn_results, vn_err = search_vn_journals(t3_query, max_res)
                     st.session_state["t3_vn_data"] = vn_results
                     if vn_err:
                         st.warning(vn_err)
