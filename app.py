@@ -347,20 +347,31 @@ def add_pdf_documents(uploaded_files) -> Tuple[int, int, List[str]]:
     return new_sources, new_chunks_count, errors
 
 # ============================================================
-# 8. TRA CỨU MESH (Helper)
+# 8. TRA CỨU TỪ KHÓA (ĐÃ TỐI ƯU HÓA CHO PUBMED)
 # ============================================================
 
 def translate_query_to_mesh(vietnamese_query: str) -> str:
-    prompt = (
-        "Chuyển đổi từ khóa tiếng Việt sau thành chuỗi từ khóa y khoa "
-        "(MeSH terms) bằng tiếng Anh tối ưu nhất để tìm trên PubMed.\n"
-        f"Từ gốc: {vietnamese_query}\n"
-        "Chỉ trả về chuỗi tiếng Anh, không giải thích, không markdown."
-    )
-    # ÉP CHẠY LITE: Tác vụ dịch thuật đơn giản, tiết kiệm quota
-    text = call_gemini(prompt, model=MODEL_LITE, temperature=0.1)
+    prompt = f"""
+    Bạn là một chuyên gia tra cứu tài liệu y khoa. 
+    Nhiệm vụ: Chuyển đổi tên đề tài tiếng Việt sau thành chuỗi từ khóa tiếng Anh hiệu quả nhất để tra cứu trên PubMed.
+    
+    NGUYÊN TẮC BẮT BUỘC:
+    1. Trích xuất các danh từ chính (Ví dụ: Vancomycin, drug utilization, pharmacokinetics).
+    2. Dùng toán tử AND, OR để kết nối.
+    3. TUYỆT ĐỐI KHÔNG dùng cấu trúc MeSH chứa dấu gạch chéo (ví dụ KHÔNG dùng: Vancomycin/therapeutic use). Việc ép subheadings sẽ làm mất kết quả tìm kiếm.
+    4. Giữ chuỗi tìm kiếm ngắn gọn, từ 2 đến 4 cụm từ khóa.
+    
+    Từ gốc tiếng Việt: "{vietnamese_query}"
+    
+    Chỉ trả về chuỗi tiếng Anh, không giải thích, không dùng markdown.
+    """
+    
+    # Sử dụng MODEL_LITE để dịch thuật nhanh
+    text = call_gemini(prompt, model=MODEL_LITE)
     if text:
-        return text.strip().strip('"').strip("'")
+        # Dọn dẹp các ký tự thừa nếu AI lỡ tay sinh ra
+        return text.strip().strip('"').strip("'").replace("\n", " ")
+    
     return vietnamese_query
 
 # ============================================================
