@@ -1148,9 +1148,6 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
     with tabs[3]:
         st.header("📊 Phân tích số liệu bệnh án")
 
-        # Lưu ý: Hàm auto_clean_data đã được chuyển sang data_engine.py 
-        # và import ở đầu file app.py
-
         excel_file = st.file_uploader("Tải file Excel", type=["xlsx", "xls"], key=ui_key("excel_data"))
 
         if excel_file is not None:
@@ -1158,7 +1155,6 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                 raw_df = pd.read_excel(excel_file)
                 
                 with st.spinner("Đang dọn dẹp và chuẩn hóa dữ liệu bằng Data Engine..."):
-                    # Gọi hàm xử lý từ bộ máy Data Engine riêng biệt
                     df, clean_logs = auto_clean_data(raw_df)
                 
                 st.success(f"Dữ liệu sẵn sàng: {df.shape[0]} dòng × {df.shape[1]} cột.")
@@ -1167,6 +1163,22 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                     with st.expander("🛠️ Xem nhật ký tự động dọn dẹp dữ liệu", expanded=True):
                         for log in clean_logs:
                             st.write(log)
+
+                validation = validate_dataframe(df)
+                if validation:
+                    for item in validation:
+                        st.warning(item)
+
+                with st.expander("Xem dữ liệu sau khi chuẩn hóa"):
+                    st.dataframe(df)
+
+            except Exception as exc:
+                st.error(f"Lỗi khi đọc hoặc xử lý file Excel: {exc}")
+
+        # ==========================================
+        # HIỂN THỊ GIỎ KẾT QUẢ VÀ TẢI VỀ WORD
+        # ==========================================
+        # (Giữ nguyên phần code Giỏ kết quả của anh ở ngay dưới dòng này...)
 
                 validation = validate_dataframe(df)
                 if validation:
