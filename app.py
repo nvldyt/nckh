@@ -1341,7 +1341,7 @@ with tabs[3]:
     # BỘ DỌN RÁC TỰ ĐỘNG (AUTO-CLEAN)
     # ==========================================
     def auto_clean_data(raw_df: pd.DataFrame):
-    logs = []
+        logs = []
     df_clean = raw_df.copy()
     old_rows = df_clean.shape[0]
     
