@@ -79,186 +79,141 @@ DEFAULT_VN_JOURNAL_DOMAINS = [
 ]
 
 # ============================================================
-# 2. CSS – GIAO DIỆN SẶC SỠ & TRONG SUỐT HEADER
+# 2. CSS – GIAO DIỆN HỌC THUẬT, TỐI GIẢN & TỐI ƯU HIỆU NĂNG
 # ============================================================
 
 st.markdown(
     """
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
     html, body, p, h1, h2, h3, h4, h5, h6, span, div, label, li, .stMarkdown {
-        font-family: 'Be Vietnam Pro', 'Arial', sans-serif;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    /* ===== NỀN TOÀN TRANG VÀ LÀM TRONG SUỐT THANH HEADER ===== */
-    [data-testid="stHeader"] {
-        background-color: transparent !important;
-    }
-
+    /* ===== NỀN TOÀN TRANG: XÁM SÁNG TRUNG TÍNH ===== */
     .stApp {
-        background: linear-gradient(-45deg, #ff9a9e, #a18cd1, #667eea, #43e97b, #38f9d7, #6a1b9a);
-        background-size: 400% 400%;
-        animation: gradientShift 20s ease infinite;
-    }
-    @keyframes gradientShift {
-        0% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
-    }
-
-    /* Đẩy lùi nội dung xuống một chút để không bị lẹm vào Header */
-    .block-container {
-        max-width: 1450px;
-        padding-top: 4.5rem !important;
-        padding-bottom: 2rem !important;
+        background-color: #f8f9fa;
+        color: #2c3e50;
     }
 
     /* ===== TIÊU ĐỀ CHÍNH ===== */
     h1 {
-        color: #ffffff !important;
+        color: #1e293b !important;
         text-align: center;
         font-weight: 800;
-        letter-spacing: 1px;
         margin-top: 0 !important;
         margin-bottom: 6px;
-        text-shadow: 0 4px 12px rgba(0,0,0,0.35), 0 0 30px rgba(255,255,255,0.25);
     }
-    .stCaption, [data-testid="stCaptionContainer"] {
-        text-align: center;
-    }
-    h1 + div p, .stApp > div > div > div > div > div:has(h1) + div {
-        color: rgba(255,255,255,0.92) !important;
-    }
-    h2, h3 { color: #4a148c !important; font-weight: 700; }
+    h2, h3, h4 { color: #0f172a !important; font-weight: 600; }
 
-    /* ===== KHỐI NỘI DUNG TAB - HIỆU ỨNG KÍNH MỜ (GLASSMORPHISM) ===== */
+    /* ===== KHỐI NỘI DUNG TAB - TRẮNG PHẲNG, VIỀN MỎNG ===== */
     .stTabs [data-baseweb="tab-panel"] {
-        background: rgba(255, 255, 255, 0.88);
-        backdrop-filter: blur(14px);
-        -webkit-backdrop-filter: blur(14px);
-        border-radius: 20px;
-        padding: 28px;
-        box-shadow: 0 12px 32px rgba(0,0,0,0.18);
-        border: 1px solid rgba(255,255,255,0.4);
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 32px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+        border: 1px solid #e2e8f0;
         margin-top: 10px;
     }
 
     /* ===== THANH TAB ===== */
     .stTabs [data-baseweb="tab-list"] {
-        background: rgba(255, 255, 255, 0.35);
-        backdrop-filter: blur(8px);
-        border-radius: 14px;
-        padding: 6px;
-        gap: 6px;
-        flex-wrap: wrap;
+        background: #f1f5f9;
+        border-radius: 10px;
+        padding: 4px;
+        gap: 4px;
     }
     .stTabs [data-baseweb="tab"] {
-        border-radius: 10px !important;
-        font-weight: 700;
-        color: #ffffff;
-        transition: all 0.25s ease;
+        border-radius: 8px !important;
+        font-weight: 600;
+        color: #64748b;
+        transition: background-color 0.2s;
     }
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, #6a1b9a, #ab47bc) !important;
-        color: #fff !important;
-        box-shadow: 0 4px 10px rgba(106,27,154,0.4);
+        background: #ffffff !important;
+        color: #2563eb !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
 
-    /* ===== NÚT BẤM - GRADIENT SẶC SỠ + HOVER ===== */
+    /* ===== NÚT BẤM - PHẲNG, MÀU TINH TẾ ===== */
     div.stButton > button, div.stDownloadButton > button {
-        background: linear-gradient(135deg, #6a1b9a 0%, #ab47bc 50%, #ff6ec4 100%) !important;
-        color: white !important;
-        font-weight: 700;
-        border-radius: 12px;
-        border: none;
-        padding: 10px 20px;
-        box-shadow: 0 6px 14px rgba(106,27,154,0.35);
-        transition: all 0.25s ease;
+        background-color: #ffffff !important;
+        color: #334155 !important;
+        font-weight: 600;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1 !important;
+        padding: 8px 16px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        transition: all 0.2s ease;
     }
     div.stButton > button:hover, div.stDownloadButton > button:hover {
-        transform: translateY(-3px) scale(1.02);
-        box-shadow: 0 10px 22px rgba(106,27,154,0.5);
-        filter: brightness(1.08);
+        border-color: #94a3b8 !important;
+        background-color: #f8fafc !important;
     }
-    div.stButton > button:active { transform: translateY(0px) scale(0.98); }
-
+    
+    /* Nút Primary (Màu xanh Blue học thuật) */
     div.stButton > button[kind="primary"] {
-        background: linear-gradient(135deg, #ff512f, #f09819) !important;
-        box-shadow: 0 6px 14px rgba(255,81,47,0.4);
+        background-color: #2563eb !important;
+        color: white !important;
+        border: none !important;
+        box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+    }
+    div.stButton > button[kind="primary"]:hover {
+        background-color: #1d4ed8 !important;
     }
 
     /* ===== BẢNG DỮ LIỆU ===== */
     [data-testid="stDataFrame"] {
         background-color: white;
-        border-radius: 14px;
-        padding: 10px;
-        box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
     }
 
     /* ===== Ô NHẬP LIỆU ===== */
     .stTextArea textarea, .stTextInput input, .stNumberInput input {
-        border-radius: 12px !important;
-        border: 1.5px solid #d1a3f0 !important;
-        background-color: rgba(255,255,255,0.9) !important;
+        border-radius: 8px !important;
+        border: 1px solid #cbd5e1 !important;
+        background-color: #ffffff !important;
+        color: #1e293b !important;
     }
     .stTextArea textarea:focus, .stTextInput input:focus {
-        border-color: #6a1b9a !important;
-        box-shadow: 0 0 0 3px rgba(106,27,154,0.15) !important;
-    }
-    div[data-baseweb="select"] > div {
-        border-radius: 12px !important;
-        border: 1.5px solid #d1a3f0 !important;
+        border-color: #2563eb !important;
+        box-shadow: 0 0 0 1px #2563eb !important;
     }
 
     /* ===== EXPANDER / CONTAINER / ALERT ===== */
     .streamlit-expanderHeader {
-        background: rgba(171, 71, 188, 0.12);
-        border-radius: 10px;
+        background: #f8fafc;
+        border-radius: 6px;
         font-weight: 600;
-        color: #4a148c;
+        color: #334155;
+        border: 1px solid #e2e8f0;
     }
-    .stAlert { border-radius: 12px !important; }
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        border-radius: 14px !important;
-        border: 1px solid rgba(171,71,188,0.25) !important;
-        background: rgba(255,255,255,0.7);
-    }
+    .stAlert { border-radius: 8px !important; }
 
-    /* ===== FILE UPLOADER ===== */
-    [data-testid="stFileUploader"] {
-        border-radius: 14px;
-        background: rgba(255,255,255,0.6);
-        padding: 10px;
-    }
+    /* ===== CÁC KHỐI CẢNH BÁO TÙY CHỈNH (MÀU PASTEL NHẸ) ===== */
+    .warning-box { border-left: 4px solid #f59e0b; padding: 12px 16px; background: #fffbeb; border-radius: 6px; color: #92400e; font-size: 0.95rem;}
+    .danger-box  { border-left: 4px solid #ef4444; padding: 12px 16px; background: #fef2f2; border-radius: 6px; color: #991b1b; font-size: 0.95rem;}
+    .success-box { border-left: 4px solid #10b981; padding: 12px 16px; background: #ecfdf5; border-radius: 6px; color: #065f46; font-size: 0.95rem;}
 
-    /* ===== CÁC KHỐI CẢNH BÁO TÙY CHỈNH ===== */
-    .source-card {
-        border: 1px solid #d9e2ec; border-radius: 10px;
-        padding: 10px 14px; margin-bottom: 8px; background: white;
-    }
-    .warning-box { border-left: 5px solid #f0ad4e; padding: 10px 14px; background: #fff8e8; border-radius: 8px; }
-    .danger-box  { border-left: 5px solid #d9534f; padding: 10px 14px; background: #fff1f0; border-radius: 8px; }
-    .success-box { border-left: 5px solid #2e8b57; padding: 10px 14px; background: #eef9f1; border-radius: 8px; }
-
-    /* ===== VĂN BẢN HỌC THUẬT DO AI TẠO - DỄ ĐỌC, CANH ĐỀU 2 LỀ ===== */
+    /* ===== VĂN BẢN HỌC THUẬT DO AI TẠO - CANH ĐỀU 2 LỀ, DỄ ĐỌC ===== */
     .stMarkdown p, .stMarkdown li {
-        font-size: 0.95rem !important;
-        line-height: 1.75 !important;
+        font-size: 1rem !important;
+        line-height: 1.8 !important;
+        color: #334155;
         text-align: justify !important;
-        text-justify: inter-word;
     }
-    .stMarkdown table td, .stMarkdown table th { font-size: 0.85rem !important; }
-    .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4 {
-        text-align: left !important;
-        border-left: 5px solid #ab47bc;
-        padding-left: 12px;
+    .stMarkdown h3 {
+        border-bottom: 2px solid #e2e8f0;
+        padding-bottom: 8px;
+        margin-top: 24px;
+        color: #1e293b;
     }
 </style>
 """,
     unsafe_allow_html=True,
 )
-
 
 # ============================================================
 # 4. SESSION STATE
