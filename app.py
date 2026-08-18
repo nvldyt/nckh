@@ -1362,7 +1362,7 @@ with tabs[3]:
     # 4. Giữ nguyên vẹn giá trị gốc để bảo vệ mã ICD-10, HbA1c, eGFR
     logs.append("🛡️ Đã giữ nguyên vẹn các giá trị gốc (không đổi hoa/thường) nhằm bảo vệ ký hiệu chuyên ngành.")
         
-        return df_clean, logs
+            return df_clean, logs
 
     excel_file = st.file_uploader("Tải file Excel", type=["xlsx", "xls"], key="excel_data")
 
