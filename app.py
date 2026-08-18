@@ -204,32 +204,70 @@ st.markdown(
 )
 
 # ============================================================
-# 4. SESSION STATE
+# 4. QUẢN LÝ STATE (VERSIONED UI STATE & PERSISTENT STATE)
 # ============================================================
+
+UI_NAMESPACE = "nckh_cki"
+
 def init_state():
+    """Khởi tạo toàn bộ Session State, tách biệt dữ liệu sống và UI."""
+    
+    # 1. UI STATE (Dùng để reset giao diện mượt mà)
+    if "ui_version" not in st.session_state:
+        st.session_state["ui_version"] = 0
+
+    # 2. PERSISTENT STATE (Dữ liệu nền không bị mất khi reset UI)
     defaults = {
-        "documents": {},            # source_id -> SourceDocument dict
-        "chunks": [],               # list[EvidenceChunk dict]
-        "embeddings": None,         # np.ndarray
+        # Evidence DB
+        "documents": {},
+        "chunks": [],
+        "embeddings": None,
         "bm25": None,
-        "citation_registry": {},    # source_id -> citation number
+        "citation_registry": {},
+        
+        # Tracking & Audit
         "audit_log": [],
         "last_generated": "",
         "last_evidence": [],
         "current_references": [],
+        
+        # Nguồn API/Cào dữ liệu
         "vn_journal_domains": list(DEFAULT_VN_JOURNAL_DOMAINS),
         "t3_pm_data": [],
         "t3_vn_data": [],
         "t3_en_keyword": "",
         "t3_query": "",
-        "result_cart": [],
+        
+        # Thống kê & Tuyển chọn
+        "result_cart": {},  # Sửa thành Dict theo khuyến nghị P0 để tránh trùng lặp
         "saved_tables": {},
+        "selection_decisions": [],
+        "narrative_plan": {},
     }
+    
     for key, value in defaults.items():
         if key not in st.session_state:
-            st.session_state[key] = value
+            # Copy để tránh tham chiếu bộ nhớ với biến mutable (list, dict)
+            st.session_state[key] = value.copy() if isinstance(value, (list, dict)) else value
 
-init_state()
+
+def ui_key(widget_name: str) -> str:
+    """
+    Sinh key động cho widget dựa trên ui_version.
+    Mỗi khi ui_version tăng, key thay đổi -> Streamlit sẽ tạo widget hoàn toàn mới,
+    xóa sạch rác và trạng thái cũ.
+    """
+    version = st.session_state.get("ui_version", 0)
+    return f"{UI_NAMESPACE}_v{version}_{widget_name}"
+
+
+def reset_ui_state():
+    """
+    Kích hoạt Reset toàn bộ giao diện bằng cách tăng version.
+    Tuyệt đối không xóa trực tiếp các widget key trong st.session_state.
+    """
+    current_version = st.session_state.get("ui_version", 0)
+    st.session_state["ui_version"] = current_version + 1
 
 # ============================================================
 # 5. GEMINI CLIENT
