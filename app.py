@@ -372,21 +372,24 @@ def get_embeddings(texts: List[str]) -> np.ndarray:
 # ============================================================
 
 def add_pdf_documents(uploaded_files) -> Tuple[int, int, List[str]]:
-    new_sources, new_chunks, errors = 0, 0, []
+    new_sources, new_chunks_count, errors = 0, 0, []
+    new_chunks_list = [] # Lưu trữ các chunk mới để update index
 
     for uploaded_file in uploaded_files:
         try:
             source, chunks = extract_pdf(uploaded_file)
             if add_source_and_chunks(source, chunks):
                 new_sources += 1
-                new_chunks += len(chunks)
+                new_chunks_count += len(chunks)
+                new_chunks_list.extend(chunks)
         except Exception as exc:
             errors.append(f"{uploaded_file.name}: {exc}")
 
     if new_sources:
-        rebuild_index()
+        # Truyền danh sách chunk mới vào để hệ thống chỉ encode phần mới
+        rebuild_index(new_chunks=new_chunks_list)
 
-    return new_sources, new_chunks, errors
+    return new_sources, new_chunks_count, errors
 
 # ============================================================
 # 8. TRA CỨU MESH (Helper)
@@ -405,10 +408,14 @@ def translate_query_to_mesh(vietnamese_query: str) -> str:
         return text.strip().strip('"').strip("'")
     return vietnamese_query
 
+# ============================================================
+# 10. INDEX / VECTOR RETRIEVAL (HYBRID: EMBEDDING + BM25)
+# ============================================================
+import numpy as np
+from rank_bm25 import BM25Okapi
+from typing import Any, Dict, List
+import streamlit as st
 
-# ============================================================
-# 10. INDEX / VECTOR RETRIEVAL (dùng chung cho PDF + kết quả tra cứu)
-# ============================================================
 def evidence_database_summary() -> Dict[str, Any]:
     """Đếm số nguồn/số đoạn bằng chứng theo từng nguồn gốc (PDF/PubMed/VN/Thủ công)."""
     documents = st.session_state.get("documents", {})
@@ -432,7 +439,6 @@ def evidence_database_summary() -> Dict[str, Any]:
         "by_origin_chunks": by_origin_chunks,
         "index_ready": st.session_state.get("embeddings") is not None,
     }
-
 
 def render_evidence_database_status(context_label: str = ""):
     """Hiển thị hộp trạng thái Evidence Database - dùng ở đầu các tab cần bằng chứng."""
@@ -467,33 +473,80 @@ def render_evidence_database_status(context_label: str = ""):
     )
     st.markdown(status_html, unsafe_allow_html=True)
 
-def rebuild_index():
-    chunks = st.session_state["chunks"]
-    if not chunks:
+
+def rebuild_index(new_chunks: List[Dict[str, Any]] = None):
+    """
+    Cải tiến P1: Incremental Indexing & BM25
+    Chỉ mã hóa (embed) những đoạn văn MỚI được thêm vào thay vì làm lại từ đầu.
+    Đồng thời xây dựng lại bộ từ điển BM25 cho tìm kiếm từ khóa.
+    """
+    all_chunks = st.session_state.get("chunks", [])
+    if not all_chunks:
         st.session_state["embeddings"] = None
+        st.session_state["bm25"] = None
         return
-    texts = [c["text"] for c in chunks]
-    st.session_state["embeddings"] = get_embeddings(texts)
+
+    # 1. CẬP NHẬT EMBEDDING (Vector Ngữ nghĩa) - Chỉ mã hóa phần mới nếu đã có index cũ
+    if new_chunks and st.session_state.get("embeddings") is not None:
+        new_texts = [c["text"] for c in new_chunks]
+        new_matrix = get_embeddings(new_texts)
+        st.session_state["embeddings"] = np.vstack([st.session_state["embeddings"], new_matrix])
+    else:
+        texts = [c["text"] for c in all_chunks]
+        st.session_state["embeddings"] = get_embeddings(texts)
+
+    # 2. XÂY DỰNG TỪ ĐIỂN BM25 (Từ khóa chính xác)
+    tokenized_corpus = [c["text"].lower().split() for c in all_chunks]
+    st.session_state["bm25"] = BM25Okapi(tokenized_corpus)
 
 
-def retrieve_evidence(query: str, k: int = DEFAULT_TOP_K) -> List[Dict[str, Any]]:
-    chunks = st.session_state["chunks"]
+def retrieve_evidence(query: str, k: int = 8) -> List[Dict[str, Any]]:
+    """
+    Cải tiến P1: Hybrid Search (65% Semantic + 35% BM25)
+    Kết hợp sức mạnh hiểu ngữ cảnh của Vector và khả năng bắt từ khóa chính xác của BM25.
+    """
+    chunks = st.session_state.get("chunks", [])
     matrix = st.session_state.get("embeddings")
+    bm25 = st.session_state.get("bm25")
 
-    if not chunks or matrix is None:
+    if not chunks or matrix is None or bm25 is None:
         return []
 
+    # --- 1. TÍNH ĐIỂM NGỮ NGHĨA (SEMANTIC SCORE) ---
     query_vector = get_embeddings([query])[0]
-    scores = matrix @ query_vector
+    semantic_scores = matrix @ query_vector
+    
+    # Chuẩn hóa điểm ngữ nghĩa về dải 0-1
+    sem_min, sem_max = semantic_scores.min(), semantic_scores.max()
+    if sem_max > sem_min:
+        semantic_scores = (semantic_scores - sem_min) / (sem_max - sem_min)
+    else:
+        semantic_scores = np.zeros_like(semantic_scores)
 
+    # --- 2. TÍNH ĐIỂM TỪ KHÓA (BM25 SCORE) ---
+    tokenized_query = query.lower().split()
+    bm25_scores = np.array(bm25.get_scores(tokenized_query))
+    
+    # Chuẩn hóa điểm BM25 về dải 0-1
+    bm25_min, bm25_max = bm25_scores.min(), bm25_scores.max()
+    if bm25_max > bm25_min:
+        bm25_scores = (bm25_scores - bm25_min) / (bm25_max - bm25_min)
+    else:
+        bm25_scores = np.zeros_like(bm25_scores)
+
+    # --- 3. KẾT HỢP HYBRID SCORE (Trọng số: 65% Semantic + 35% BM25) ---
+    final_scores = (0.65 * semantic_scores) + (0.35 * bm25_scores)
+
+    # Lấy top K đoạn văn có điểm kết hợp cao nhất
     k = min(k, len(chunks))
-    indices = np.argsort(scores)[::-1][:k]
+    indices = np.argsort(final_scores)[::-1][:k]
 
     results = []
     for idx in indices:
         item = dict(chunks[idx])
-        item["score"] = float(scores[idx])
+        item["score"] = float(final_scores[idx])
         results.append(item)
+        
     return results
 
 
