@@ -12,3 +12,4 @@ requests>=2.31.0
 scipy
 statsmodels
 rank-bm25
+tabulate
