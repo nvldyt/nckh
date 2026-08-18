@@ -263,17 +263,24 @@ def reset_ui_state():
 
 
 # ============================================================
-# 5. GEMINI CLIENT
+# 5. GEMINI CLIENT (HỖ TRỢ XOAY VÒNG NHIỀU API KEY)
 # ============================================================
 @st.cache_resource
 def get_gemini_client(api_key: str):
     return genai.Client(api_key=api_key)
 
-def get_api_key() -> Optional[str]:
+def get_api_keys() -> List[str]:
+    keys_str = ""
     try:
-        return st.secrets["GEMINI_API_KEY"]
+        keys_str = st.secrets.get("GEMINI_API_KEYS", "")
+        if not keys_str:
+            keys_str = st.secrets.get("GEMINI_API_KEY", "")
     except Exception:
-        return os.getenv("GEMINI_API_KEY")
+        keys_str = os.getenv("GEMINI_API_KEYS", os.getenv("GEMINI_API_KEY", ""))
+    
+    # Tự động ủi phẳng các dấu xuống dòng nếu anh dùng ngoặc kép """...""" trong TOML
+    clean_str = keys_str.replace("\n", ",").replace("\r", ",")
+    return [k.strip() for k in clean_str.split(",") if k.strip()]
 
 def call_gemini(
     prompt: str,
@@ -281,15 +288,24 @@ def call_gemini(
     temperature: float = 0.1,
     max_retries: int = 5,
 ) -> Optional[str]:
-    api_key = get_api_key()
-    if not api_key:
-        st.error("Chưa có GEMINI_API_KEY. Hãy thêm vào Streamlit Secrets hoặc biến môi trường.")
+    api_keys = get_api_keys()
+    if not api_keys:
+        st.error("Chưa có GEMINI_API_KEYS. Hãy thêm vào Streamlit Secrets.")
         return None
-
-    client = get_gemini_client(api_key)
+        
     model_name = model or DEFAULT_MODEL
+    
+    # Biến nhớ xem hệ thống đang dùng tới key số mấy
+    if "current_key_idx" not in st.session_state:
+        st.session_state["current_key_idx"] = 0
 
     for attempt in range(max_retries):
+        # Lấy key hiện tại dựa theo index
+        current_idx = st.session_state["current_key_idx"] % len(api_keys)
+        current_key = api_keys[current_idx]
+        
+        client = get_gemini_client(current_key)
+
         try:
             response = client.models.generate_content(
                 model=model_name,
@@ -303,16 +319,28 @@ def call_gemini(
 
         except Exception as exc:
             error_msg = str(exc)
-            if any(code in error_msg for code in ["429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE"]):
-                if attempt < max_retries - 1:
-                    wait_time = 15
-                    status = st.warning(f"⏳ Trạm máy chủ Google đang quá tải đột xuất. Đợi {wait_time} giây rồi thử lại...")
-                    time.sleep(wait_time)
+            # Bắt lỗi quá tải (429) hoặc hết Quota
+            if any(code in error_msg for code in ["429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE", "quota"]):
+                if len(api_keys) > 1:
+                    # NẾU CÓ NHIỀU KEY: Nhảy sang key tiếp theo ngay lập tức
+                    st.session_state["current_key_idx"] += 1
+                    next_idx = st.session_state["current_key_idx"] % len(api_keys)
+                    status = st.warning(f"🔄 Key số {current_idx + 1} đang bận/hết hạn mức. Hệ thống tự động chuyển sang Key số {next_idx + 1}...")
+                    time.sleep(1.5)
                     status.empty()
+                    continue # Bỏ qua việc chờ, lặp lại vòng while ngay với key mới
                 else:
-                    st.error("❌ Máy chủ Google Gemini hiện đang quá bận. Anh vui lòng đợi 1-2 phút rồi bấm thử lại nhé!")
-                    return None
+                    # NẾU CÓ 1 KEY: Chờ 15s như cũ
+                    if attempt < max_retries - 1:
+                        wait_time = 15  
+                        status = st.warning(f"⏳ Trạm máy chủ Google đang quá tải. Đợi {wait_time} giây rồi thử lại...")
+                        time.sleep(wait_time)
+                        status.empty()  
+                    else:
+                        st.error("❌ Máy chủ Google Gemini hiện đang quá bận. Vui lòng đợi 1-2 phút rồi bấm thử lại!")
+                        return None
             else:
+                # Lỗi khác không phải quá tải
                 if attempt == max_retries - 1:
                     st.error(f"Lỗi Gemini: {error_msg}")
                     return None
