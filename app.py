@@ -523,32 +523,28 @@ NỘI DUNG GỐC:
 
     return "\n\n".join(blocks)
 
+# ============================================================
+# 11. CITATION ENGINE (CẤU TRÚC MỚI CHUẨN VANCOUVER)
+# ============================================================
+from citation_engine import CitationEngine
 
-# ============================================================
-# 11. CITATION ENGINE
-# ============================================================
+def get_citation_engine() -> CitationEngine:
+    """Khởi tạo và lấy bộ máy Citation Engine từ Session State"""
+    if "citation_engine" not in st.session_state:
+        st.session_state["citation_engine"] = CitationEngine()
+    return st.session_state["citation_engine"]
 
 def source_metadata(source_id: str) -> Dict[str, Any]:
     return st.session_state["documents"].get(source_id, {})
 
-
-def register_citations(evidence: List[Dict[str, Any]]) -> Dict[str, int]:
-    """Citation số do hệ thống cấp - AI không tự quyết định [1],[2],[3]."""
-    registry = st.session_state["citation_registry"]
-    for ev in evidence:
-        source_id = ev["source_id"]
-        if source_id not in registry:
-            registry[source_id] = len(registry) + 1
-    return registry
-
-
 def citation_bibliography() -> str:
-    registry = st.session_state["citation_registry"]
+    """Xuất danh mục tài liệu tham khảo theo đúng thứ tự bản nháp vừa tạo"""
+    refs = st.session_state.get("current_references", [])
     rows = []
-    for source_id, number in sorted(registry.items(), key=lambda x: x[1]):
-        meta = source_metadata(source_id)
+    for ref in refs:
+        meta = ref["metadata"]
         citation = (
-            f"[{number}] {meta.get('authors', '')}. "
+            f"[{ref['vancouver_index']}] {meta.get('authors', '')}. "
             f"{meta.get('title', meta.get('file_name', 'Tài liệu chưa xác định'))}. "
             f"{meta.get('journal', '')}. {meta.get('year', '')}."
         )
@@ -560,28 +556,6 @@ def citation_bibliography() -> str:
             citation += f" [{meta['url']}]"
         rows.append(citation)
     return "\n".join(rows)
-
-
-def replace_source_tags_with_citations(
-    generated_text: str, evidence: List[Dict[str, Any]]
-) -> Tuple[str, List[str]]:
-    """Chỉ chấp nhận SOURCE_TAG thật sự tồn tại trong evidence đã truy xuất."""
-    registry = register_citations(evidence)
-    valid_chunk_to_source = {ev["chunk_id"]: ev["source_id"] for ev in evidence}
-    invalid_tags = []
-
-    pattern = re.compile(r"\[SOURCE_TAG=([A-Za-z0-9_-]+)\]")
-
-    def repl(match):
-        chunk_id = match.group(1)
-        if chunk_id not in valid_chunk_to_source:
-            invalid_tags.append(chunk_id)
-            return "[CITATION_INVALID]"
-        source_id = valid_chunk_to_source[chunk_id]
-        return f"[{registry[source_id]}]"
-
-    converted = pattern.sub(repl, generated_text)
-    return converted, invalid_tags
 
 
 # ============================================================
@@ -602,73 +576,73 @@ NGUYÊN TẮC BẮT BUỘC:
    trong context được cung cấp.
 5. Nếu context không đủ bằng chứng, phải nói rõ:
    "Tài liệu được cung cấp chưa đủ bằng chứng để kết luận."
-6. Mọi khẳng định dựa trên tài liệu phải gắn SOURCE_TAG thật ngay sau
-   khẳng định: [SOURCE_TAG=SRC-...-Pxxx-Cxxx]
-7. Chỉ được dùng SOURCE_TAG xuất hiện nguyên văn trong context.
-   Không tự tạo [1], [2], [3] và không dùng citation dạng tác giả-năm.
-8. Phân biệt rõ: FACT (dữ kiện trực tiếp từ nguồn) – INTERPRETATION
-   (diễn giải từ dữ kiện) – INFERENCE (suy luận, chỉ nêu khi có cơ sở
-   và phải ghi rõ đây là suy luận, dùng ngôn ngữ "có thể", "gợi ý").
-9. Không biến giả thuyết thành kết luận chắc chắn; không suy ra quan hệ
-   nhân quả từ thiết kế nghiên cứu quan sát/mô tả cắt ngang.
-10. Với thuật ngữ Dược lâm sàng (tương tác thuốc, ADR, hiệu chỉnh liều
-    theo eGFR, tuân thủ điều trị, phác đồ...), dùng chính xác thuật ngữ
-    chuyên ngành, văn phong khô khan, trực diện, không hoa mỹ.
-11. Nếu nguồn có ghi chú "CHỈ LÀ ĐOẠN TRÍCH NGẮN - CẦN KIỂM TRA BẢN GỐC",
-    phải nêu rõ đây là thông tin sơ bộ, khuyến nghị người viết đối chiếu
-    bản gốc trước khi dùng số liệu chi tiết.
-12. Không tạo danh mục tài liệu tham khảo nếu metadata chưa được xác thực;
-    danh mục tham khảo chính thức do hệ thống citation registry cấp,
-    không phải do bạn tự liệt kê.
+6. Mọi khẳng định dựa trên tài liệu phải chèn MÃ ĐỊNH DANH của tài liệu đó
+   ngay sau câu. Ví dụ: "Tỷ lệ này là 12% [REF-001]."
+7. TUYỆT ĐỐI KHÔNG tự tạo [1], [2], [3] và không dùng citation dạng tác giả-năm.
+8. Phân biệt rõ: FACT (dữ kiện) – INTERPRETATION (diễn giải) – INFERENCE (suy luận).
+9. Dùng chính xác thuật ngữ chuyên ngành Dược lâm sàng, văn phong khô khan.
 """
-
 
 def generate_evidence_based(
     task: str, query: str, k: int = DEFAULT_TOP_K
 ) -> Tuple[Optional[str], List[Dict[str, Any]], List[str]]:
+    
+    # 1. Truy xuất bằng chứng (RAG)
     evidence = retrieve_evidence(query, k=k)
-
     if not evidence:
         return "Tài liệu được cung cấp chưa đủ bằng chứng để kết luận.", [], []
 
-    evidence_text = format_evidence_for_prompt(evidence)
+    # 2. Đưa bằng chứng vào Citation Engine để lấy mã định danh [REF-...]
+    engine = get_citation_engine()
+    evidence_context = ""
+    
+    for ev in evidence:
+        meta = st.session_state["documents"].get(ev["source_id"], {})
+        # Đăng ký và lấy mã tag, VD: [REF-DOC_01]
+        tag = engine.register_evidence(ev["source_id"], meta)
+        
+        table_note = f"\nGhi chú: {ev['table_hint']}" if ev.get("table_hint") else ""
+        evidence_context += (
+            f"\nTài liệu {tag}:\n"
+            f"Nguồn: {ev['file_name']} | Trang: {ev['page']}\n"
+            f"Nội dung: {ev['text']}{table_note}\n"
+        )
 
+    # 3. Gom Prompt và gọi Gemini
     prompt = f"""
-{BASE_SYSTEM_RULES}
+    {BASE_SYSTEM_RULES}
 
-NHIỆM VỤ:
-{task}
+    NHIỆM VỤ:
+    {task}
 
-CÂU HỎI/TRUY VẤN:
-{query}
+    BẰNG CHỨNG ĐƯỢC PHÉP SỬ DỤNG:
+    {evidence_context}
 
-BẰNG CHỨNG ĐƯỢC PHÉP SỬ DỤNG:
-{evidence_text}
-
-YÊU CẦU:
-- Chỉ sử dụng thông tin có thể truy về các SOURCE_TAG ở trên.
-- Nếu không đủ bằng chứng, nói rõ phần nào chưa đủ.
-- Không cố lấp khoảng trống bằng kiến thức chung.
-- Không tự đặt số citation.
-"""
+    YÊU CẦU:
+    - LƯU Ý: KHÔNG ĐƯỢC tự đánh số [1], [2]. PHẢI dùng nguyên vẹn mã [REF-...] từ tài liệu.
+    - Chỉ sử dụng thông tin có thể truy về các tài liệu ở trên.
+    """
 
     output = call_gemini(prompt)
     if output is None:
         return None, evidence, []
 
-    converted, invalid_tags = replace_source_tags_with_citations(output, evidence)
+    # 4. Citation Engine xử lý hậu kỳ: Đổi [REF-...] thành [1], [2] theo thứ tự
+    final_text, references, invalid_tags = engine.process_vancouver_citations(output)
 
+    # Nếu AI tự bịa ra mã trích dẫn, thêm cảnh báo vào bài viết
     if invalid_tags:
-        converted += (
-            "\n\n> ⚠️ CẢNH BÁO AUDIT: Có SOURCE_TAG không tồn tại trong bằng "
-            "chứng được truy xuất. Đoạn này cần kiểm tra thủ công trước khi sử dụng."
+        final_text += (
+            f"\n\n> ⚠️ CẢNH BÁO AUDIT: Phát hiện AI tự tạo mã trích dẫn không có "
+            f"trong dữ liệu truy xuất: {', '.join(invalid_tags)}. Đoạn này cần kiểm tra kỹ."
         )
 
-    st.session_state["last_generated"] = converted
+    # 5. Lưu kết quả vào bộ nhớ
+    st.session_state["last_generated"] = final_text
     st.session_state["last_evidence"] = evidence
-    return converted, evidence, invalid_tags
+    st.session_state["current_references"] = references  # Lưu để hàm citation_bibliography() đọc
 
-
+    return final_text, evidence, invalid_tags
 # ============================================================
 # 17. KIỂM TRA NHẤT QUÁN SỐ LIỆU + TRÙNG LẶP NỘI BỘ
 # ============================================================
