@@ -237,3 +237,128 @@ def binary_logistic_regression(df: pd.DataFrame, outcome: str, predictors: List[
 
     summary_info = "Mô hình hồi quy Logistic đa biến chạy thành công."
     return output, summary_info
+
+# ============================================================
+# 5. TỔNG HỢP BẢNG ĐẶC ĐIỂM CHUNG CHUẨN LUẬN VĂN (BASELINE)
+# ============================================================
+
+@st.cache_data(show_spinner=False)
+def create_clinical_groups(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Tự động quét các cột lâm sàng phổ biến (Tuổi, BMI, CrCl) 
+    và tạo ra các cột phân nhóm chuẩn y khoa nếu dữ liệu gốc chưa có.
+    """
+    df = df.copy()
+    
+    # Phân nhóm Tuổi
+    age_col = next((c for c in df.columns if str(c).strip().lower() in ['tuổi', 'tuoi', 'age']), None)
+    if age_col and pd.api.types.is_numeric_dtype(df[age_col]):
+        bins = [0, 18, 60, float('inf')]
+        labels = ["< 18 tuổi", "18 - 60 tuổi", "> 60 tuổi"]
+        df["Nhóm tuổi"] = pd.cut(df[age_col], bins=bins, labels=labels, right=False)
+
+    # Phân nhóm chức năng thận (CrCl / Độ thanh thải)
+    crcl_col = next((c for c in df.columns if any(k in str(c).strip().lower() for k in ['crcl', 'thanh thải', 'clearance'])), None)
+    if crcl_col and pd.api.types.is_numeric_dtype(df[crcl_col]):
+        bins = [0, 30, 50, float('inf')]
+        labels = ["< 30 mL/min", "30 - < 50 mL/min", ">= 50 mL/min"]
+        df["Nhóm chức năng thận (CrCl)"] = pd.cut(df[crcl_col], bins=bins, labels=labels, right=False)
+        
+    # Phân nhóm BMI (Chuẩn Châu Á)
+    bmi_col = next((c for c in df.columns if 'bmi' in str(c).strip().lower()), None)
+    if bmi_col and pd.api.types.is_numeric_dtype(df[bmi_col]):
+        bins = [0, 18.5, 23, 25, float('inf')]
+        labels = ["Gầy (< 18.5)", "Bình thường (18.5 - < 23)", "Tiền béo phì (23 - < 25)", "Béo phì (>= 25)"]
+        df["Phân loại BMI"] = pd.cut(df[bmi_col], bins=bins, labels=labels, right=False)
+
+    return df
+
+@st.cache_data(show_spinner=False)
+def generate_baseline_table(df: pd.DataFrame, cat_vars: list, num_vars: list) -> pd.DataFrame:
+    """
+    Tổng hợp bảng Đặc điểm chung chuẩn luận văn:
+    - Tự động chạy Shapiro-Wilk chọn Mean ± SD hoặc Median [IQR].
+    - Tính tỷ lệ % trên mẫu số hợp lệ (loại bỏ NaN).
+    - Gom nhóm hiếm < 5% vào mục "Khác".
+    - Định dạng Plain Text viết hoa tên biến (chống lỗi Markdown trong Word).
+    """
+    rows = []
+    
+    # 1. XỬ LÝ BIẾN ĐỊNH LƯỢNG
+    for var in num_vars:
+        if var in df.columns:
+            clean_series = df[var].dropna()
+            valid_n = len(clean_series)
+            if valid_n == 0: continue
+            
+            # Kiểm định phân phối chuẩn (Shapiro-Wilk)
+            is_normal = False
+            if valid_n >= 3:
+                try:
+                    stat, p = stats.shapiro(clean_series)
+                    if p >= 0.05:
+                        is_normal = True
+                except:
+                    pass
+            
+            if is_normal:
+                mean_val = clean_series.mean()
+                sd_val = clean_series.std(ddof=1)
+                rows.append({
+                    "Đặc điểm": f"{var.upper()} (Mean ± SD)",
+                    "Số lượng / Thống kê": f"n = {valid_n}",
+                    "Tỷ lệ (%) / Giá trị": f"{mean_val:.2f} ± {sd_val:.2f}"
+                })
+            else:
+                median_val = clean_series.median()
+                q1 = clean_series.quantile(0.25)
+                q3 = clean_series.quantile(0.75)
+                rows.append({
+                    "Đặc điểm": f"{var.upper()} (Median [IQR])",
+                    "Số lượng / Thống kê": f"n = {valid_n}",
+                    "Tỷ lệ (%) / Giá trị": f"{median_val:.2f} [{q1:.2f} - {q3:.2f}]"
+                })
+
+    # 2. XỬ LÝ BIẾN PHÂN LOẠI
+    for var in cat_vars:
+        if var in df.columns:
+            clean_series = df[var].dropna()
+            valid_n = len(clean_series)
+            if valid_n == 0: continue
+            
+            # Tên biến (Viết hoa để nổi bật trong Word thay vì dùng **)
+            rows.append({
+                "Đặc điểm": str(var).upper(),
+                "Số lượng / Thống kê": f"N = {valid_n}",
+                "Tỷ lệ (%) / Giá trị": ""
+            })
+            
+            value_counts = clean_series.value_counts()
+            
+            # Gom nhóm hiếm < 5% vào "Khác"
+            other_count = 0
+            main_categories = []
+            for val, count in value_counts.items():
+                pct = (count / valid_n) * 100
+                # Chỉ gộp nếu biến có nhiều hơn 3 nhóm (để tránh gộp sai biến nhị phân như Giới tính)
+                if pct < 5.0 and len(value_counts) > 3:
+                    other_count += count
+                else:
+                    main_categories.append((val, count, pct))
+            
+            for val, count, pct in main_categories:
+                rows.append({
+                    "Đặc điểm": f"  - {val}",
+                    "Số lượng / Thống kê": str(count),
+                    "Tỷ lệ (%) / Giá trị": f"{pct:.1f}%"
+                })
+            
+            if other_count > 0:
+                other_pct = (other_count / valid_n) * 100
+                rows.append({
+                    "Đặc điểm": "  - Khác",
+                    "Số lượng / Thống kê": str(other_count),
+                    "Tỷ lệ (%) / Giá trị": f"{other_pct:.1f}%"
+                })
+
+    return pd.DataFrame(rows)
