@@ -215,7 +215,7 @@ def search_pubmed(query_en: str, max_res: int = 5) -> List[Dict[str, Any]]:
 def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
     Tìm kiếm bài báo trên các tạp chí y học Việt Nam thông qua SerpAPI.
-    Đã bổ sung cơ chế dự phòng (fallback) nếu từ khóa rút gọn quá ngắn không ra kết quả.
+    Sử dụng chính tên đề tài gốc của người dùng kết hợp tách từ thông minh.
     """
     api_key = get_serpapi_key()
     if not api_key:
@@ -231,14 +231,20 @@ def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str,
 
     site_query = " OR ".join([f"site:{d}" for d in domains])
     
+    # Tạo danh sách các biến thể từ khóa tìm kiếm:
+    # 1. Dùng nguyên văn câu truy vấn gốc của anh (ví dụ: "phân tích tình hình sử dụng vancomycin")
+    # 2. Lọc bỏ các từ ngắn, giữ lại các từ khóa chính (ví dụ: "tình hình sử dụng vancomycin")
     words = [w for w in query.split() if len(w) > 2]
-    core_keyword = " ".join(words[:4]) if words else query
+    core_keyword = " ".join(words) if words else query
 
     search_queries = [
         query,
-        core_keyword,
-        f"sử dụng {core_keyword.split()[-1] if words else query}"
+        core_keyword
     ]
+    
+    # Nếu câu truy vấn quá ngắn, bổ sung thêm ngữ cảnh y khoa
+    if len(query.split()) <= 2:
+        search_queries.append(f"nghiên cứu {query}")
 
     collected_results = []
     seen_links = set()
@@ -291,11 +297,12 @@ def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str,
         except Exception as e:
             return [], f"Lỗi kết nối SerpAPI: {str(e)}"
 
+    # Tầng dự phòng toàn cầu nếu các trang chuyên ngành chưa đủ bài
     if not collected_results:
         try:
             fallback_params = {
                 "engine": "google",
-                "q": f"nghiên cứu {query} site:vn",
+                "q": f"nghiên cứu y học {query} site:vn",
                 "api_key": api_key,
                 "hl": "vi",
                 "gl": "vn",
@@ -304,9 +311,13 @@ def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str,
             fb_search = GoogleSearch(fallback_params)
             fb_results = fb_search.get_dict().get("organic_results", [])
             for item in fb_results:
+                link = item.get("link", "")
+                if link in seen_links: continue
+                seen_links.add(link)
+                
                 collected_results.append({
                     "title": item.get("title", ""),
-                    "link": item.get("link", ""),
+                    "link": link,
                     "snippet": item.get("snippet", ""),
                     "source": "Google Scholar / VN Research",
                     "origin": "Tạp chí VN"
