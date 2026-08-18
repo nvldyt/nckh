@@ -14,21 +14,17 @@
 # "ngủ đông" / redeploy — nên xem đây là checkpoint tạm thời trong
 # phiên làm việc, không phải nơi lưu trữ vĩnh viễn duy nhất.
 
-import os
-import glob
 import pickle
 from datetime import datetime
+from pathlib import Path
 from typing import List, Tuple
 
 import streamlit as st
 
-# Thư mục lưu các file checkpoint dự án
-PROJECTS_DIR = os.path.join(os.getcwd(), "saved_projects")
+# Thư mục lưu các file checkpoint dự án (sử dụng pathlib hiện đại)
+PROJECTS_DIR = Path.cwd() / "saved_projects"
 
 # Các key trong st.session_state sẽ được đóng gói khi lưu 1 dự án.
-# Nếu sau này bổ sung tính năng mới có sinh ra session_state key mới
-# mà muốn được lưu/khôi phục cùng checkpoint, chỉ cần thêm tên key
-# vào danh sách này.
 PROJECT_STATE_KEYS = [
     # Evidence Database (Tab 1 + Tab 2)
     "documents",
@@ -54,7 +50,8 @@ PROJECT_STATE_KEYS = [
 
 
 def _ensure_dir() -> None:
-    os.makedirs(PROJECTS_DIR, exist_ok=True)
+    """Đảm bảo thư mục lưu trữ luôn tồn tại."""
+    PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def _safe_filename(name: str) -> str:
@@ -62,8 +59,7 @@ def _safe_filename(name: str) -> str:
     name = (name or "").strip() or "du_an_khong_ten"
     keep_chars = "-_.() "
     cleaned = "".join(c for c in name if c.isalnum() or c in keep_chars).strip()
-    cleaned = cleaned.replace(" ", "_")
-    return cleaned or "du_an_khong_ten"
+    return cleaned.replace(" ", "_") or "du_an_khong_ten"
 
 
 def save_project(project_name: str) -> Tuple[bool, str]:
@@ -71,18 +67,20 @@ def save_project(project_name: str) -> Tuple[bool, str]:
     try:
         _ensure_dir()
         filename = _safe_filename(project_name)
-        filepath = os.path.join(PROJECTS_DIR, f"{filename}.pkl")
+        filepath = PROJECTS_DIR / f"{filename}.pkl"
 
-        snapshot = {}
-        for key in PROJECT_STATE_KEYS:
-            if key in st.session_state:
-                snapshot[key] = st.session_state[key]
+        # Đóng gói dữ liệu bằng dict comprehension để mã gọn và nhanh hơn
+        snapshot = {
+            key: st.session_state[key]
+            for key in PROJECT_STATE_KEYS
+            if key in st.session_state
+        }
 
         saved_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         snapshot["_saved_at"] = saved_at
         snapshot["_project_name"] = project_name
 
-        with open(filepath, "wb") as f:
+        with filepath.open("wb") as f:
             pickle.dump(snapshot, f)
 
         n_keys = len(snapshot) - 2  # trừ 2 key metadata
@@ -99,22 +97,23 @@ def load_project(project_name: str) -> Tuple[bool, str]:
     try:
         _ensure_dir()
         filename = _safe_filename(project_name)
-        filepath = os.path.join(PROJECTS_DIR, f"{filename}.pkl")
+        filepath = PROJECTS_DIR / f"{filename}.pkl"
 
-        if not os.path.exists(filepath):
-            # project_name có thể đã là tên file gốc (không dấu, có sẵn),
-            # thử tìm trực tiếp trước khi báo lỗi.
-            alt_path = os.path.join(PROJECTS_DIR, project_name)
-            if not alt_path.endswith(".pkl"):
-                alt_path += ".pkl"
-            if os.path.exists(alt_path):
+        if not filepath.exists():
+            # project_name có thể đã là tên file gốc, thử tìm trực tiếp
+            alt_path = PROJECTS_DIR / project_name
+            if alt_path.suffix != ".pkl":
+                alt_path = alt_path.with_suffix(".pkl")
+            
+            if alt_path.exists():
                 filepath = alt_path
             else:
                 return False, f"❌ Không tìm thấy checkpoint '{project_name}'."
 
-        with open(filepath, "rb") as f:
+        with filepath.open("rb") as f:
             snapshot = pickle.load(f)
 
+        # Nạp lại dữ liệu vào session state
         for key in PROJECT_STATE_KEYS:
             if key in snapshot:
                 st.session_state[key] = snapshot[key]
@@ -129,9 +128,11 @@ def list_projects() -> List[str]:
     """Liệt kê các checkpoint đã lưu, mới nhất lên trước."""
     try:
         _ensure_dir()
-        files = glob.glob(os.path.join(PROJECTS_DIR, "*.pkl"))
-        files.sort(key=os.path.getmtime, reverse=True)
-        return [os.path.splitext(os.path.basename(f))[0] for f in files]
+        # Lấy tất cả file .pkl và sắp xếp theo thời gian sửa đổi (mới nhất đầu tiên)
+        files = list(PROJECTS_DIR.glob("*.pkl"))
+        files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+        # Trả về tên file bỏ đuôi .pkl (dùng f.stem)
+        return [f.stem for f in files]
     except Exception:
         return []
 
@@ -141,9 +142,10 @@ def delete_project(project_name: str) -> Tuple[bool, str]:
     try:
         _ensure_dir()
         filename = _safe_filename(project_name)
-        filepath = os.path.join(PROJECTS_DIR, f"{filename}.pkl")
-        if os.path.exists(filepath):
-            os.remove(filepath)
+        filepath = PROJECTS_DIR / f"{filename}.pkl"
+        
+        if filepath.exists():
+            filepath.unlink()
             return True, f"🗑️ Đã xóa checkpoint '{project_name}'."
         return False, f"❌ Không tìm thấy checkpoint '{project_name}' để xóa."
     except Exception as exc:
