@@ -710,7 +710,7 @@ def Audit_generated_text(text: str) -> Dict[str, Any]:
     Aidit = compare_numbers_advanced(source_text, text)
     return {
         "evidence_used": relevant_evidence,
-        **Kiểm tra
+        **Audit
     }
 
 def normalize_for_similarity(text: str) -> str:
