@@ -211,41 +211,88 @@ def search_pubmed(query_en: str, max_res: int = 5) -> List[Dict[str, Any]]:
             })
     return articles
 
-def search_vn_journals(vietnamese_query: str, max_res: int = 5) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-    serpapi_key = get_serpapi_key()
-    if not serpapi_key:
-        return [], "Chưa cấu hình SERPAPI_KEY trong Streamlit Secrets (bỏ qua tra cứu tạp chí VN)."
+def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """
+    Tìm kiếm bài báo trên các tạp chí y học Việt Nam thông qua SerpAPI.
+    Đã bổ sung cơ chế dự phòng (fallback) nếu từ khóa rút gọn quá ngắn không ra kết quả.
+    """
+    api_key = get_serpapi_key()
+    if not api_key:
+        return [], "⚠️ Chưa cấu hình SerpAPI Key (không thể cào kết quả từ tạp chí VN)."
 
     domains = st.session_state.get("vn_journal_domains", [])
-    if domains:
-        domain_filter = " OR ".join(f"site:{d}" for d in domains)
-        full_query = f"{vietnamese_query} tạp chí y học ({domain_filter})"
-    else:
-        full_query = f"{vietnamese_query} tạp chí y học site:.vn"
+    if not domains:
+        domains = ["tapchiyhocvietnam.vn", "vjol.info", "tapchinghiencuuyhoc.vn"]
 
-    params = {
-        "engine": "google_scholar",
-        "q": full_query,
-        "hl": "vi",
-        "num": max_res,
-        "api_key": serpapi_key,
-    }
+    # Tạo câu lệnh tìm kiếm giới hạn trong các trang tạp chí y học VN
+    site_query = " OR ".join([f"site:{d}" for d in domains])
+    
+    # Danh sách các biến thể từ khóa để thử tìm kiếm lần lượt nếu lần đầu bị rỗng
+    search_queries = [
+        f"{query} (sử dụng OR vancomycin OR điều trị)", # Kết hợp từ khóa người dùng
+        query,                                         # Từ khóa thô
+    ]
+    
+    # Nếu query quá ngắn (ví dụ chỉ có 1 từ như "Vancomycin"), ép tìm kèm chữ y học
+    if len(query.split()) <= 1:
+        search_queries.insert(0, f"{query} dược lâm sàng bệnh viện")
 
-    try:
-        res = requests.get("https://serpapi.com/search", params=params, timeout=20)
-        data = res.json()
-    except Exception as exc:
-        return [], f"Lỗi kết nối SerpAPI: {exc}"
+    collected_results = []
+    seen_links = set()
 
-    results = []
-    for item in data.get("organic_results", [])[:max_res]:
-        results.append({
-            "title": item.get("title", "Không có tiêu đề"),
-            "link": item.get("link", ""),
-            "snippet": item.get("snippet", "Không có đoạn trích."),
-            "source": item.get("publication_info", {}).get("summary", "Không rõ nguồn"),
-        })
-    return results, None
+    for q_text in search_queries:
+        if len(collected_results) >= max_results:
+            break
+            
+        full_query = f"({site_query}) {q_text}"
+        
+        params = {
+            "engine": "google",
+            "q": full_query,
+            "api_key": api_key,
+            "hl": "vi",
+            "gl": "vn",
+            "num": max_results
+        }
+
+        try:
+            search = GoogleSearch(params)
+            results = search.get_dict()
+            organic_results = results.get("organic_results", [])
+
+            for item in organic_results:
+                link = item.get("link", "")
+                if link in seen_links:
+                    continue
+                seen_links.add(link)
+
+                title = item.get("title", "Không có tiêu đề")
+                snippet = item.get("snippet", "Không có tóm tắt.")
+                
+                # Trích xuất tên nguồn từ link hiển thị hoặc domain
+                source_name = "Tạp chí Y học Việt Nam"
+                for d in domains:
+                    if d in link:
+                        source_name = d.upper()
+                        break
+
+                collected_results.append({
+                    "title": title,
+                    "link": link,
+                    "snippet": snippet,
+                    "source": source_name,
+                    "origin": "Tạp chí VN"
+                })
+                
+                if len(collected_results) >= max_results:
+                    break
+        except Exception as e:
+            return [], f"Lỗi kết nối SerpAPI: {str(e)}"
+
+    if not collected_results:
+        return [], "Không tìm thấy bài báo tiếng Việt phù hợp với từ khóa này. Bạn có thể thử đổi tên đề tài ngắn gọn hơn ở ô tra cứu."
+
+    return collected_results, None
 
 # ============================================================
 # 7. INGESTION TỪ API VÀO DATABASE
