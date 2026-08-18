@@ -214,63 +214,83 @@ def search_pubmed(query_en: str, max_res: int = 5) -> List[Dict[str, Any]]:
 
 def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
-    Tìm kiếm bài báo tiếng Việt qua SerpAPI dựa trên danh sách domain chuẩn,
-    có fallback mở rộng sang toàn bộ site:vn nếu không tìm thấy.
+    Tìm kiếm bài báo trên các tạp chí y học Việt Nam thông qua SerpAPI.
+    Đã bổ sung cơ chế dự phòng (fallback) nếu từ khóa rút gọn quá ngắn không ra kết quả.
     """
     api_key = get_serpapi_key()
     if not api_key:
-        return [], "⚠️ Chưa cấu hình SerpAPI Key."
+        return [], "⚠️ Chưa cấu hình SerpAPI Key (không thể cào kết quả từ tạp chí VN)."
 
     domains = st.session_state.get("vn_journal_domains", [])
     if not domains:
         domains = [
-            "tapchiyhocvietnam.vn", "vjol.info", "tapchinghiencuuyhoc.vn",
-            "jmp.huemed-univ.edu.vn", "jmpm.vn", "huejmp.vn",
+            "tapchiyhocvietnam.vn", "vjol.info", "tapchinghiencuuyhoc.vn", 
+            "jmp.huemed-univ.edu.vn", "jmpm.vn", "huejmp.vn", 
             "tcydls108.benhvien108.vn", "tapchiyhcd.vn", "thaibinhjmp.vn", "hup.edu.vn"
         ]
 
     site_query = " OR ".join([f"site:{d}" for d in domains])
-    full_query = f"({site_query}) {query}"
+    
+    words = [w for w in query.split() if len(w) > 2]
+    core_keyword = " ".join(words[:4]) if words else query
 
-    params = {
-        "engine": "google",
-        "q": full_query,
-        "api_key": api_key,
-        "hl": "vi",
-        "gl": "vn",
-        "num": max_results
-    }
+    search_queries = [
+        query,
+        core_keyword,
+        f"sử dụng {core_keyword.split()[-1] if words else query}"
+    ]
 
     collected_results = []
+    seen_links = set()
 
-    try:
-        search = GoogleSearch(params)
-        results = search.get_dict()
-        organic_results = results.get("organic_results", [])
+    for q_text in search_queries:
+        if len(collected_results) >= max_results:
+            break
+            
+        full_query = f"({site_query}) {q_text}"
+        
+        params = {
+            "engine": "google",
+            "q": full_query,
+            "api_key": api_key,
+            "hl": "vi",
+            "gl": "vn",
+            "num": max_results
+        }
 
-        for item in organic_results:
-            link = item.get("link", "")
-            title = item.get("title", "Không có tiêu đề")
-            snippet = item.get("snippet", "Không có tóm tắt.")
+        try:
+            search = GoogleSearch(params)
+            results = search.get_dict()
+            organic_results = results.get("organic_results", [])
 
-            source_name = "Tạp chí Y học Việt Nam"
-            for d in domains:
-                if d in link:
-                    source_name = d.upper()
+            for item in organic_results:
+                link = item.get("link", "")
+                if link in seen_links:
+                    continue
+                seen_links.add(link)
+
+                title = item.get("title", "Không có tiêu đề")
+                snippet = item.get("snippet", "Không có tóm tắt.")
+                
+                source_name = "Tạp chí Y học Việt Nam"
+                for d in domains:
+                    if d in link:
+                        source_name = d.upper()
+                        break
+
+                collected_results.append({
+                    "title": title,
+                    "link": link,
+                    "snippet": snippet,
+                    "source": source_name,
+                    "origin": "Tạp chí VN"
+                })
+                
+                if len(collected_results) >= max_results:
                     break
+        except Exception as e:
+            return [], f"Lỗi kết nối SerpAPI: {str(e)}"
 
-            collected_results.append({
-                "title": title,
-                "link": link,
-                "snippet": snippet,
-                "source": source_name,
-                "origin": "Tạp chí VN"
-            })
-
-    except Exception as e:
-        return [], f"Lỗi kết nối SerpAPI: {str(e)}"
-
-    # === FALLBACK: chỉ chạy khi tìm site-restricted không ra gì ===
     if not collected_results:
         try:
             fallback_params = {
@@ -288,7 +308,7 @@ def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str,
                     "title": item.get("title", ""),
                     "link": item.get("link", ""),
                     "snippet": item.get("snippet", ""),
-                    "source": "Google / VN Research",
+                    "source": "Google Scholar / VN Research",
                     "origin": "Tạp chí VN"
                 })
         except Exception:
