@@ -1075,12 +1075,50 @@ def main():
         st.warning("Đây là công cụ tạo bản nháp. Mọi citation và số liệu phải được Audit lại (đối chiếu bản gốc) trước khi đưa vào luận văn chính thức.")
         render_evidence_database_status("dùng cho các nút viết nhanh bên dưới")
 
-        my_research_data = st.text_area(
-            "🌉 Số liệu nghiên cứu của riêng anh (dùng cho Bàn luận / So sánh):",
-            placeholder="VD: dán bảng crosstab/kết quả logistic regression...",
-            height=140,
-            key=ui_key("my_research_data")
-        )
+        # ------------------------------------------------------------
+        # KHU VỰC NHẬP DỮ LIỆU NGHIÊN CỨU & NHẬN XÉT BẢNG
+        # ------------------------------------------------------------
+        st.markdown("### 📊 Dữ liệu nghiên cứu của riêng anh")
+        col_data_1, col_data_2 = st.columns(2)
+        
+        with col_data_1:
+            my_research_data = st.text_area(
+                "1. Số liệu bảng (Dán bảng Excel/Markdown vào đây):",
+                placeholder="VD: Bảng phân bố thời gian phẫu thuật...",
+                height=180,
+                key=ui_key("my_research_data")
+            )
+            
+        with col_data_2:
+            my_table_remarks = st.text_area(
+                "2. Nhận xét bảng (Chỉ diễn giải số liệu, KHÔNG bàn luận):",
+                placeholder="VD: Thời gian phẫu thuật trung vị là 45 phút... Đa số hoàn thành trong dưới 60 phút (90%).\n\n(Anh có thể gõ tay, hoặc bấm nút 'AI Viết Nhận Xét Bảng' ở dưới để AI tự sinh ra).",
+                height=180,
+                key=ui_key("my_table_remarks")
+            )
+
+        if st.button("✍️ AI Viết Nhận Xét Bảng (Tự động điền vào ô 2)"):
+            if not my_research_data.strip():
+                st.warning("⚠️ Anh cần dán bảng số liệu vào ô số 1 trước để AI có dữ liệu đọc!")
+            else:
+                with st.spinner("AI đang phân tích bảng và soạn nhận xét..."):
+                    task = """Bạn là biên tập viên y khoa. Dựa vào bảng số liệu dưới đây, hãy viết phần 'Nhận xét' chuẩn văn phong luận văn. 
+YÊU CẦU TỐI THƯỢNG: 
+- Ngắn gọn, logic, khoa học. 
+- CHỈ diễn giải các số liệu nổi bật (cao nhất, thấp nhất, trung vị, tỷ lệ %). 
+- TUYỆT ĐỐI KHÔNG giải thích nguyên nhân, KHÔNG so sánh với y văn, KHÔNG bàn luận."""
+                    prompt = f"{BASE_SYSTEM_RULES}\nNHIỆM VỤ:\n{task}\n\nBẢNG SỐ LIỆU:\n{my_research_data}"
+                    
+                    # Gọi AI trực tiếp thay vì qua run_quick_task (vì phần này không cần chèn Reference)
+                    generated_remark = call_gemini(prompt)
+                    
+                    if generated_remark:
+                        # Bắn trực tiếp kết quả vào bộ nhớ của ô text_area số 2
+                        st.session_state[ui_key("my_table_remarks")] = generated_remark
+                        # Ép giao diện tải lại lập tức để chữ hiện lên ô 2
+                        st.rerun()
+
+        st.write("---")
 
         citation_rules = """QUY TẮC TRÍCH DẪN & HÀN LÂM BẮT BUỘC:
 Chỉ dùng SOURCE_TAG thật để hệ thống tự chuyển thành [n].
