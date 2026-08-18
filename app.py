@@ -714,10 +714,10 @@ def compare_numbers_advanced(source_text: str, generated_text: str) -> Dict[str,
 def Audit_generated_text(text: str) -> Dict[str, Any]:
     relevant_evidence = retrieve_evidence(text, k=6)
     source_text = "\n".join(e["text"] for e in relevant_evidence)
-    Aidit = compare_numbers_advanced(source_text, text)
+    audit_result = compare_numbers_advanced(source_text, text)
     return {
         "evidence_used": relevant_evidence,
-        **Audit
+        **audit_result
     }
 
 def normalize_for_similarity(text: str) -> str:
