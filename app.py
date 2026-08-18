@@ -481,11 +481,7 @@ def rebuild_index(new_chunks: List[Dict[str, Any]] = None):
     st.session_state["bm25"] = BM25Okapi(tokenized_corpus)
 
 
-def retrieve_evidence(query: str, k: int = 8) -> List[Dict[str, Any]]:
-    """
-    Cải tiến P1: Hybrid Search (65% Semantic + 35% BM25)
-    Kết hợp sức mạnh hiểu ngữ cảnh của Vector và khả năng bắt từ khóa chính xác của BM25.
-    """
+def retrieve_evidence(query: str, k: int = DEFAULT_TOP_K) -> List[Dict[str, Any]]:
     chunks = st.session_state.get("chunks", [])
     matrix = st.session_state.get("embeddings")
     bm25 = st.session_state.get("bm25")
@@ -493,39 +489,36 @@ def retrieve_evidence(query: str, k: int = 8) -> List[Dict[str, Any]]:
     if not chunks or matrix is None or bm25 is None:
         return []
 
-    # --- 1. TÍNH ĐIỂM NGỮ NGHĨA (SEMANTIC SCORE) ---
+    # 1. Lấy Top 30 ứng viên từ Semantic Search
     query_vector = get_embeddings([query])[0]
     semantic_scores = matrix @ query_vector
+    sem_indices = np.argsort(semantic_scores)[::-1][:30]
     
-    # Chuẩn hóa điểm ngữ nghĩa về dải 0-1
-    sem_min, sem_max = semantic_scores.min(), semantic_scores.max()
-    if sem_max > sem_min:
-        semantic_scores = (semantic_scores - sem_min) / (sem_max - sem_min)
-    else:
-        semantic_scores = np.zeros_like(semantic_scores)
-
-    # --- 2. TÍNH ĐIỂM TỪ KHÓA (BM25 SCORE) ---
+    # 2. Lấy Top 30 ứng viên từ BM25 Keyword Search
     tokenized_query = query.lower().split()
     bm25_scores = np.array(bm25.get_scores(tokenized_query))
+    bm25_indices = np.argsort(bm25_scores)[::-1][:30]
+
+    # 3. Tổng hợp bằng Reciprocal Rank Fusion (RRF constant c = 60)
+    rrf_scores = {}
+    c = 60.0
+
+    for rank, idx in enumerate(sem_indices):
+        rrf_scores[idx] = rrf_scores.get(idx, 0.0) + (0.65 / (c + rank + 1))
+
+    for rank, idx in enumerate(bm25_indices):
+        rrf_scores[idx] = rrf_scores.get(idx, 0.0) + (0.35 / (c + rank + 1))
+
+    # Sắp xếp lại theo điểm RRF tích hợp cao nhất
+    sorted_indices = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
     
-    # Chuẩn hóa điểm BM25 về dải 0-1
-    bm25_min, bm25_max = bm25_scores.min(), bm25_scores.max()
-    if bm25_max > bm25_min:
-        bm25_scores = (bm25_scores - bm25_min) / (bm25_max - bm25_min)
-    else:
-        bm25_scores = np.zeros_like(bm25_scores)
-
-    # --- 3. KẾT HỢP HYBRID SCORE (Trọng số: 65% Semantic + 35% BM25) ---
-    final_scores = (0.65 * semantic_scores) + (0.35 * bm25_scores)
-
-    # Lấy top K đoạn văn có điểm kết hợp cao nhất
-    k = min(k, len(chunks))
-    indices = np.argsort(final_scores)[::-1][:k]
+    k = min(k, len(sorted_indices))
+    final_indices = sorted_indices[:k]
 
     results = []
-    for idx in indices:
+    for idx in final_indices:
         item = dict(chunks[idx])
-        item["score"] = float(final_scores[idx])
+        item["score"] = float(rrf_scores[idx])
         results.append(item)
         
     return results
