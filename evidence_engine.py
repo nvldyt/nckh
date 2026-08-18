@@ -212,6 +212,24 @@ def search_pubmed(query_en: str, max_res: int = 5) -> List[Dict[str, Any]]:
             })
     return articles
 
+def _sanitize_query(raw_query: str) -> str:
+    """
+    Làm sạch từ khóa trước khi đưa vào Google Search qua SerpAPI.
+
+    LÝ DO: nếu từ khóa đến từ Gemini (qua extract_vn_keywords/translate_query_to_mesh)
+    hoặc do người dùng gõ tay có lẫn markdown ("**từ khóa**") hoặc khoảng trắng thừa,
+    thì dấu "*" sẽ bị Google hiểu là ký tự WILDCARD (khớp bất kỳ từ nào), khiến toàn bộ
+    ý nghĩa thật của từ khóa bị bỏ qua và trả về kết quả không liên quan (vd. chỉ khớp
+    lỏng lẻo với 1-2 từ chung chung trong câu). Hàm này là lớp phòng thủ ở tầng
+    evidence_engine, độc lập với việc app.py có làm sạch trước đó hay không.
+    """
+    if not raw_query:
+        return raw_query
+    cleaned = raw_query.replace("**", " ").replace("*", " ")
+    cleaned = cleaned.replace("_", " ")  # markdown in nghiêng cũng có thể gây nhiễu
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
+
 def _classify_vn_source(link: str) -> str:
     """Nhận diện tên nguồn hiển thị cho đẹp mắt dựa trên domain trong link."""
     lower_link = (link or "").lower()
@@ -262,6 +280,10 @@ def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str,
     if not api_key:
         return [], "⚠️ Chưa cấu hình SerpAPI Key."
 
+    query = _sanitize_query(query)
+    if not query:
+        return [], "Từ khóa rỗng sau khi làm sạch, vui lòng nhập lại."
+
     seen_links: set = set()
     collected_results: List[Dict[str, Any]] = []
 
@@ -298,7 +320,7 @@ def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str,
     if not collected_results:
         params_fallback = {
             "engine": "google",
-            "q": f"nghiên cứu y học {query} site:vn",
+            "q": f"nghiên cứu y học {query} site:vn",  # query đã được sanitize ở đầu hàm
             "api_key": api_key,
             "hl": "vi",
             "gl": "vn",
