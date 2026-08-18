@@ -1764,11 +1764,10 @@ with tabs[4]:
 
     audit_text = st.text_area("Dán đoạn văn cần kiểm tra vào đây:", height=250, key="audit_text")
     
-    # Tạo 1 hàng duy nhất gồm 6 cột bằng nhau
+    # Tạo 1 hàng duy nhất gồm 6 cột
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     
     st.write("---")
-    # Khung hiển thị kết quả nằm cố định bên dưới để không làm nhảy giao diện các nút
     ket_qua_audit_container = st.container()
 
     # 1. AUDIT SỐ LIỆU
