@@ -33,8 +33,8 @@ from docx import Document
 # 1. Import bộ máy tuyển chọn bảng
 from table_selection_engine import (
     StudyObjective, CandidateResult,
-    TableSelectionEngine, NarrativePlanner,
-    Priority, Presentation
+    TableSelectionEngine, NarrativePlanner,
+    Priority, Presentation
 )
 
 # 2. Import bộ máy Thống kê Toán học
