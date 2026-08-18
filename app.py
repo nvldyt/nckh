@@ -2047,74 +2047,76 @@ CÁC RÀNG BUỘC BẮT BUỘC:
                 st.rerun()
        
         # ============================================================
-        # QUẢN LÝ CHECKPOINT & DỰ ÁN LUẬN VĂN
+        # QUẢN LÝ CHECKPOINT & DỰ ÁN LUẬN VĂN (XUẤT/NHẬP FILE JSON)
         # ============================================================
         st.write("---")
-        st.subheader("💾 Quản lý Checkpoint & Dự án luận văn")
+        st.subheader("💾 Lưu trữ dự án dài hạn")
         st.info(
-            "Lưu lại toàn bộ trạng thái làm việc hiện tại (Evidence Database, "
-            "Citation Registry, Giỏ kết quả & cấu trúc Chương 3 ở Tab 4, bản "
-            "nháp gần nhất...) xuống một checkpoint trên máy chủ."
+            "Vì máy chủ đám mây sẽ xóa dữ liệu khi khởi động lại, anh hãy **Tải file dự án (.json)** về máy sau mỗi phiên làm việc. "
+            "Lần sau vào lại, chỉ cần tải file đó lên để khôi phục toàn bộ 100% trạng thái (PDF, Metadata, Kết quả thống kê)."
         )
-        col_save1, col_save2 = st.columns([3, 1])
-        with col_save1:
-            proj_name_input = st.text_input(
-                "Tên định danh đề tài / dự án:",
-                placeholder="VD: Vancomycin_SonLa_2026 hoặc THA_BVTP_2026",
-                key=ui_key("proj_name_input"),
-            )
-        with col_save2:
-            st.write("")
-            st.write("")
-            if st.button("💾 Lưu Checkpoint", type="primary", key="btn_save_project", use_container_width=True):
-                if not proj_name_input.strip():
-                    st.warning("Vui lòng nhập tên dự án trước khi lưu.")
-                else:
-                    success, msg = save_project(proj_name_input)
-                    if success:
-                        st.success(msg)
-                    else:
-                        st.error(msg)
 
-        st.write("📂 Danh sách checkpoint đã lưu trên máy chủ:")
-        existing_projects = list_projects()
-        if existing_projects:
-            col_load1, col_load2, col_load3 = st.columns([3, 1, 1])
-            with col_load1:
-                selected_proj = st.selectbox(
-                    "Chọn checkpoint để khôi phục:", existing_projects, key=ui_key("select_proj_load")
-                )
-            with col_load2:
-                st.write("")
-                st.write("")
-                if st.button("📂 Tải lại", key="btn_load_project", use_container_width=True):
-                    success, msg = load_project(selected_proj)
-                    if success:
-                        st.success(msg)
-                        # Ép reset giao diện để render data mới lên các ô
+        col_ex1, col_ex2 = st.columns(2)
+        
+        # --- 1. XUẤT DỰ ÁN (EXPORT) ---
+        with col_ex1:
+            st.markdown("#### 📥 1. Sao lưu dự án ra máy")
+            # Đóng gói dữ liệu
+            project_data = {
+                "documents": st.session_state.get("documents", {}),
+                "chunks": st.session_state.get("chunks", []),
+                "citation_registry": st.session_state.get("citation_registry", {}),
+                "current_references": st.session_state.get("current_references", []),
+                "result_cart": [vars(item) if hasattr(item, "__dict__") else item for item in st.session_state.get("result_cart", [])],
+                # Convert DataFrame sang dict để lưu JSON
+                "saved_tables": {k: v.to_dict(orient='split') for k, v in st.session_state.get("saved_tables", {}).items()}
+            }
+            json_str = json.dumps(project_data, ensure_ascii=False, indent=4)
+            
+            st.download_button(
+                label="📥 Tải file dự án (.json)",
+                data=json_str,
+                file_name="Du_An_Luan_Van.json",
+                mime="application/json",
+                use_container_width=True
+            )
+
+        # --- 2. NHẬP DỰ ÁN (IMPORT) ---
+        with col_ex2:
+            st.markdown("#### 📂 2. Khôi phục dự án từ máy")
+            uploaded_proj_file = st.file_uploader("Chọn file .json đã lưu:", type=["json"], key=ui_key("upload_proj_json"))
+            
+            if uploaded_proj_file is not None:
+                if st.button("🚀 Khôi phục dự án", type="primary", use_container_width=True):
+                    try:
+                        loaded_data = json.load(uploaded_proj_file)
+                        
+                        # Phục hồi dữ liệu
+                        st.session_state["documents"] = loaded_data.get("documents", {})
+                        st.session_state["chunks"] = loaded_data.get("chunks", [])
+                        st.session_state["citation_registry"] = loaded_data.get("citation_registry", {})
+                        st.session_state["current_references"] = loaded_data.get("current_references", [])
+                        
+                        # Phục hồi Giỏ kết quả
+                        cart_raw = loaded_data.get("result_cart", [])
+                        st.session_state["result_cart"] = [CandidateResult(**item) if isinstance(item, dict) else item for item in cart_raw]
+                        
+                        # Phục hồi Saved Tables
+                        tables_raw = loaded_data.get("saved_tables", {})
+                        st.session_state["saved_tables"] = {k: pd.DataFrame.from_dict(v, orient='split') for k, v in tables_raw.items()}
+                        
+                        # Tái thiết lập bộ chỉ mục tìm kiếm (RAG)
+                        with st.spinner("Đang xây dựng lại index tìm kiếm..."):
+                            rebuild_index()
+                        
+                        st.success("🎉 Khôi phục thành công! Mọi tài liệu và kết quả đã sẵn sàng.")
+                        time.sleep(1)
                         reset_ui_state()
                         st.rerun()
-                    else:
-                        st.error(msg)
-            with col_load3:
-                st.write("")
-                st.write("")
-                if st.button("🗑️ Xóa", key="btn_delete_project", use_container_width=True):
-                    success, msg = delete_project(selected_proj)
-                    if success:
-                        st.success(msg)
-                        st.rerun()
-                    else:
-                        st.error(msg)
-        else:
-            st.caption("Chưa có checkpoint nào được lưu.")
+                    except Exception as e:
+                        st.error(f"❌ Lỗi khi đọc file: {str(e)}")
 
-        st.caption(
-            "⚠️ **Lưu ý về Checkpoint:** Dữ liệu được lưu trực tiếp trên ổ đĩa của máy chủ. "
-            "Nếu anh đang triển khai ứng dụng trên các nền tảng đám mây miễn phí (như Streamlit Community Cloud), "
-            "dữ liệu này có thể bị xóa khi ứng dụng tự động khởi động lại. "
-            "Hãy đảm bảo anh luôn xuất và tải file Word cuối cùng về máy cá nhân!"
-        )
+        st.caption("⚠️ **Lưu ý:** Luôn tải bản sao lưu (.json) về máy tính cá nhân sau mỗi lần làm việc quan trọng.")
 
 if __name__ == "__main__":
     main()
