@@ -81,6 +81,12 @@ DEFAULT_VN_JOURNAL_DOMAINS = [
     "vjol.info",
     "tapchinghiencuuyhoc.vn",
     "jmp.huemed-univ.edu.vn",
+    "jmpm.vn",
+    "huejmp.vn",
+    "tcydls108.benhvien108.vn",
+    "tapchiyhcd.vn",
+    "thaibinhjmp.vn",
+    "hup.edu.vn",
 ]
 
 # ============================================================
