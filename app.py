@@ -650,7 +650,7 @@ def generate_evidence_based(
     - Chỉ sử dụng thông tin có thể truy về các tài liệu ở trên.
     """
 
-    output = # Gọi với model do anh đã chọn ở Tab 6 output = call_gemini(prompt, model=st.session_state["selected_model"])
+    # Gọi với model do anh đã chọn ở Tab 6 output = call_gemini(prompt, model=st.session_state["selected_model"])
     if output is None:
         return None, evidence, []
 
