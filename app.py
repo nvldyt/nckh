@@ -557,18 +557,24 @@ def citation_bibliography() -> str:
     rows = []
     for ref in refs:
         meta = ref["metadata"]
-        citation = (
-            f"[{ref['vancouver_index']}] {meta.get('authors', '')}. "
-            f"{meta.get('title', meta.get('file_name', 'Tài liệu chưa xác định'))}. "
-            f"{meta.get('journal', '')}. {meta.get('year', '')}."
-        )
+        
+        # Mẹo: Dùng "or" để nếu giá trị là rỗng ("") thì lấy chuỗi dự phòng
+        authors = meta.get('authors') or "Tác giả chưa xác định"
+        title = meta.get('title') or meta.get('file_name') or "Tài liệu chưa xác định"
+        journal = meta.get('journal') or "Tài liệu lưu trữ"
+        year = meta.get('year') or "Năm chưa rõ"
+        
+        citation = f"[{ref['vancouver_index']}] {authors}. {title}. {journal}. {year}."
+        
         if meta.get("doi"):
             citation += f" DOI: {meta['doi']}."
         if meta.get("pmid"):
             citation += f" PMID: {meta['pmid']}."
         if meta.get("url") and meta.get("origin") == "Tạp chí VN":
             citation += f" [{meta['url']}]"
+            
         rows.append(citation)
+        
     return "\n".join(rows)
 
 # ============================================================
