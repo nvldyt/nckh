@@ -1766,60 +1766,57 @@ with tabs[3]:
             st.error(f"Lỗi đọc file Excel: {exc}")
 
 # ------------------------------------------------------------
-# TAB 5 – AUDIT (ĐÃ CẬP NHẬT GIAO DIỆN KIỂM TRA 3 CẤP ĐỘ)
+# TAB 5 – AUDIT (1 HÀNG GỌN GÀNG - 6 CHỨC NĂNG)
 # ------------------------------------------------------------
 with tabs[4]:
-    st.header("🔎 Audit luận văn")
+    st.header("🔎 Audit luận văn toàn diện")
 
     st.markdown(
-        '<div class="warning-box">⚠️ <b>Giới hạn cần biết:</b> các công cụ ở '
+        '<div class="warning-box">⚠️ <b>Giới hạn cần biết:</b> Các công cụ ở '
         "tab này chỉ đưa ra <b>chỉ báo nguy cơ / gợi ý kiểm tra thêm</b>. "
         "Không có công cụ nào khẳng định chắc chắn 100%.</div>",
         unsafe_allow_html=True,
     )
 
-    audit_text = st.text_area("Dán đoạn văn cần kiểm tra", height=280, key="audit_text")
-
+    audit_text = st.text_area("Dán đoạn văn cần kiểm tra vào đây:", height=250, key="audit_text")
+    
+    # Tạo 1 hàng duy nhất gồm 6 cột bằng nhau
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    
     st.write("---")
+    # Khung hiển thị kết quả nằm cố định bên dưới để không làm nhảy giao diện các nút
     ket_qua_audit_container = st.container()
 
-    st.subheader("Nhóm 1: Đối chiếu với bằng chứng & citation")
-    a1, a2, a3 = st.columns(3)
-
-    with a1:
-        if st.button("🔢 Audit số liệu", key="audit_numbers"):
+    # 1. AUDIT SỐ LIỆU
+    with c1:
+        if st.button("🔢 Số liệu", key="audit_numbers", use_container_width=True):
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
-                with st.spinner("Đang truy xuất tài liệu khớp với đoạn văn và đối chiếu số liệu..."):
+                with st.spinner("Đang truy xuất và đối chiếu..."):
                     result = audit_generated_text(audit_text)
-                
                 with ket_qua_audit_container:
                     st.markdown("### 🔢 Kết quả Audit Số liệu (3 Cấp Độ)")
-                    
-                    st.success(f"**Level 1 (Khớp chính xác bề mặt):** {', '.join(result['exact_matches']) if result['exact_matches'] else 'Không có'}")
-                    st.info(f"**Level 2 (Khớp giá trị phái sinh - VD tỷ lệ/phần trăm):** {', '.join(result['derived_matches']) if result['derived_matches'] else 'Không có'}")
-                    
+                    st.success(f"**Level 1 (Khớp chính xác):** {', '.join(result['exact_matches']) if result['exact_matches'] else 'Không có'}")
+                    st.info(f"**Level 2 (Khớp phái sinh):** {', '.join(result['derived_matches']) if result['derived_matches'] else 'Không có'}")
                     if result["warnings"]:
-                        st.error(f"**Level 3 (⚠️ CẢNH BÁO SỐ LIỆU LẠ):** {', '.join(result['warnings'])}")
-                        st.caption("Các số trên không xuất hiện trong các tài liệu liên quan được truy xuất. Cần đối chiếu lại bản gốc!")
+                        st.error(f"**Level 3 (⚠️ SỐ LIỆU LẠ):** {', '.join(result['warnings'])}")
+                        st.caption("Cần đối chiếu lại bản gốc!")
                     else:
-                        st.success("**Level 3:** Tuyệt vời, không phát hiện số liệu lạ bị AI bịa ra!")
-                    
-                    with st.expander("📄 Xem các bằng chứng hệ thống đã tự động rút ra để đối chiếu"):
+                        st.success("**Level 3:** Không phát hiện số liệu lạ!")
+                    with st.expander("📄 Xem bằng chứng đối chiếu"):
                         for ev in result["evidence_used"]:
                             st.caption(f"Nguồn: {ev['file_name']} (Trang {ev['page']})")
                             st.write(f"> {ev['text']}")
 
-    with a2:
-        if st.button("📚 Audit citation", key="audit_citation"):
+    # 2. AUDIT TRÍCH DẪN
+    with c2:
+        if st.button("📚 Trích dẫn", key="audit_citation", use_container_width=True):
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
-                # Trích xuất tất cả các tag [1], [2] từ văn bản
                 citations_in_text = re.findall(r"\[(\d+)\]", audit_text)
                 current_refs = {str(ref['vancouver_index']): ref for ref in st.session_state.get("current_references", [])}
-                
                 with ket_qua_audit_container:
                     st.markdown("### 📚 Kết quả Audit Citation Validator")
                     if not citations_in_text:
@@ -1827,18 +1824,18 @@ with tabs[4]:
                     else:
                         fake_citations = [c for c in citations_in_text if c not in current_refs]
                         if fake_citations:
-                            st.error(f"❌ Phát hiện trích dẫn ẢO không tồn tại trong danh mục: [{'], ['.join(fake_citations)}]")
+                            st.error(f"❌ Phát hiện trích dẫn ẢO: [{'], ['.join(fake_citations)}]")
                         else:
-                            st.success("✅ Toàn bộ trích dẫn trong văn bản đều khớp với danh mục hiện tại!")
-                            
-                        with st.expander("Tra cứu nhanh nguồn của các trích dẫn trong bài"):
+                            st.success("✅ Toàn bộ trích dẫn khớp với danh mục hiện tại!")
+                        with st.expander("Nguồn của các trích dẫn trong bài"):
                             for c in citations_in_text:
                                 if c in current_refs:
                                     meta = current_refs[c]['metadata']
                                     st.write(f"**[{c}]** {meta.get('authors', 'N/A')}. {meta.get('title', 'N/A')} ({meta.get('year', 'N/A')})")
 
-    with a3:
-        if st.button("🔍 Tìm trùng lặp nội bộ", key="audit_overlap"):
+    # 3. TRÙNG LẶP NỘI BỘ
+    with c3:
+        if st.button("🔍 Trùng lặp", key="audit_overlap", use_container_width=True):
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
@@ -1850,11 +1847,51 @@ with tabs[4]:
                         st.info("Không tìm thấy đoạn trùng đáng kể trong kho tài liệu hiện tại.")
                     else:
                         for item in overlaps:
-                            st.markdown(
-                                f"**{item['file']} – trang {item['page']}**\n"
-                                f"Similarity nội bộ: **{item['similarity']}**\n\n"
-                                f"> {item['text']}"
-                            )
+                            st.markdown(f"**{item['file']} – trang {item['page']}**\nSimilarity: **{item['similarity']}**\n\n> {item['text']}")
+
+    # 4. KIỂM TRA CHÍNH TẢ
+    with c4:
+        if st.button("🔤 Chính tả", key="audit_spelling", use_container_width=True):
+            if not audit_text.strip():
+                st.warning("Chưa có văn bản.")
+            else:
+                with st.spinner("Đang rà soát lỗi chính tả & thuật ngữ..."):
+                    response = spelling_and_terminology_check(audit_text)
+                with ket_qua_audit_container:
+                    st.markdown("### 🔤 Kiểm tra Chính tả & Thuật ngữ")
+                    st.markdown(response if response else "Không nhận được phản hồi từ AI.")
+
+    # 5. KIỂM TRA VĂN PHONG AI
+    with c5:
+        if st.button("🤖 Check văn AI", key="audit_ai_style", use_container_width=True):
+            if not audit_text.strip():
+                st.warning("Chưa có văn bản.")
+            else:
+                with st.spinner("Đang phân tích dấu hiệu văn phong máy móc..."):
+                    style_analysis = heuristic_ai_style_score(audit_text)
+                with ket_qua_audit_container:
+                    st.markdown("### 🤖 Chỉ báo nguy cơ văn bản do AI viết")
+                    st.markdown(style_analysis if style_analysis else "Không nhận được phản hồi từ AI.")
+
+    # 6. PHẢN BIỆN LOGIC
+    with c6:
+        if st.button("⚖️ Phản biện", key="logic_review", use_container_width=True):
+            if not audit_text.strip():
+                st.warning("Chưa có văn bản.")
+            else:
+                with st.spinner("Đang soi logic nghiên cứu..."):
+                    prompt = f"""
+                    {BASE_SYSTEM_RULES}
+                    Đóng vai phản biện luận văn CKI Dược lâm sàng. Đọc đoạn văn sau và chỉ ra các điểm yếu logic:
+                    1. Có khẳng định nào thiếu bằng chứng không?
+                    2. Có nhảy từ tương quan sang nhân quả không?
+                    3. Kết luận có vượt quá giới hạn thiết kế nghiên cứu không?
+                    ĐOẠN VĂN GỐC: {audit_text}
+                    """
+                    response = call_gemini(prompt)
+                with ket_qua_audit_container:
+                    st.markdown("### ⚖️ Kết quả Phản biện Logic")
+                    st.markdown(response if response else "Không nhận được phản hồi từ AI.")
 # ------------------------------------------------------------
 # TAB 6 – NGUỒN & CẤU HÌNH
 # ------------------------------------------------------------
