@@ -1202,7 +1202,7 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
         with c3:
             btn_phuong_phap = st.button("Phương pháp NC")
         with c4:
-            btn_ban_luan = st.button("Bàn luận toàn diện")
+            btn_ban_luan = st.button("Bàn luận KQNC và So sánh")
         with c5:
             btn_so_sanh = st.button("So sánh NC liên quan")
         with c6:
@@ -1237,35 +1237,18 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                 task = f"""DỮ LIỆU NGHIÊN CỨU THỰC TẾ CỦA TÔI:
 {context}
 
-YÊU CẦU TRÌNH BÀY:
-Từ phần nhận xét diễn giải ở trên, hãy viết BÀN LUẬN sâu sắc. Hãy so sánh kết quả này với các nghiên cứu trong y văn, giải thích nguyên nhân có thể dẫn đến kết quả này.
+YÊU CẦU TRÌNH BÀY (BÀN LUẬN & SO SÁNH):
+Từ phần nhận xét diễn giải ở trên, hãy viết một phần BÀN LUẬN TOÀN DIỆN. Hãy thực hiện mượt mà 2 nhiệm vụ sau trong cùng một mạch văn:
+1. Giải thích sâu sắc nguyên nhân hoặc cơ sở lâm sàng có thể dẫn đến kết quả này.
+2. Đối chiếu, so sánh trực tiếp kết quả của tôi với các tác giả và nghiên cứu khác trong y văn.
 
 CÁC RÀNG BUỘC BẮT BUỘC:
-- BẮT BUỘC viết thành các đoạn văn xuôi y khoa liền mạch, tự nhiên (có thể chia nhiều đoạn nhưng tuyệt đối không dùng gạch đầu dòng để phân ý).
+- BẮT BUỘC viết thành các đoạn văn xuôi y khoa liền mạch, tự nhiên (tuyệt đối không dùng gạch đầu dòng để phân ý, không xuống dòng ngắt vụn).
 - TUYỆT ĐỐI KHÔNG sử dụng các nhãn phân chia máy móc như "Dữ kiện (FACT):", "Diễn giải (INTERPRETATION):", hay "Suy luận (INFERENCE):".
-- Nếu tài liệu không có thông tin để đối chứng, hãy diễn đạt tự nhiên (VD: "Tuy nhiên, các y văn hiện tại chưa đề cập số liệu tương đương..."). TUYỆT ĐỐI KHÔNG dùng câu rập khuôn "Tài liệu được cung cấp chưa đủ bằng chứng để kết luận...".
+- Nếu tài liệu không có thông tin để đối chứng, hãy lướt qua hoặc diễn đạt tự nhiên (VD: "Tuy nhiên, y văn hiện tại chưa ghi nhận số liệu tương đương..."). TUYỆT ĐỐI KHÔNG dùng câu rập khuôn "Tài liệu được cung cấp chưa đủ bằng chứng để kết luận...".
 
 {citation_rules}"""
-                run_quick_task("Bàn luận toàn diện", context, task, k=8)
-
-        if btn_so_sanh:
-            if not my_research_data.strip() and not my_table_remarks.strip():
-                st.warning("⚠️ Cần dán bảng số liệu (ô 1) và nhận xét (ô 2) của anh vào phía trên trước!")
-            else:
-                context = f"SỐ LIỆU BẢNG:\n{my_research_data}\n\nNHẬN XÉT DIỄN GIẢI:\n{my_table_remarks}"
-                task = f"""DỮ LIỆU NGHIÊN CỨU THỰC TẾ CỦA TÔI:
-{context}
-
-YÊU CẦU TRÌNH BÀY:
-Tập trung vào việc SO SÁNH trực tiếp kết quả của tôi với các tác giả khác trong y văn. Trình bày giống cấu trúc hàn lâm của một luận văn CKI.
-
-CÁC RÀNG BUỘC BẮT BUỘC:
-- BẮT BUỘC viết thành MỘT ĐOẠN VĂN HOÀN CHỈNH LIỀN MẠCH, tự nhiên (không gạch đầu dòng, không xuống dòng ngắt vụn).
-- TUYỆT ĐỐI KHÔNG sử dụng các nhãn phân chia máy móc như "Dữ kiện (FACT):", "Diễn giải (INTERPRETATION):", hay "Suy luận (INFERENCE):".
-- Nếu tài liệu không có thông tin để đối chứng, chỉ cần nói ngắn gọn "Y văn chưa ghi nhận..." hoặc lướt qua. TUYỆT ĐỐI KHÔNG dùng câu "Tài liệu được cung cấp chưa đủ bằng chứng để kết luận...".
-
-{citation_rules}"""
-                run_quick_task("So sánh nghiên cứu liên quan", context, task, k=8)
+                run_quick_task("Bàn luận và So sánh toàn diện", context, task, k=8)
                 
         if btn_tltk:
             query = "Tài liệu tham khảo, tác giả, năm xuất bản, tạp chí"
