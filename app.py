@@ -270,17 +270,30 @@ def get_gemini_client(api_key: str):
     return genai.Client(api_key=api_key)
 
 def get_api_keys() -> List[str]:
-    keys_str = ""
+    keys_list = []
     try:
-        keys_str = st.secrets.get("GEMINI_API_KEYS", "")
-        if not keys_str:
-            keys_str = st.secrets.get("GEMINI_API_KEY", "")
+        # Tự động quét mọi biến trong st.secrets chứa "GEMINI_API" (ví dụ: GEMINI_API_KEY, GEMINI_API_KEYS, GEMINI_API_KEY_2,...)
+        for key_name, value in st.secrets.items():
+            if "GEMINI_API" in key_name and isinstance(value, str):
+                cleaned_val = value.replace("\n", ",").replace("\r", ",")
+                for k in cleaned_val.split(","):
+                    if k.strip():
+                        keys_list.append(k.strip())
     except Exception:
-        keys_str = os.getenv("GEMINI_API_KEYS", os.getenv("GEMINI_API_KEY", ""))
+        pass
     
-    # Tự động ủi phẳng các dấu xuống dòng nếu anh dùng ngoặc kép """...""" trong TOML
-    clean_str = keys_str.replace("\n", ",").replace("\r", ",")
-    return [k.strip() for k in clean_str.split(",") if k.strip()]
+    # Dự phòng tìm trong biến môi trường hệ thống nếu không đọc được secrets
+    if not keys_list:
+        for env_key in ["GEMINI_API_KEYS", "GEMINI_API_KEY"]:
+            env_val = os.getenv(env_key, "")
+            if env_val:
+                cleaned_env = env_val.replace("\n", ",").replace("\r", ",")
+                for k in cleaned_env.split(","):
+                    if k.strip():
+                        keys_list.append(k.strip())
+
+    # Loại bỏ các key trùng lặp nhưng giữ nguyên thứ tự sắp xếp
+    return list(dict.fromkeys(keys_list))
 
 def call_gemini(
     prompt: str,
