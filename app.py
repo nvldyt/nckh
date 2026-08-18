@@ -11,6 +11,7 @@ import re
 import time
 import math
 import uuid
+import json
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -367,6 +368,31 @@ def call_gemini(
                 time.sleep(3)
 
     return None
+# ============================================================
+# HÀM MỚI: AI TỰ ĐỘNG ĐỌC METADATA TỪ TRANG ĐẦU CỦA PDF
+# ============================================================
+def extract_metadata_from_text_ai(text: str) -> dict:
+    """Hàm nhờ AI đọc 4000 ký tự đầu tiên của file PDF để bóc tách thông tin tác giả, năm..."""
+    prompt = f"""Bạn là một chuyên gia thư viện y khoa.
+Nhiệm vụ: Đọc đoạn văn bản (trích từ trang đầu của bài báo/tài liệu PDF) và tìm các thông tin thư mục.
+TRẢ VỀ DUY NHẤT MỘT CHUỖI JSON HỢP LỆ, KHÔNG GIẢI THÍCH GÌ THÊM, KHÔNG DÙNG MARKDOWN (```json):
+{{
+    "authors": "Tên các tác giả",
+    "title": "Tên bài báo / tài liệu",
+    "year": "Năm xuất bản",
+    "journal": "Tên tạp chí hoặc nhà xuất bản",
+    "doi": "Mã DOI (nếu có)",
+    "pmid": "Mã PMID (nếu có)"
+}}
+Nếu không tìm thấy thông tin nào, hãy để giá trị là chuỗi rỗng "".
+ĐOẠN VĂN BẢN:
+{text[:4000]}
+"""
+    res = call_gemini(prompt, model=MODEL_LITE, temperature=0.1)
+    if not res: 
+        return {}
+    try:
+        cleaned = res.replace("
 
 # ============================================================
 # 6. EMBEDDING MODEL
@@ -1891,16 +1917,46 @@ CÁC RÀNG BUỘC BẮT BUỘC:
             st.info("Citation registry chưa có dữ liệu.")
 
         st.write("---")
-        st.subheader("Metadata nguồn (bổ sung tay - AI không tự điền)")
+        st.subheader("🤖 Metadata nguồn (AI tự động trích xuất hoặc sửa tay)")
+        st.info("💡 Đối với các tài liệu PDF tải lên từ máy, anh có thể bấm nút 'AI đọc tự động' để hệ thống tự quét trang đầu và điền tên tác giả, năm xuất bản...")
+        
         for source_id, meta in list(st.session_state["documents"].items()):
-            with st.expander(f"[{meta.get('origin','')}] {source_id} – {meta['file_name']}"):
+            with st.expander(f"[{meta.get('origin','')}] {source_id} – {meta.get('file_name', '')}"):
+                
+                # --- Nút Nhờ AI đọc tự động ---
+                if meta.get("origin") == "PDF":
+                    if st.button(f"🤖 Nhờ AI đọc PDF và điền tự động", key=f"ai_meta_{source_id}"):
+                        # Tìm đoạn văn bản đầu tiên của tài liệu này để đưa cho AI đọc
+                        chunk_text = ""
+                        for c in st.session_state["chunks"]:
+                            if (isinstance(c, dict) and c.get("source_id") == source_id) or (hasattr(c, 'source_id') and c.source_id == source_id):
+                                chunk_text = c.get("text") if isinstance(c, dict) else c.text
+                                break
+                                
+                        if chunk_text:
+                            with st.spinner("AI đang đọc trang đầu của tài liệu..."):
+                                meta_ai = extract_metadata_from_text_ai(chunk_text)
+                                if meta_ai:
+                                    meta["title"] = meta_ai.get("title", meta.get("title", ""))
+                                    meta["authors"] = meta_ai.get("authors", meta.get("authors", ""))
+                                    meta["year"] = meta_ai.get("year", meta.get("year", ""))
+                                    meta["journal"] = meta_ai.get("journal", meta.get("journal", ""))
+                                    meta["doi"] = meta_ai.get("doi", meta.get("doi", ""))
+                                    meta["pmid"] = meta_ai.get("pmid", meta.get("pmid", ""))
+                                    st.session_state["documents"][source_id] = meta
+                                    st.success("✅ AI đã bóc tách xong! Các ô bên dưới đã được tự động điền.")
+                                    st.rerun()
+                                else:
+                                    st.error("AI không tìm thấy thông tin trong trang đầu.")
+                
+                # --- Khu vực nhập liệu ---
                 mc1, mc2 = st.columns(2)
                 with mc1:
                     authors = st.text_input("Tác giả", value=meta.get("authors", ""), key=ui_key(f"authors_{source_id}"))
                     title = st.text_input("Tên bài/tài liệu", value=meta.get("title", ""), key=ui_key(f"title_{source_id}"))
                     year = st.text_input("Năm", value=meta.get("year", ""), key=ui_key(f"year_{source_id}"))
                 with mc2:
-                    journal = st.text_input("Tạp chí", value=meta.get("journal", ""), key=ui_key(f"journal_{source_id}"))
+                    journal = st.text_input("Tạp chí/NXB", value=meta.get("journal", ""), key=ui_key(f"journal_{source_id}"))
                     doi = st.text_input("DOI", value=meta.get("doi", ""), key=ui_key(f"doi_{source_id}"))
                     pmid = st.text_input("PMID", value=meta.get("pmid", ""), key=ui_key(f"pmid_{source_id}"))
 
