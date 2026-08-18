@@ -1186,28 +1186,74 @@ QUY TẮC TRÍCH DẪN & HÀN LÂM BẮT BUỘC:
             output, evidence, invalid = generate_evidence_based(task_prompt, query, k=k)
 
         if output:
-            # --- SỬA LỖI LAYOUT: ĐẨY KẾT QUẢ VÀO CONTAINER Ở TRÊN ---
             with ket_qua_container:
                 st.write("---")
                 st.subheader(task_label)
+                
+                # In ra bản nháp luận văn
                 st.markdown(output)
 
+                # =========================================================
+                # TÍNH NĂNG MỚI: EVIDENCE TRACE (DẤU VẾT BẰNG CHỨNG)
+                # =========================================================
+                st.markdown("### 🔎 Dấu vết bằng chứng (Evidence Trace)")
+                st.caption("Bấm vào từng trích dẫn để xem chính xác đoạn văn bản gốc mà AI đã dùng làm căn cứ.")
+                
+                # Lấy danh sách các trích dẫn đã được sử dụng trong bản nháp này
+                current_refs = st.session_state.get("current_references", [])
+                
+                if current_refs:
+                    for ref in current_refs:
+                        v_index = ref['vancouver_index']
+                        ref_id = ref['ref_id']
+                        # Bóc tách tiền tố REF- để lấy ID gốc của tài liệu
+                        source_id = ref_id.replace("REF-", "") if ref_id.startswith("REF-") else ref_id
+                        
+                        # Lọc ra các đoạn văn bản (chunks) thuộc tài liệu này
+                        related_chunks = [ev for ev in evidence if ev['source_id'] == source_id]
+                        
+                        title = ref['metadata'].get('title', 'Tài liệu chưa có tiêu đề')
+                        file_name = ref['metadata'].get('file_name', 'N/A')
+                        
+                        # Tạo hộp Expander cho từng trích dẫn [1], [2]...
+                        with st.expander(f"[{v_index}] ↳ {title[:85]}..."):
+                            st.write(f"**Tệp gốc:** `{file_name}`")
+                            if ref['metadata'].get('doi'):
+                                st.write(f"**DOI:** {ref['metadata']['doi']}")
+                                
+                            # In ra các phân đoạn bằng chứng đã giúp AI viết câu
+                            for chunk in related_chunks:
+                                st.markdown(
+                                    f"- **Trang/Mục:** `{chunk.get('page', 'N/A')}` | "
+                                    f"**Độ khớp:** `{chunk.get('score', 0):.4f}` | "
+                                    f"**Mã đoạn:** `{chunk.get('chunk_id', 'N/A')}`"
+                                )
+                                # Hiển thị text gốc trong hộp màu xanh
+                                st.info(f"_{chunk.get('text', '')}_")
+                else:
+                    st.info("Đoạn văn này không sử dụng trích dẫn nào từ Evidence Database.")
+                # =========================================================
+
+                # Hiển thị Danh mục tài liệu tham khảo Vancouver chuẩn
                 bib = citation_bibliography()
-                with st.expander("📖 Tài liệu tham khảo đã đăng ký (toàn phiên)"):
+                with st.expander("📖 Danh mục Tài liệu tham khảo (Của bản nháp này)"):
                     st.code(bib if bib else "Chưa có citation registry.", language="text")
 
+                # =========================================================
+                # GIỮ NGUYÊN PHẦN AUDIT SỐ LIỆU TỰ ĐỘNG
+                # =========================================================
                 audit = audit_generated_text(output)
                 colA, colB = st.columns(2)
                 with colA:
-                    if audit["invalid_citation"]:
-                        st.error("Có citation không hợp lệ trong bản nháp.")
+                    if invalid:
+                        st.error(f"Phát hiện citation ảo: {', '.join(invalid)}")
                     else:
-                        st.success("Không phát hiện citation invalid.")
+                        st.success("Không phát hiện citation ảo.")
                 with colB:
-                    if audit["suspicious_generated_numbers"]:
-                        st.warning(f"Số liệu lạ (không có trong bằng chứng): {audit['suspicious_generated_numbers']}")
+                    if audit.get("warnings"):
+                        st.warning(f"Số liệu lạ (Cần kiểm tra lại): {', '.join(audit['warnings'])}")
                     else:
-                        st.success("Không phát hiện số liệu lạ ngoài bằng chứng đã truy xuất.")
+                        st.success("Không phát hiện số liệu lạ ngoài bằng chứng.")
 
                 st.session_state["audit_log"].append({
                     "type": task_label, "invalid_citation": invalid, "audit": audit,
