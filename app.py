@@ -2,6 +2,7 @@
 # ============================================================
 # HỖ TRỢ NGHIÊN CỨU KHOA HỌC – EVIDENCE-BASED RAG
 # Bản tối ưu cho luận văn Chuyên khoa cấp I – Dược lâm sàng
+# (Đã rà soát & sửa lỗi logic, giữ nguyên toàn bộ chức năng gốc)
 # ============================================================
 
 import io
@@ -149,7 +150,7 @@ st.markdown(
         border-color: #94a3b8 !important;
         background-color: #f8fafc !important;
     }
-    
+
     div.stButton > button[kind="primary"] {
         background-color: #2563eb !important;
         color: white !important;
@@ -225,27 +226,27 @@ def init_state():
         "embeddings": None,
         "bm25": None,
         "citation_registry": {},
-        
+
         # Tracking & Audit
         "audit_log": [],
         "last_generated": "",
         "last_evidence": [],
         "current_references": [],
-        
+
         # Nguồn API/Cào dữ liệu
         "vn_journal_domains": list(DEFAULT_VN_JOURNAL_DOMAINS),
         "t3_pm_data": [],
         "t3_vn_data": [],
         "t3_en_keyword": "",
         "t3_query": "",
-        
+
         # Thống kê & Tuyển chọn
         "result_cart": [],
         "saved_tables": {},
         "selection_decisions": [],
         "narrative_plan": {},
     }
-    
+
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value.copy() if isinstance(value, (list, dict)) else value
@@ -284,7 +285,7 @@ def call_gemini(
     if not api_key:
         st.error("Chưa có GEMINI_API_KEY. Hãy thêm vào Streamlit Secrets hoặc biến môi trường.")
         return None
-        
+
     client = get_gemini_client(api_key)
     model_name = model or DEFAULT_MODEL
 
@@ -304,10 +305,10 @@ def call_gemini(
             error_msg = str(exc)
             if any(code in error_msg for code in ["429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE"]):
                 if attempt < max_retries - 1:
-                    wait_time = 15  
+                    wait_time = 15
                     status = st.warning(f"⏳ Trạm máy chủ Google đang quá tải đột xuất. Đợi {wait_time} giây rồi thử lại...")
                     time.sleep(wait_time)
-                    status.empty()  
+                    status.empty()
                 else:
                     st.error("❌ Máy chủ Google Gemini hiện đang quá bận. Anh vui lòng đợi 1-2 phút rồi bấm thử lại nhé!")
                     return None
@@ -336,8 +337,8 @@ def get_embeddings(texts: List[str]) -> np.ndarray:
 # ============================================================
 def add_pdf_documents(uploaded_files) -> Tuple[int, int, List[str]]:
     new_sources, new_chunks_count, errors = 0, 0, []
-    new_chunks_list = [] 
-    
+    new_chunks_list = []
+
     for uploaded_file in uploaded_files:
         try:
             source, chunks = extract_pdf(uploaded_file)
@@ -389,7 +390,7 @@ def evidence_database_summary() -> Dict[str, Any]:
     documents = st.session_state.get("documents", {})
     chunks = st.session_state.get("chunks", [])
     by_origin_sources: Dict[str, int] = {}
-    
+
     for meta in documents.values():
         origin = meta.get("origin", "Khác")
         by_origin_sources[origin] = by_origin_sources.get(origin, 0) + 1
@@ -442,7 +443,7 @@ def rebuild_index(new_chunks: List[Dict[str, Any]] = None):
         st.session_state["embeddings"] = None
         st.session_state["bm25"] = None
         return
-        
+
     if new_chunks and st.session_state.get("embeddings") is not None:
         new_texts = [c["text"] for c in new_chunks]
         new_matrix = get_embeddings(new_texts)
@@ -458,7 +459,7 @@ def retrieve_evidence(query: str, k: int = 8) -> List[Dict[str, Any]]:
     chunks = st.session_state.get("chunks", [])
     matrix = st.session_state.get("embeddings")
     bm25 = st.session_state.get("bm25")
-    
+
     if not chunks or matrix is None or bm25 is None:
         return []
 
@@ -489,7 +490,7 @@ def retrieve_evidence(query: str, k: int = 8) -> List[Dict[str, Any]]:
         item = dict(chunks[idx])
         item["score"] = float(final_scores[idx])
         results.append(item)
-        
+
     return results
 
 # ============================================================
@@ -541,7 +542,7 @@ NGUYÊN TẮC BẮT BUỘC:
 def generate_evidence_based(
     task: str, query: str, k: int = DEFAULT_TOP_K
 ) -> Tuple[Optional[str], List[Dict[str, Any]], List[str]]:
-    
+
     evidence = retrieve_evidence(query, k=k)
     if not evidence:
         return "Tài liệu được cung cấp chưa đủ bằng chứng để kết luận.", [], []
@@ -587,7 +588,7 @@ YÊU CẦU:
 
     st.session_state["last_generated"] = final_text
     st.session_state["last_evidence"] = evidence
-    st.session_state["current_references"] = references  
+    st.session_state["current_references"] = references
 
     return final_text, evidence, invalid_tags
 
@@ -607,10 +608,25 @@ def parse_number(num_str: str) -> Optional[float]:
     except ValueError:
         return None
 
+def _strip_citation_markers(text: str) -> str:
+    """
+    Loại bỏ các mã trích dẫn dạng [1], [2]... (đã được CitationEngine đánh số)
+    và các mã thô REF-xxx (trường hợp văn bản chưa qua xử lý citation) trước khi
+    tách số. Nếu không làm bước này, số thứ tự trích dẫn (vd. "[1]") sẽ bị hiểu
+    nhầm thành số liệu và bị báo sai là "số liệu lạ" trong audit.
+    """
+    if not text:
+        return text
+    cleaned = re.sub(r"\[\s*\d+\s*\]", " ", text)
+    cleaned = re.sub(r"REF-[A-Za-z0-9\-]+", " ", cleaned)
+    return cleaned
+
 def compare_numbers_advanced(source_text: str, generated_text: str) -> Dict[str, Any]:
+    generated_text_clean = _strip_citation_markers(generated_text)
+
     source_nums = extract_numeric_tokens(source_text)
-    generated_nums = extract_numeric_tokens(generated_text)
-    
+    generated_nums = extract_numeric_tokens(generated_text_clean)
+
     source_normalized = set(x.replace(",", ".").replace(" ", "") for x in source_nums)
     generated_normalized = set(x.replace(",", ".").replace(" ", "") for x in generated_nums)
     source_floats = set(filter(None, [parse_number(x) for x in source_normalized]))
@@ -620,9 +636,6 @@ def compare_numbers_advanced(source_text: str, generated_text: str) -> Dict[str,
     warnings = []
 
     for gen_num in generated_normalized:
-        if re.match(r"^\[\d+\]$", gen_num):
-            continue
-
         if gen_num in source_normalized:
             exact_matches.append(gen_num)
         else:
@@ -635,7 +648,7 @@ def compare_numbers_advanced(source_text: str, generated_text: str) -> Dict[str,
                        math.isclose(gen_val * 100, src_val, rel_tol=1e-4):
                         is_derived = True
                         break
-                
+
                 if is_derived:
                     derived_matches.append(gen_num)
                 else:
@@ -675,15 +688,17 @@ def internal_overlap_audit(text: str, top_k: int = 5) -> List[Dict[str, Any]]:
     target = ngram_set(text)
     if not target:
         return []
-        
+
     results = []
     for chunk in st.session_state["chunks"]:
         other = ngram_set(chunk["text"])
-        if not other: continue
+        if not other:
+            continue
 
         intersection = len(target & other)
         union = len(target | other)
-        if union == 0: continue
+        if union == 0:
+            continue
 
         jaccard = intersection / union
         if jaccard > 0:
@@ -700,9 +715,20 @@ def internal_overlap_audit(text: str, top_k: int = 5) -> List[Dict[str, Any]]:
 # 18. XUẤT WORD
 # ============================================================
 def add_markdown_body_to_doc(doc: Document, body: str):
+    """
+    Chuyển nội dung Markdown (heading, bullet, bảng, đoạn văn) vào Document.
+
+    LƯU Ý QUAN TRỌNG (đã sửa lỗi): trước đây cờ `_last_table_open` chỉ bị tắt khi
+    gặp một dòng VĂN BẢN THƯỜNG, nên nếu 2 bảng markdown liên tiếp chỉ cách nhau
+    bởi một dòng TIÊU ĐỀ (### ...) hoặc dòng TRỐNG thì bảng thứ 2 sẽ bị nối nhầm
+    (thêm hàng) vào bảng thứ 1 thay vì tạo bảng mới — gây sai lệch dữ liệu khi
+    xuất nhiều bảng thống kê ra cùng một file Word (mục "Tải TẤT CẢ bảng ra Word").
+    Nay bất kỳ dòng nào KHÔNG PHẢI là dòng bảng (kể cả heading, bullet, dòng
+    trống) đều sẽ đóng bảng hiện tại lại trước khi xử lý tiếp.
+    """
     lines = body.split("\n")
     buffer_paragraph = []
-    
+
     def flush_paragraph():
         if buffer_paragraph:
             doc.add_paragraph(" ".join(buffer_paragraph).strip())
@@ -710,6 +736,12 @@ def add_markdown_body_to_doc(doc: Document, body: str):
 
     for line in lines:
         stripped = line.strip()
+        is_table_row = stripped.startswith("|")
+
+        # Đóng bảng hiện tại nếu dòng này không phải là dòng bảng markdown.
+        if not is_table_row:
+            doc._last_table_open = False
+
         if not stripped:
             flush_paragraph()
             continue
@@ -726,13 +758,13 @@ def add_markdown_body_to_doc(doc: Document, body: str):
         elif stripped.startswith(("- ", "* ")):
             flush_paragraph()
             doc.add_paragraph(stripped[2:].strip(), style="List Bullet")
-        elif stripped.startswith("|"):
+        elif is_table_row:
             if set(stripped.replace("|", "").replace(" ", "").replace(":", "")) <= {"-"}:
                 continue
             flush_paragraph()
             cells = [c.strip() for c in stripped.strip("|").split("|")]
-            table = doc.tables[-1] if doc.tables and getattr(doc, "_last_table_open", False) else None
-            
+            table = doc.tables[-1] if (doc.tables and getattr(doc, "_last_table_open", False)) else None
+
             if table is None:
                 table = doc.add_table(rows=1, cols=len(cells))
                 table.style = "Light Grid Accent 1"
@@ -745,7 +777,6 @@ def add_markdown_body_to_doc(doc: Document, body: str):
                     if i < len(row.cells):
                         row.cells[i].text = c
         else:
-            doc._last_table_open = False
             buffer_paragraph.append(stripped)
 
     flush_paragraph()
@@ -754,7 +785,7 @@ def create_word_document(title: str, body: str, bibliography: str = "") -> bytes
     doc = Document()
     doc.add_heading(title, level=0)
     add_markdown_body_to_doc(doc, body)
-    
+
     if bibliography.strip():
         doc.add_heading("Tài liệu tham khảo", level=1)
         for item in bibliography.splitlines():
@@ -769,7 +800,8 @@ def create_word_document(title: str, body: str, bibliography: str = "") -> bytes
 # 18.5. CÁC HÀM XỬ LÝ CHO TAB AUDIT
 # ============================================================
 def spelling_and_terminology_check(text: str) -> Optional[str]:
-    if not text.strip(): return None
+    if not text.strip():
+        return None
     prompt = f"""{BASE_SYSTEM_RULES}
 Bạn là một biên tập viên y khoa khó tính chuyên ngành Dược lâm sàng.
 Hãy rà soát đoạn văn bản sau để tìm ra các lỗi chính tả, đánh máy, sai thuật ngữ chuyên ngành.
@@ -779,7 +811,8 @@ Chỉ trình bày những lỗi tìm thấy và đề xuất cách sửa. Nếu 
     return call_gemini(prompt, model=MODEL_LITE)
 
 def plagiarism_style_review(text: str) -> Optional[str]:
-    if not text.strip(): return None
+    if not text.strip():
+        return None
     prompt = f"""{BASE_SYSTEM_RULES}
 Hãy đóng vai hội đồng phản biện luận văn CKI Dược lâm sàng.
 Phân tích đoạn văn sau để đánh giá độ logic mạch lạc, cảnh báo câu cấu trúc lặp lại (nguy cơ đạo văn), đề xuất cách nâng cấp văn phong.
@@ -788,7 +821,8 @@ Phân tích đoạn văn sau để đánh giá độ logic mạch lạc, cảnh 
     return call_gemini(prompt)
 
 def heuristic_ai_style_score(text: str) -> Optional[str]:
-    if not text.strip(): return None
+    if not text.strip():
+        return None
     prompt = f"""{BASE_SYSTEM_RULES}
 Hãy phân tích đoạn văn sau và soi khắt khe các dấu hiệu văn bản do AI viết: từ nối rập khuôn (Tóm lại, Nhìn chung...), cấu trúc câu máy móc, tính từ hoa mỹ.
 ĐOẠN VĂN GỐC:
@@ -823,7 +857,7 @@ def main():
     with tabs[0]:
         st.header("📚 Ngân hàng tài liệu gốc (PDF)")
         render_evidence_database_status()
-        
+
         uploaded_files = st.file_uploader(
             "Tải PDF nghiên cứu / guideline / bài báo",
             type=["pdf"], accept_multiple_files=True,
@@ -896,7 +930,7 @@ def main():
         st.header("🔍 Tra cứu đa nguồn: PubMed (Quốc tế) + Tạp chí Y học Việt Nam")
         st.info("Nhập tên đề tài bằng tiếng Việt. Hệ thống tự dịch sang từ khoá MeSH để tìm trên PubMed, đồng thời tìm bài báo tiếng Việt liên quan.")
         render_evidence_database_status()
-        
+
         col_search, col_btn = st.columns([4, 1])
         with col_search:
             t3_query = st.text_input(
@@ -921,7 +955,7 @@ def main():
 
                 with st.spinner("Đang rút gọn từ khóa & tìm trên tạp chí Y học Việt Nam..."):
                     vn_short_query = extract_vn_keywords(t3_query)
-                    st.session_state["t3_vn_keyword"] = vn_short_query 
+                    st.session_state["t3_vn_keyword"] = vn_short_query
                     vn_results, vn_err = search_vn_journals(vn_short_query, max_res)
                     st.session_state["t3_vn_data"] = vn_results
                     if vn_err:
@@ -935,7 +969,7 @@ def main():
                 st.markdown("### 🇻🇳 Tạp chí Y học Việt Nam")
                 if st.session_state.get("t3_vn_keyword"):
                     st.success(f"🔑 Từ khoá đã rút gọn: **{st.session_state['t3_vn_keyword']}**")
-                    
+
                 if not st.session_state.get("t3_vn_data"):
                     st.info("Chưa có dữ liệu / không tìm thấy kết quả phù hợp.")
                 else:
@@ -977,9 +1011,11 @@ def main():
             if st.button("➕ Nạp TẤT CẢ kết quả ở trên vào Evidence Database", key="t3_ingest_all"):
                 count = 0
                 for art in st.session_state.get("t3_pm_data", []):
-                    if ingest_pubmed_article(art): count += 1
+                    if ingest_pubmed_article(art):
+                        count += 1
                 for art in st.session_state.get("t3_vn_data", []):
-                    if ingest_vn_article(art): count += 1
+                    if ingest_vn_article(art):
+                        count += 1
                 if count:
                     rebuild_index()
                 st.success(f"Đã nạp {count} nguồn mới vào Evidence Database.")
@@ -991,7 +1027,7 @@ def main():
         st.header("✍️ Viết luận văn dựa trên bằng chứng")
         st.warning("Đây là công cụ tạo bản nháp. Mọi citation và số liệu phải được kiểm tra lại (đối chiếu bản gốc) trước khi đưa vào luận văn chính thức.")
         render_evidence_database_status("dùng cho các nút viết nhanh bên dưới")
-        
+
         my_research_data = st.text_area(
             "🌉 Số liệu nghiên cứu của riêng anh (dùng cho Bàn luận / So sánh):",
             placeholder="VD: dán bảng crosstab/kết quả logistic regression...",
@@ -1018,23 +1054,23 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
 
                         st.markdown("### 🔎 Dấu vết bằng chứng (Evidence Trace)")
                         st.caption("Bấm vào từng trích dẫn để xem chính xác đoạn văn bản gốc mà AI đã dùng làm căn cứ.")
-                        
+
                         current_refs = st.session_state.get("current_references", [])
                         if current_refs:
                             for ref in current_refs:
                                 v_index = ref['vancouver_index']
                                 ref_id = ref['ref_id']
                                 source_id = ref_id.replace("REF-", "") if ref_id.startswith("REF-") else ref_id
-                                
+
                                 related_chunks = [ev for ev in evidence if ev['source_id'] == source_id]
                                 title = ref['metadata'].get('title', 'Tài liệu chưa có tiêu đề')
                                 file_name = ref['metadata'].get('file_name', 'N/A')
-                                
+
                                 with st.expander(f"[{v_index}] ↳ {title[:85]}..."):
                                     st.write(f"**Tệp gốc:** `{file_name}`")
                                     if ref['metadata'].get('doi'):
                                         st.write(f"**DOI:** {ref['metadata']['doi']}")
-                                        
+
                                     for chunk in related_chunks:
                                         st.markdown(
                                             f"- **Trang/Mục:** `{chunk.get('page', 'N/A')}` | "
@@ -1068,12 +1104,18 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
 
         st.subheader("📝 Lệnh viết nhanh")
         c1, c2, c3, c4, c5, c6 = st.columns(6)
-        with c1: btn_dat_van_de = st.button("Đặt vấn đề")
-        with c2: btn_tong_quan = st.button("Tổng quan tài liệu")
-        with c3: btn_phuong_phap = st.button("Phương pháp NC")
-        with c4: btn_ban_luan = st.button("Bàn luận toàn diện")
-        with c5: btn_so_sanh = st.button("So sánh NC liên quan")
-        with c6: btn_tltk = st.button("Trích dẫn TLTK")
+        with c1:
+            btn_dat_van_de = st.button("Đặt vấn đề")
+        with c2:
+            btn_tong_quan = st.button("Tổng quan tài liệu")
+        with c3:
+            btn_phuong_phap = st.button("Phương pháp NC")
+        with c4:
+            btn_ban_luan = st.button("Bàn luận toàn diện")
+        with c5:
+            btn_so_sanh = st.button("So sánh NC liên quan")
+        with c6:
+            btn_tltk = st.button("Trích dẫn TLTK")
 
         st.write("---")
         st.subheader("Lệnh tùy chỉnh")
@@ -1140,12 +1182,12 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
         if excel_file is not None:
             try:
                 raw_df = pd.read_excel(excel_file)
-                
+
                 with st.spinner("Đang dọn dẹp và chuẩn hóa dữ liệu bằng Data Engine..."):
                     df, clean_logs = auto_clean_data(raw_df)
-                
+
                 st.success(f"Dữ liệu sẵn sàng: {df.shape[0]} dòng × {df.shape[1]} cột.")
-                
+
                 if clean_logs:
                     with st.expander("🛠️ Xem nhật ký tự động dọn dẹp dữ liệu", expanded=True):
                         for log in clean_logs:
@@ -1165,36 +1207,36 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                 st.write("---")
                 st.markdown(f"### 🛒 Giỏ kết quả: **{len(st.session_state.get('result_cart', []))}** bảng đã lưu")
                 st.info("💡 Mỗi khi anh bấm các nút thống kê bên dưới, kết quả tự động được nạp vào Giỏ này để lát nữa AI tuyển chọn hoặc xuất ra Word.")
-                
+
                 col_cart1, col_cart2 = st.columns(2)
-                
+
                 with col_cart1:
                     if st.button("🗑️ Xóa toàn bộ Giỏ kết quả", use_container_width=True):
                         st.session_state["result_cart"] = []
                         st.session_state["saved_tables"] = {}
                         st.rerun()
-                
+
                 with col_cart2:
                     saved_tabs = st.session_state.get("saved_tables", {})
                     if saved_tabs:
                         md_content = ""
                         for table_id, df_table in saved_tabs.items():
                             md_content += f"### Kết quả Thống kê: {table_id}\n\n"
-                            
+
                             header = "| " + " | ".join(str(c) for c in df_table.columns) + " |"
                             separator = "|" + "|".join(["---"] * len(df_table.columns)) + "|"
                             rows = []
                             for _, row in df_table.iterrows():
                                 rows.append("| " + " | ".join(str(x) for x in row.values) + " |")
-                            
+
                             md_content += "\n".join([header, separator] + rows) + "\n\n"
-                        
+
                         docx_data = create_word_document(
                             title="Phụ lục Số liệu Thống kê (Xuất từ Giỏ kết quả)",
                             body=md_content,
                             bibliography=""
                         )
-                        
+
                         st.download_button(
                             label="📥 Tải TẤT CẢ bảng ra file Word",
                             data=docx_data,
@@ -1332,15 +1374,21 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                 st.subheader("3. Bảng chéo và kiểm định (Chi-square / Fisher / OR)")
                 cc1, cc2 = st.columns(2)
                 with cc1:
-                    if st.checkbox("✅ Chọn tất cả biến phụ thuộc", key=ui_key("chk_all_deps")):
-                        deps = st.multiselect("Các biến phụ thuộc", all_cols, default=all_cols, key=ui_key("cross_deps"))
-                    else:
-                        deps = st.multiselect("Các biến phụ thuộc", all_cols, key=ui_key("cross_deps"))
+                    select_all_deps = st.checkbox("✅ Chọn tất cả biến phụ thuộc", key=ui_key("chk_all_deps"))
+                    deps_widget_key = ui_key("cross_deps_all") if select_all_deps else ui_key("cross_deps_manual")
+                    deps = st.multiselect(
+                        "Các biến phụ thuộc", all_cols,
+                        default=all_cols if select_all_deps else [],
+                        key=deps_widget_key,
+                    )
                 with cc2:
-                    if st.checkbox("✅ Chọn tất cả biến độc lập", key=ui_key("chk_all_indeps")):
-                        indeps = st.multiselect("Các biến độc lập cần đối chiếu", all_cols, default=all_cols, key=ui_key("cross_indeps"))
-                    else:
-                        indeps = st.multiselect("Các biến độc lập cần đối chiếu", all_cols, key=ui_key("cross_indeps"))
+                    select_all_indeps = st.checkbox("✅ Chọn tất cả biến độc lập", key=ui_key("chk_all_indeps"))
+                    indeps_widget_key = ui_key("cross_indeps_all") if select_all_indeps else ui_key("cross_indeps_manual")
+                    indeps = st.multiselect(
+                        "Các biến độc lập cần đối chiếu", all_cols,
+                        default=all_cols if select_all_indeps else [],
+                        key=indeps_widget_key,
+                    )
 
                 if st.button("Quét Crosstab + Kiểm định (Nạp TẤT CẢ vào Giỏ)", key="calc_cross"):
                     if not deps or not indeps:
@@ -1351,20 +1399,22 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                         with st.spinner("Đang cày xới toàn bộ ma trận số liệu..."):
                             for dep in deps:
                                 for indep in indeps:
-                                    if dep == indep: continue
+                                    if dep == indep:
+                                        continue
                                     pair_key = frozenset([dep, indep])
-                                    if pair_key in processed_pairs: continue
+                                    if pair_key in processed_pairs:
+                                        continue
                                     processed_pairs.add(pair_key)
 
                                     try:
                                         result = crosstab_test(df, indep, dep)
                                         found_count += 1
-                                        
+
                                         sig_marker = "🟢 CÓ Ý NGHĨA" if result['p_value'] < 0.05 else "⚪ KHÔNG Ý NGHĨA"
                                         st.markdown(f"**► Mối liên quan giữa: [{indep}] & [{dep}] — {sig_marker}**")
                                         st.dataframe(result["table"])
                                         st.write(f"- **Kiểm định:** {result['test']} | **p-value:** `{result['p_value']:.4g}`")
-                                        
+
                                         if "effect_size" in result:
                                             st.write(f"- **Chỉ số (Effect Size):** `{result['effect_size']}`")
 
@@ -1392,17 +1442,23 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                 st.subheader("4. So sánh biến định lượng giữa 2 nhóm (T-test / Mann-Whitney)")
                 gc1, gc2 = st.columns(2)
                 with gc1:
-                    if st.checkbox("✅ Chọn tất cả biến nhóm", key=ui_key("chk_all_groups")):
-                        group_vars = st.multiselect("Biến nhóm (Tự lọc biến 2 mức)", all_cols, default=all_cols, key=ui_key("group_vars"))
-                    else:
-                        group_vars = st.multiselect("Biến nhóm (Tự lọc biến 2 mức)", all_cols, key=ui_key("group_vars"))
+                    select_all_groups = st.checkbox("✅ Chọn tất cả biến nhóm", key=ui_key("chk_all_groups"))
+                    group_vars_widget_key = ui_key("group_vars_all") if select_all_groups else ui_key("group_vars_manual")
+                    group_vars = st.multiselect(
+                        "Biến nhóm (Tự lọc biến 2 mức)", all_cols,
+                        default=all_cols if select_all_groups else [],
+                        key=group_vars_widget_key,
+                    )
                 with gc2:
                     valid_num_cols = numeric_candidates if 'numeric_candidates' in locals() and numeric_candidates else all_cols
-                    if st.checkbox("✅ Chọn tất cả biến định lượng", key=ui_key("chk_all_vals")):
-                        val_vars = st.multiselect("Biến định lượng cần so sánh", valid_num_cols, default=valid_num_cols, key=ui_key("val_vars"))
-                    else:
-                        val_vars = st.multiselect("Biến định lượng cần so sánh", valid_num_cols, key=ui_key("val_vars"))
-                
+                    select_all_vals = st.checkbox("✅ Chọn tất cả biến định lượng", key=ui_key("chk_all_vals"))
+                    val_vars_widget_key = ui_key("val_vars_all") if select_all_vals else ui_key("val_vars_manual")
+                    val_vars = st.multiselect(
+                        "Biến định lượng cần so sánh", valid_num_cols,
+                        default=valid_num_cols if select_all_vals else [],
+                        key=val_vars_widget_key,
+                    )
+
                 if st.button("Quét kiểm định so sánh (Nạp TẤT CẢ vào Giỏ)", key="run_group_compare"):
                     if not group_vars or not val_vars:
                         st.warning("Vui lòng chọn ít nhất 1 biến ở mỗi mục.")
@@ -1411,19 +1467,20 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                         with st.spinner("Đang rà soát và tính toán..."):
                             for gv in group_vars:
                                 for vv in val_vars:
-                                    if gv == vv: continue
+                                    if gv == vv:
+                                        continue
                                     try:
                                         result = compare_two_groups(df, gv, vv)
                                         found_count += 1
-                                        
+
                                         sig_marker = "🟢 KHÁC BIỆT" if result['p_value'] < 0.05 else "⚪ TƯƠNG ĐỒNG"
                                         g1n, g2n = result["group_names"]
                                         st.markdown(f"**► Sự phân bố của [{vv}] giữa 2 nhóm [{gv}] — {sig_marker}**")
-                                        
+
                                         st.write(f"- **Kiểm định:** {result['test']} | **p-value:** `{result['p_value']:.4g}`")
                                         if "effect_size" in result:
                                             st.write(f"- **Chỉ số (Effect Size):** `{result['effect_size']}`")
-                                        
+
                                         comp_df = pd.DataFrame({
                                             g1n: [result["group1_stats"]],
                                             g2n: [result["group2_stats"]],
@@ -1442,7 +1499,7 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                                         )
                                     except Exception as e:
                                         st.error(f"⚠️ Lỗi so sánh [{gv} & {vv}]: {str(e)}")
-                                        
+
                         if found_count > 0:
                             st.success(f"✅ Đã nạp {found_count} kết quả so sánh vào Giỏ!")
 
@@ -1455,22 +1512,28 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                 outcome_candidates = [c for c in all_cols if df[c].dropna().nunique() == 2]
                 forbidden_keywords = ["unnamed", "ngay", "ngày", "ten", "tên", "ma", "mã", "sobenhan", "id"]
                 predictor_candidates = [
-                    c for c in all_cols 
+                    c for c in all_cols
                     if not any(kw in str(c).lower() for kw in forbidden_keywords)
                     and df[c].dropna().nunique() > 1
                 ]
 
                 lc1, lc2 = st.columns([1, 2])
                 with lc1:
-                    if st.checkbox("✅ Chọn tất cả biến kết cục", key=ui_key("chk_all_outcomes")):
-                        outcomes = st.multiselect("Biến kết cục (Nhị phân)", outcome_candidates, default=outcome_candidates, key=ui_key("log_outcomes"))
-                    else:
-                        outcomes = st.multiselect("Biến kết cục (Nhị phân)", outcome_candidates, key=ui_key("log_outcomes"))
+                    select_all_outcomes = st.checkbox("✅ Chọn tất cả biến kết cục", key=ui_key("chk_all_outcomes"))
+                    outcomes_widget_key = ui_key("log_outcomes_all") if select_all_outcomes else ui_key("log_outcomes_manual")
+                    outcomes = st.multiselect(
+                        "Biến kết cục (Nhị phân)", outcome_candidates,
+                        default=outcome_candidates if select_all_outcomes else [],
+                        key=outcomes_widget_key,
+                    )
                 with lc2:
-                    if st.checkbox("✅ Chọn tất cả yếu tố dự báo", key=ui_key("chk_all_predictors")):
-                        predictors = st.multiselect("Yếu tố dự báo", predictor_candidates, default=predictor_candidates, key=ui_key("log_predictors"))
-                    else:
-                        predictors = st.multiselect("Yếu tố dự báo", predictor_candidates, key=ui_key("log_predictors"))
+                    select_all_predictors = st.checkbox("✅ Chọn tất cả yếu tố dự báo", key=ui_key("chk_all_predictors"))
+                    predictors_widget_key = ui_key("log_predictors_all") if select_all_predictors else ui_key("log_predictors_manual")
+                    predictors = st.multiselect(
+                        "Yếu tố dự báo", predictor_candidates,
+                        default=predictor_candidates if select_all_predictors else [],
+                        key=predictors_widget_key,
+                    )
 
                 if st.button("Chạy Logistic Regression đa biến (Nạp vào Giỏ)", key="run_logistic"):
                     if not outcomes or not predictors:
@@ -1480,11 +1543,12 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                         with st.spinner("Đang xây dựng mô hình hồi quy..."):
                             for out in outcomes:
                                 preds = [p for p in predictors if p != out]
-                                if not preds: continue
+                                if not preds:
+                                    continue
                                 try:
                                     result_df, summary = binary_logistic_regression(df, out, preds)
                                     found_count += 1
-                                    
+
                                     st.markdown(f"**► MÔ HÌNH HỒI QUY ĐA BIẾN CHO KẾT CỤC: [{out}]**")
                                     st.info(summary)
                                     st.dataframe(result_df)
@@ -1505,47 +1569,47 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                             st.success(f"✅ Đã nạp {found_count} mô hình hồi quy vào Giỏ!")
 
                 st.write("---")
-                
+
                 # ==========================================
                 # 8. DIỄN GIẢI BẰNG AI
                 # ==========================================
                 st.subheader("8. Diễn giải kết quả bằng AI (không tính lại số liệu)")
                 st.info("💡 **Không cần copy/paste thủ công!** Anh chỉ cần chọn bảng đã tính ở trên từ danh sách, hệ thống sẽ tự động rút số liệu chuyển cho AI.")
-                
+
                 saved_tables = st.session_state.get("saved_tables", {})
                 table_options = ["-- Chỉ dùng số liệu dán tay bên dưới --"] + list(saved_tables.keys())
-                
+
                 selected_table_key = st.selectbox(
-                    "Lựa chọn bảng từ Giỏ kết quả:", 
-                    options=table_options, 
+                    "Lựa chọn bảng từ Giỏ kết quả:",
+                    options=table_options,
                     key=ui_key("select_ai_table")
                 )
-                
+
                 interpretation_request = st.text_area(
-                    "Hoặc dán số liệu bổ sung vào đây (nếu có):", 
-                    height=120, 
+                    "Hoặc dán số liệu bổ sung vào đây (nếu có):",
+                    height=120,
                     key=ui_key("interpretation_request")
                 )
 
                 if st.button("🤖 AI diễn giải", type="primary", key="ai_interpret"):
                     final_data = ""
-                    
+
                     if selected_table_key != "-- Chỉ dùng số liệu dán tay bên dưới --":
                         df_target = saved_tables[selected_table_key]
                         final_data += f"TÊN BẢNG: {selected_table_key}\n"
                         final_data += df_target.to_markdown(index=False) + "\n\n"
-                        
+
                     if interpretation_request.strip():
                         final_data += f"SỐ LIỆU BỔ SUNG:\n{interpretation_request.strip()}"
-                        
+
                     if not final_data.strip():
                         st.warning("⚠️ Anh chưa chọn bảng nào hoặc chưa dán số liệu!")
                     else:
                         try:
                             prompt = f"{BASE_SYSTEM_RULES}\nBạn chỉ được DIỄN GIẢI kết quả thống kê dưới đây. Không được tính lại hoặc sửa số liệu.\nKẾT QUẢ:\n{final_data}"
-                            
+
                             with st.spinner("AI đang đọc và diễn giải số liệu..."):
-                                output = call_gemini(prompt, model=st.session_state.get("selected_model", "gemini-3.6-flash"))
+                                output = call_gemini(prompt, model=st.session_state.get("selected_model", DEFAULT_MODEL))
                                 if output:
                                     st.markdown(output)
                         except Exception as exc:
@@ -1759,7 +1823,7 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
             * Người nghiên cứu phải kiểm tra bản gốc trước khi chấp nhận số liệu và diễn giải.
             """
         )
-        
+
         st.write("---")
         c_exp1, c_exp2 = st.columns(2)
         with c_exp1:
@@ -1813,7 +1877,7 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                         st.success(msg)
                     else:
                         st.error(msg)
-                        
+
         st.write("📂 Danh sách checkpoint đã lưu trên máy chủ:")
         existing_projects = list_projects()
         if existing_projects:
@@ -1846,7 +1910,7 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                         st.error(msg)
         else:
             st.caption("Chưa có checkpoint nào được lưu.")
-            
+
         st.caption(
             "⚠️ **Lưu ý về Checkpoint:** Dữ liệu được lưu trực tiếp trên ổ đĩa của máy chủ. "
             "Nếu anh đang triển khai ứng dụng trên các nền tảng đám mây miễn phí (như Streamlit Community Cloud), "
