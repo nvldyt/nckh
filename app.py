@@ -227,8 +227,8 @@ def init_state():
         "bm25": None,
         "citation_registry": {},
 
-        # Theo dõi & Kiểm tra
-        "Kiểm tra_log": [],
+        # Theo dõi & Audit
+        "Audit_log": [],
         "last_generated": "",
         "last_evidence": [],
         "current_references": [],
@@ -623,8 +623,8 @@ YÊU CẦU:
 
     if invalid_tags:
         final_text += (
-            f"\n\n> ⚠️ CẢNH BÁO Kiểm tra: Phát hiện AI tự tạo mã trích dẫn không có "
-            f"trong dữ liệu truy xuất: {', '.join(invalid_tags)}. Đoạn này cần kiểm tra kỹ."
+            f"\n\n> ⚠️ CẢNH BÁO Audit: Phát hiện AI tự tạo mã trích dẫn không có "
+            f"trong dữ liệu truy xuất: {', '.join(invalid_tags)}. Đoạn này cần Audit kỹ."
         )
 
     st.session_state["last_generated"] = final_text
@@ -634,7 +634,7 @@ YÊU CẦU:
     return final_text, evidence, invalid_tags
 
 # ============================================================
-# 17. KIỂM TRA NHẤT QUÁN SỐ LIỆU + TRÙNG LẶP NỘI BỘ
+# 17. Audit NHẤT QUÁN SỐ LIỆU + TRÙNG LẶP NỘI BỘ
 # ============================================================
 def extract_numeric_tokens(text: str) -> List[str]:
     if not text:
@@ -654,7 +654,7 @@ def _strip_citation_markers(text: str) -> str:
     Loại bỏ các mã trích dẫn dạng [1], [2]... (đã được CitationEngine đánh số)
     và các mã thô REF-xxx (trường hợp văn bản chưa qua xử lý citation) trước khi
     tách số. Nếu không làm bước này, số thứ tự trích dẫn (vd. "[1]") sẽ bị hiểu
-    nhầm thành số liệu và bị báo sai là "số liệu lạ" trong Kiểm tra.
+    nhầm thành số liệu và bị báo sai là "số liệu lạ" trong Audit.
     """
     if not text:
         return text
@@ -725,7 +725,7 @@ def ngram_set(text: str, n: int = 8) -> set:
         return set()
     return {" ".join(words[i : i + n]) for i in range(len(words) - n + 1)}
 
-def internal_overlap_Kiểm tra(text: str, top_k: int = 5) -> List[Dict[str, Any]]:
+def internal_overlap_Audit(text: str, top_k: int = 5) -> List[Dict[str, Any]]:
     target = ngram_set(text)
     if not target:
         return []
@@ -838,7 +838,7 @@ def create_word_document(title: str, body: str, bibliography: str = "") -> bytes
     return output.getvalue()
 
 # ============================================================
-# 18.5. CÁC HÀM XỬ LÝ CHO TAB Kiểm tra
+# 18.5. CÁC HÀM XỬ LÝ CHO TAB Audit
 # ============================================================
 def spelling_and_terminology_check(text: str) -> Optional[str]:
     if not text.strip():
@@ -880,7 +880,7 @@ def main():
     st.title("🔬 HỖ TRỢ NGHIÊN CỨU KHOA HỌC")
     st.caption(
         "Evidence-Based RAG • Tra cứu TLTK (PubMed + Tạp chí VN) • "
-        "Citation Registry • Statistical Engine • Kiểm tra"
+        "Citation Registry • Statistical Engine • Audit"
     )
 
     tabs = st.tabs([
@@ -888,7 +888,7 @@ def main():
         "🔍 2. Tra cứu TLTK",
         "✍️ 3. Viết luận văn",
         "📊 4. Phân tích số liệu",
-        "🔎 5. Kiểm tra",
+        "🔎 5. Audit",
         "⚙️ 6. Nguồn & cấu hình",
     ])
 
@@ -1023,7 +1023,7 @@ def main():
                                 added = ingest_vn_article(art)
                                 if added:
                                     rebuild_index()
-                                    st.success("Đã nạp. Nhớ kiểm tra bản gốc trước khi dùng số liệu chi tiết.")
+                                    st.success("Đã nạp. Nhớ Audit bản gốc trước khi dùng số liệu chi tiết.")
                                 else:
                                     st.info("Nguồn này đã có trong Evidence Database.")
 
@@ -1066,7 +1066,7 @@ def main():
     # ------------------------------------------------------------
     with tabs[2]:
         st.header("✍️ Viết luận văn dựa trên bằng chứng")
-        st.warning("Đây là công cụ tạo bản nháp. Mọi citation và số liệu phải được kiểm tra lại (đối chiếu bản gốc) trước khi đưa vào luận văn chính thức.")
+        st.warning("Đây là công cụ tạo bản nháp. Mọi citation và số liệu phải được Audit lại (đối chiếu bản gốc) trước khi đưa vào luận văn chính thức.")
         render_evidence_database_status("dùng cho các nút viết nhanh bên dưới")
 
         my_research_data = st.text_area(
@@ -1126,7 +1126,7 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                         with st.expander("📖 Danh mục Tài liệu tham khảo (Của bản nháp này)"):
                             st.code(bib if bib else "Chưa có citation registry.", language="text")
 
-                        Kiểm tra = Audit_generated_text(output)
+                        Audit = Audit_generated_text(output)
                         colA, colB = st.columns(2)
                         with colA:
                             if invalid:
@@ -1134,13 +1134,13 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                             else:
                                 st.success("Không phát hiện citation ảo.")
                         with colB:
-                            if Kiểm tra.get("warnings"):
-                                st.warning(f"Số liệu lạ (Cần kiểm tra lại): {', '.join(Kiểm tra['warnings'])}")
+                            if Audit.get("warnings"):
+                                st.warning(f"Số liệu lạ (Cần Audit lại): {', '.join(Audit['warnings'])}")
                             else:
                                 st.success("Không phát hiện số liệu lạ ngoài bằng chứng.")
 
-                        st.session_state["Kiểm tra_log"].append({
-                            "type": task_label, "invalid_citation": invalid, "Kiểm tra": Kiểm tra,
+                        st.session_state["Audit_log"].append({
+                            "type": task_label, "invalid_citation": invalid, "Audit": Audit,
                         })
 
         st.subheader("📝 Lệnh viết nhanh")
@@ -1660,34 +1660,34 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                 st.error(f"Lỗi khi đọc hoặc xử lý file Excel: {exc}")
 
     # ------------------------------------------------------------
-    # TAB 5 – Kiểm tra
+    # TAB 5 – Audit
     # ------------------------------------------------------------
     with tabs[4]:
-        st.header("🔎 Kiểm tra luận văn toàn diện")
+        st.header("🔎 Audit luận văn toàn diện")
         st.markdown(
             '<div class="warning-box">⚠️ <b>Giới hạn cần biết:</b> Các công cụ ở '
-            "tab này chỉ đưa ra <b>chỉ báo nguy cơ / gợi ý kiểm tra thêm</b>. "
+            "tab này chỉ đưa ra <b>chỉ báo nguy cơ / gợi ý Audit thêm</b>. "
             "Không có công cụ nào khẳng định chắc chắn 100%.</div>",
             unsafe_allow_html=True,
         )
 
-        Kiểm tra_text = st.text_area("Dán đoạn văn cần kiểm tra vào đây:", height=250, key=ui_key("Kiểm tra_text"))
+        Audit_text = st.text_area("Dán đoạn văn cần Audit vào đây:", height=250, key=ui_key("Audit_text"))
 
         c1, c2, c3, c4, c5, c6 = st.columns(6)
 
         st.write("---")
-        ket_qua_Kiểm tra_container = st.container()
+        ket_qua_Audit_container = st.container()
 
-        # 1. Kiểm tra SỐ LIỆU
+        # 1. Audit SỐ LIỆU
         with c1:
-            if st.button("🔢 Số liệu", key="Kiểm tra_numbers", use_container_width=True):
-                if not Kiểm tra_text.strip():
+            if st.button("🔢 Số liệu", key="Audit_numbers", use_container_width=True):
+                if not Audit_text.strip():
                     st.warning("Chưa có văn bản.")
                 else:
                     with st.spinner("Đang truy xuất và đối chiếu..."):
-                        result = Audit_generated_text(Kiểm tra_text)
-                    with ket_qua_Kiểm tra_container:
-                        st.markdown("### 🔢 Kết quả Kiểm tra Số liệu (3 Cấp Độ)")
+                        result = Audit_generated_text(Audit_text)
+                    with ket_qua_Audit_container:
+                        st.markdown("### 🔢 Kết quả Audit Số liệu (3 Cấp Độ)")
                         st.success(f"**Level 1 (Khớp chính xác):** {', '.join(result['exact_matches']) if result['exact_matches'] else 'Không có'}")
                         st.info(f"**Level 2 (Khớp phái sinh):** {', '.join(result['derived_matches']) if result['derived_matches'] else 'Không có'}")
                         if result["warnings"]:
@@ -1700,16 +1700,16 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                                 st.caption(f"Nguồn: {ev['file_name']} (Trang {ev['page']})")
                                 st.write(f"> {ev['text']}")
 
-        # 2. Kiểm tra TRÍCH DẪN
+        # 2. Audit TRÍCH DẪN
         with c2:
-            if st.button("📚 Trích dẫn", key="Kiểm tra_citation", use_container_width=True):
-                if not Kiểm tra_text.strip():
+            if st.button("📚 Trích dẫn", key="Audit_citation", use_container_width=True):
+                if not Audit_text.strip():
                     st.warning("Chưa có văn bản.")
                 else:
-                    citations_in_text = re.findall(r"\[(\d+)\]", Kiểm tra_text)
+                    citations_in_text = re.findall(r"\[(\d+)\]", Audit_text)
                     current_refs = {str(ref['vancouver_index']): ref for ref in st.session_state.get("current_references", [])}
-                    with ket_qua_Kiểm tra_container:
-                        st.markdown("### 📚 Kết quả Kiểm tra Citation Validator")
+                    with ket_qua_Audit_container:
+                        st.markdown("### 📚 Kết quả Audit Citation Validator")
                         if not citations_in_text:
                             st.info("Không tìm thấy trích dẫn định dạng [n] trong văn bản.")
                         else:
@@ -1726,13 +1726,13 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
 
         # 3. TRÙNG LẶP NỘI BỘ
         with c3:
-            if st.button("🔍 Trùng lặp", key="Kiểm tra_overlap", use_container_width=True):
-                if not Kiểm tra_text.strip():
+            if st.button("🔍 Trùng lặp", key="Audit_overlap", use_container_width=True):
+                if not Audit_text.strip():
                     st.warning("Chưa có văn bản.")
                 else:
                     with st.spinner("Đang quét Jaccard Similarity..."):
-                        overlaps = internal_overlap_Kiểm tra(Kiểm tra_text)
-                    with ket_qua_Kiểm tra_container:
+                        overlaps = internal_overlap_Audit(Audit_text)
+                    with ket_qua_Audit_container:
                         st.markdown("### 🔍 Kết quả tìm trùng lặp nội bộ")
                         if not overlaps:
                             st.info("Không tìm thấy đoạn trùng đáng kể trong kho tài liệu hiện tại.")
@@ -1740,34 +1740,34 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                             for item in overlaps:
                                 st.markdown(f"**{item['file']} – trang {item['page']}**\nSimilarity: **{item['similarity']}**\n\n> {item['text']}")
 
-        # 4. KIỂM TRA CHÍNH TẢ
+        # 4. Audit CHÍNH TẢ
         with c4:
-            if st.button("🔤 Chính tả", key="Kiểm tra_spelling", use_container_width=True):
-                if not Kiểm tra_text.strip():
+            if st.button("🔤 Chính tả", key="Audit_spelling", use_container_width=True):
+                if not Audit_text.strip():
                     st.warning("Chưa có văn bản.")
                 else:
                     with st.spinner("Đang rà soát lỗi chính tả & thuật ngữ..."):
-                        response = spelling_and_terminology_check(Kiểm tra_text)
-                    with ket_qua_Kiểm tra_container:
-                        st.markdown("### 🔤 Kiểm tra Chính tả & Thuật ngữ")
+                        response = spelling_and_terminology_check(Audit_text)
+                    with ket_qua_Audit_container:
+                        st.markdown("### 🔤 Audit Chính tả & Thuật ngữ")
                         st.markdown(response if response else "Không nhận được phản hồi từ AI.")
 
-        # 5. KIỂM TRA VĂN PHONG AI
+        # 5. Audit VĂN PHONG AI
         with c5:
-            if st.button("🤖 Check văn AI", key="Kiểm tra_ai_style", use_container_width=True):
-                if not Kiểm tra_text.strip():
+            if st.button("🤖 Check văn AI", key="Audit_ai_style", use_container_width=True):
+                if not Audit_text.strip():
                     st.warning("Chưa có văn bản.")
                 else:
                     with st.spinner("Đang phân tích dấu hiệu văn phong máy móc..."):
-                        style_analysis = heuristic_ai_style_score(Kiểm tra_text)
-                    with ket_qua_Kiểm tra_container:
+                        style_analysis = heuristic_ai_style_score(Audit_text)
+                    with ket_qua_Audit_container:
                         st.markdown("### 🤖 Chỉ báo nguy cơ văn bản do AI viết")
                         st.markdown(style_analysis if style_analysis else "Không nhận được phản hồi từ AI.")
 
         # 6. PHẢN BIỆN LOGIC
         with c6:
             if st.button("⚖️ Phản biện", key="logic_review", use_container_width=True):
-                if not Kiểm tra_text.strip():
+                if not Audit_text.strip():
                     st.warning("Chưa có văn bản.")
                 else:
                     with st.spinner("Đang soi logic nghiên cứu..."):
@@ -1777,10 +1777,10 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                         1. Có khẳng định nào thiếu bằng chứng không?
                         2. Có nhảy từ tương quan sang nhân quả không?
                         3. Kết luận có vượt quá giới hạn thiết kế nghiên cứu không?
-                        ĐOẠN VĂN GỐC: {Kiểm tra_text}
+                        ĐOẠN VĂN GỐC: {Audit_text}
                         """
                         response = call_gemini(prompt)
-                    with ket_qua_Kiểm tra_container:
+                    with ket_qua_Audit_container:
                         st.markdown("### ⚖️ Kết quả Phản biện Logic")
                         st.markdown(response if response else "Không nhận được phản hồi từ AI.")
 
@@ -1859,9 +1859,9 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
             * Đoạn trích từ tạp chí Việt Nam (Google Scholar) chỉ là snippet ngắn — luôn đối chiếu bản gốc trước khi dùng số liệu chi tiết.
             * Không để AI tính p-value, OR, CI95% hoặc tỷ lệ khi Python có thể tính trực tiếp.
             * Không suy luận quan hệ nhân quả từ nghiên cứu quan sát nếu thiết kế không cho phép.
-            * Không gọi chức năng Kiểm tra nội bộ là "chứng nhận không đạo văn".
+            * Không gọi chức năng Audit nội bộ là "chứng nhận không đạo văn".
             * Không có công cụ nào bảo đảm tuyệt đối văn bản "không phải AI viết".
-            * Người nghiên cứu phải kiểm tra bản gốc trước khi chấp nhận số liệu và diễn giải.
+            * Người nghiên cứu phải Audit bản gốc trước khi chấp nhận số liệu và diễn giải.
             """
         )
 
