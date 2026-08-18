@@ -1148,32 +1148,33 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
     with tabs[3]:
         st.header("📊 Phân tích số liệu bệnh án")
 
-        def auto_clean_data(raw_df: pd.DataFrame):
-            logs = []
-            df_clean = raw_df.copy()
-            old_rows = df_clean.shape[0]
-            
-            df_clean.columns = df_clean.columns.str.strip()
-            unnamed_cols = [c for c in df_clean.columns if "unnamed" in str(c).lower()]
-            if unnamed_cols:
-                df_clean = df_clean.drop(columns=unnamed_cols)
-                logs.append(f"🗑️ Đã xóa {len(unnamed_cols)} cột rác (Unnamed) do phần mềm xuất dư.")
+        # Lưu ý: Hàm auto_clean_data đã được chuyển sang data_engine.py 
+        # và import ở đầu file app.py
+
+        excel_file = st.file_uploader("Tải file Excel", type=["xlsx", "xls"], key=ui_key("excel_data"))
+
+        if excel_file is not None:
+            try:
+                raw_df = pd.read_excel(excel_file)
                 
-            df_clean = df_clean.dropna(how='all')
-            if df_clean.shape[0] < old_rows:
-                logs.append(f"🗑️ Đã xóa {old_rows - df_clean.shape[0]} dòng trống hoàn toàn.")
+                with st.spinner("Đang dọn dẹp và chuẩn hóa dữ liệu bằng Data Engine..."):
+                    # Gọi hàm xử lý từ bộ máy Data Engine riêng biệt
+                    df, clean_logs = auto_clean_data(raw_df)
                 
-            count_cleaned_cols = 0
-            for col in df_clean.columns:
-                if df_clean[col].dtype == 'object':
-                    if not any(kw in str(col).lower() for kw in ['ngay', 'ngày', 'date', 'thoi', 'thời']):
-                        df_clean[col] = df_clean[col].apply(lambda x: str(x).strip() if pd.notnull(x) else x)
-                        count_cleaned_cols += 1
-            
-            if count_cleaned_cols > 0:
-                logs.append(f"✨ Đã đồng nhất văn bản (cắt khoảng trắng) cho {count_cleaned_cols} cột.")
+                st.success(f"Dữ liệu sẵn sàng: {df.shape[0]} dòng × {df.shape[1]} cột.")
                 
-            return df_clean, logs
+                if clean_logs:
+                    with st.expander("🛠️ Xem nhật ký tự động dọn dẹp dữ liệu", expanded=True):
+                        for log in clean_logs:
+                            st.write(log)
+
+                validation = validate_dataframe(df)
+                if validation:
+                    for item in validation:
+                        st.warning(item)
+
+                with st.expander("Xem dữ liệu sau khi chuẩn hóa"):
+                    st.dataframe(df)
 
         excel_file = st.file_uploader("Tải file Excel", type=["xlsx", "xls"], key=ui_key("excel_data"))
 
