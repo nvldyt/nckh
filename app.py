@@ -879,13 +879,13 @@ def main():
 
     st.title("🔬 HỖ TRỢ NGHIÊN CỨU KHOA HỌC")
     st.caption(
-        "Evidence-Based RAG • Tra cứu đa nguồn (PubMed + Tạp chí VN) • "
+        "Evidence-Based RAG • Tra cứu TLTK (PubMed + Tạp chí VN) • "
         "Citation Registry • Statistical Engine • Audit"
     )
 
     tabs = st.tabs([
         "📚 1. Tài liệu (PDF)",
-        "🔍 2. Tra cứu đa nguồn",
+        "🔍 2. Tra cứu TLTK",
         "✍️ 3. Viết luận văn",
         "📊 4. Phân tích số liệu",
         "🔎 5. Audit",
@@ -965,10 +965,10 @@ def main():
                         )
 
     # ------------------------------------------------------------
-    # TAB 2 – TRA CỨU ĐA NGUỒN
+    # TAB 2 – Tra cứu TLTK
     # ------------------------------------------------------------
     with tabs[1]:
-        st.header("🔍 Tra cứu đa nguồn: PubMed (Quốc tế) + Tạp chí Y học Việt Nam")
+        st.header("🔍 Tra cứu TLTK: PubMed (Quốc tế) + Tạp chí Y học Việt Nam")
         st.info("Nhập tên đề tài bằng tiếng Việt. Hệ thống tự dịch sang từ khoá MeSH để tìm trên PubMed, đồng thời tìm bài báo tiếng Việt liên quan.")
         render_evidence_database_status()
 
