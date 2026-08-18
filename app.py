@@ -1112,7 +1112,9 @@ def main():
 YÊU CẦU TỐI THƯỢNG: 
 - Ngắn gọn, logic, khoa học. 
 - CHỈ diễn giải các số liệu nổi bật (cao nhất, thấp nhất, trung vị, tỷ lệ %). 
-- TUYỆT ĐỐI KHÔNG giải thích nguyên nhân, KHÔNG so sánh với y văn, KHÔNG bàn luận."""
+- TUYỆT ĐỐI KHÔNG giải thích nguyên nhân, KHÔNG so sánh với y văn, KHÔNG bàn luận.
+- BẮT BUỘC viết thành MỘT ĐOẠN VĂN LIỀN MẠCH duy nhất (Không dùng gạch đầu dòng, không xuống dòng).
+- KHÔNG dùng ký tự in đậm (**), KHÔNG dùng ký tự ($), KHÔNG tự chèn tên bảng vào cuối câu."""
                     prompt = f"{BASE_SYSTEM_RULES}\nNHIỆM VỤ:\n{task}\n\nBẢNG SỐ LIỆU:\n{my_research_data}"
                     
                     generated_remark = call_gemini(prompt)
