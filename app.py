@@ -41,7 +41,8 @@ from table_selection_engine import (
 # 2. Import bộ máy Thống kê Toán học
 from statistical_engine import (
     validate_dataframe, descriptive_table, numeric_summary,
-    crosstab_test, compare_two_groups, binary_logistic_regression
+    crosstab_test, compare_two_groups, binary_logistic_regression,
+    create_clinical_groups, generate_baseline_table
 )
 
 # 3. Import bộ máy Xử lý Bằng chứng (PDF, PubMed, VN Journals)
