@@ -704,7 +704,7 @@ def compare_numbers_advanced(source_text: str, generated_text: str) -> Dict[str,
         "source_raw": sorted(source_normalized)
     }
 
-def Kiểm tra_generated_text(text: str) -> Dict[str, Any]:
+def Audit_generated_text(text: str) -> Dict[str, Any]:
     relevant_evidence = retrieve_evidence(text, k=6)
     source_text = "\n".join(e["text"] for e in relevant_evidence)
     Kiểm tra = compare_numbers_advanced(source_text, text)
@@ -1126,7 +1126,7 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                         with st.expander("📖 Danh mục Tài liệu tham khảo (Của bản nháp này)"):
                             st.code(bib if bib else "Chưa có citation registry.", language="text")
 
-                        Kiểm tra = Kiểm tra_generated_text(output)
+                        Kiểm tra = Audit_generated_text(output)
                         colA, colB = st.columns(2)
                         with colA:
                             if invalid:
@@ -1685,7 +1685,7 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                     st.warning("Chưa có văn bản.")
                 else:
                     with st.spinner("Đang truy xuất và đối chiếu..."):
-                        result = Kiểm tra_generated_text(Kiểm tra_text)
+                        result = Audit_generated_text(Kiểm tra_text)
                     with ket_qua_Kiểm tra_container:
                         st.markdown("### 🔢 Kết quả Kiểm tra Số liệu (3 Cấp Độ)")
                         st.success(f"**Level 1 (Khớp chính xác):** {', '.join(result['exact_matches']) if result['exact_matches'] else 'Không có'}")
