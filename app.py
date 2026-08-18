@@ -1645,20 +1645,32 @@ with tabs[3]:
             st.write("---")
 
             # ==========================================
-            # 5. HỒI QUY LOGISTIC NHỊ PHÂN
+            # 5. HỒI QUY LOGISTIC NHỊ PHÂN (SMART SELECT)
             # ==========================================
             st.subheader("5. Hồi quy logistic nhị phân (OR và 95% CI)")
+            
+            # 1. LỌC THÔNG MINH BIẾN KẾT CỤC (Chỉ lấy biến có đúng 2 giá trị)
+            outcome_candidates = [c for c in all_cols if df[c].dropna().nunique() == 2]
+            
+            # 2. LỌC THÔNG MINH YẾU TỐ DỰ BÁO (Bỏ cột Unnamed, ID, Tên, Ngày tháng, biến chỉ có 1 giá trị)
+            forbidden_keywords = ["unnamed", "ngay", "ngày", "ten", "tên", "ma", "mã", "sobenhan", "id"]
+            predictor_candidates = [
+                c for c in all_cols 
+                if not any(kw in str(c).lower() for kw in forbidden_keywords)
+                and df[c].dropna().nunique() > 1
+            ]
+
             lc1, lc2 = st.columns([1, 2])
             with lc1:
                 if st.checkbox("✅ Chọn tất cả biến kết cục", key="chk_all_outcomes"):
-                    outcomes = st.multiselect("Biến kết cục (Nhị phân)", all_cols, default=all_cols, key="log_outcomes")
+                    outcomes = st.multiselect("Biến kết cục (Đã tự động lọc chuẩn Nhị phân)", outcome_candidates, default=outcome_candidates, key="log_outcomes")
                 else:
-                    outcomes = st.multiselect("Biến kết cục (Nhị phân)", all_cols, key="log_outcomes")
+                    outcomes = st.multiselect("Biến kết cục (Đã tự động lọc chuẩn Nhị phân)", outcome_candidates, key="log_outcomes")
             with lc2:
                 if st.checkbox("✅ Chọn tất cả yếu tố dự báo", key="chk_all_predictors"):
-                    predictors = st.multiselect("Các yếu tố đưa vào mô hình", all_cols, default=all_cols, key="log_predictors")
+                    predictors = st.multiselect("Yếu tố dự báo (Đã tự động bỏ ID, Ngày, Cột rác)", predictor_candidates, default=predictor_candidates, key="log_predictors")
                 else:
-                    predictors = st.multiselect("Các yếu tố đưa vào mô hình", all_cols, key="log_predictors")
+                    predictors = st.multiselect("Yếu tố dự báo (Đã tự động bỏ ID, Ngày, Cột rác)", predictor_candidates, key="log_predictors")
 
             if st.button("Chạy Logistic Regression đa biến (Nạp vào Giỏ)", key="run_logistic"):
                 if not outcomes or not predictors:
@@ -1677,7 +1689,6 @@ with tabs[3]:
                                 st.info(summary)
                                 st.dataframe(result_df)
 
-                                # NẠP TOÀN BỘ MÔ HÌNH VÀO GIỎ, KHÔNG LỌC P-VALUE NỮA
                                 result_id = f"LOG_{out}"
                                 st.session_state["saved_tables"][result_id] = result_df
                                 st.session_state["result_cart"].append(
