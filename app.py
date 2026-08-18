@@ -1776,21 +1776,19 @@ with tabs[4]:
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
-                with st.spinner("Đang truy xuất và đối chiếu..."):
-                    result = audit_generated_text(audit_text)
-                with ket_qua_audit_container:
-                    st.markdown("### 🔢 Kết quả Audit Số liệu (3 Cấp Độ)")
-                    st.success(f"**Level 1 (Khớp chính xác):** {', '.join(result['exact_matches']) if result['exact_matches'] else 'Không có'}")
-                    st.info(f"**Level 2 (Khớp phái sinh):** {', '.join(result['derived_matches']) if result['derived_matches'] else 'Không có'}")
-                    if result["warnings"]:
-                        st.error(f"**Level 3 (⚠️ SỐ LIỆU LẠ):** {', '.join(result['warnings'])}")
-                        st.caption("Cần đối chiếu lại bản gốc!")
-                    else:
-                        st.success("**Level 3:** Không phát hiện số liệu lạ!")
-                    with st.expander("📄 Xem bằng chứng đối chiếu"):
-                        for ev in result["evidence_used"]:
-                            st.caption(f"Nguồn: {ev['file_name']} (Trang {ev['page']})")
-                            st.write(f"> {ev['text']}")
+                try:
+                    with st.spinner("Đang truy xuất và đối chiếu..."):
+                        result = audit_generated_text(audit_text)
+                    with ket_qua_audit_container:
+                        st.markdown("### 🔢 Kết quả Audit Số liệu")
+                        st.success(f"**L1 (Khớp chính xác):** {', '.join(result['exact_matches']) if result['exact_matches'] else 'Không có'}")
+                        st.info(f"**L2 (Khớp phái sinh):** {', '.join(result['derived_matches']) if result['derived_matches'] else 'Không có'}")
+                        if result["warnings"]:
+                            st.error(f"**L3 (⚠️ SỐ LIỆU LẠ):** {', '.join(result['warnings'])}")
+                        else:
+                            st.success("**L3:** Không phát hiện số liệu lạ!")
+                except Exception as e:
+                    st.error(f"Lỗi: {e}")
 
     # 2. AUDIT TRÍCH DẪN
     with c2:
@@ -1798,23 +1796,21 @@ with tabs[4]:
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
-                citations_in_text = re.findall(r"\[(\d+)\]", audit_text)
-                current_refs = {str(ref['vancouver_index']): ref for ref in st.session_state.get("current_references", [])}
-                with ket_qua_audit_container:
-                    st.markdown("### 📚 Kết quả Audit Citation Validator")
-                    if not citations_in_text:
-                        st.info("Không tìm thấy trích dẫn định dạng [n] trong văn bản.")
-                    else:
-                        fake_citations = [c for c in citations_in_text if c not in current_refs]
-                        if fake_citations:
-                            st.error(f"❌ Phát hiện trích dẫn ẢO: [{'], ['.join(fake_citations)}]")
+                try:
+                    citations_in_text = re.findall(r"\[(\d+)\]", audit_text)
+                    current_refs = {str(ref['vancouver_index']): ref for ref in st.session_state.get("current_references", [])}
+                    with ket_qua_audit_container:
+                        st.markdown("### 📚 Kết quả Audit Citation")
+                        if not citations_in_text:
+                            st.info("Không thấy trích dẫn [n].")
                         else:
-                            st.success("✅ Toàn bộ trích dẫn khớp với danh mục hiện tại!")
-                        with st.expander("Nguồn của các trích dẫn trong bài"):
-                            for c in citations_in_text:
-                                if c in current_refs:
-                                    meta = current_refs[c]['metadata']
-                                    st.write(f"**[{c}]** {meta.get('authors', 'N/A')}. {meta.get('title', 'N/A')} ({meta.get('year', 'N/A')})")
+                            fake_citations = [c for c in citations_in_text if c not in current_refs]
+                            if fake_citations:
+                                st.error(f"❌ Phát hiện trích dẫn ẢO: [{'], ['.join(fake_citations)}]")
+                            else:
+                                st.success("✅ Toàn bộ trích dẫn khớp danh mục!")
+                except Exception as e:
+                    st.error(f"Lỗi: {e}")
 
     # 3. TRÙNG LẶP NỘI BỘ
     with c3:
@@ -1822,15 +1818,18 @@ with tabs[4]:
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
-                with st.spinner("Đang quét Jaccard Similarity..."):
-                    overlaps = internal_overlap_audit(audit_text)
-                with ket_qua_audit_container:
-                    st.markdown("### 🔍 Kết quả tìm trùng lặp nội bộ")
-                    if not overlaps:
-                        st.info("Không tìm thấy đoạn trùng đáng kể trong kho tài liệu hiện tại.")
-                    else:
-                        for item in overlaps:
-                            st.markdown(f"**{item['file']} – trang {item['page']}**\nSimilarity: **{item['similarity']}**\n\n> {item['text']}")
+                try:
+                    with st.spinner("Đang quét..."):
+                        overlaps = internal_overlap_audit(audit_text)
+                    with ket_qua_audit_container:
+                        st.markdown("### 🔍 Kết quả Trùng lặp")
+                        if not overlaps:
+                            st.info("Không tìm thấy đoạn trùng đáng kể.")
+                        else:
+                            for item in overlaps:
+                                st.markdown(f"**{item['file']} – trang {item['page']}**\n> {item['text']}")
+                except Exception as e:
+                    st.error(f"Lỗi: {e}")
 
     # 4. KIỂM TRA CHÍNH TẢ
     with c4:
@@ -1838,11 +1837,14 @@ with tabs[4]:
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
-                with st.spinner("Đang rà soát lỗi chính tả & thuật ngữ..."):
-                    response = spelling_and_terminology_check(audit_text)
-                with ket_qua_audit_container:
-                    st.markdown("### 🔤 Kiểm tra Chính tả & Thuật ngữ")
-                    st.markdown(response if response else "Không nhận được phản hồi từ AI.")
+                try:
+                    with st.spinner("Rà soát lỗi..."):
+                        response = spelling_and_terminology_check(audit_text)
+                    with ket_qua_audit_container:
+                        st.markdown("### 🔤 Chính tả & Thuật ngữ")
+                        st.markdown(response)
+                except Exception as e:
+                    st.error(f"Lỗi: {e}")
 
     # 5. KIỂM TRA VĂN PHONG AI
     with c5:
@@ -1850,11 +1852,14 @@ with tabs[4]:
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
-                with st.spinner("Đang phân tích dấu hiệu văn phong máy móc..."):
-                    style_analysis = heuristic_ai_style_score(audit_text)
-                with ket_qua_audit_container:
-                    st.markdown("### 🤖 Chỉ báo nguy cơ văn bản do AI viết")
-                    st.markdown(style_analysis if style_analysis else "Không nhận được phản hồi từ AI.")
+                try:
+                    with st.spinner("Phân tích..."):
+                        style_analysis = heuristic_ai_style_score(audit_text)
+                    with ket_qua_audit_container:
+                        st.markdown("### 🤖 Chỉ báo văn phong AI")
+                        st.markdown(style_analysis)
+                except Exception as e:
+                    st.error(f"Lỗi: {e}")
 
     # 6. PHẢN BIỆN LOGIC
     with c6:
@@ -1862,19 +1867,15 @@ with tabs[4]:
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
-                with st.spinner("Đang soi logic nghiên cứu..."):
-                    prompt = f"""
-                    {BASE_SYSTEM_RULES}
-                    Đóng vai phản biện luận văn CKI Dược lâm sàng. Đọc đoạn văn sau và chỉ ra các điểm yếu logic:
-                    1. Có khẳng định nào thiếu bằng chứng không?
-                    2. Có nhảy từ tương quan sang nhân quả không?
-                    3. Kết luận có vượt quá giới hạn thiết kế nghiên cứu không?
-                    ĐOẠN VĂN GỐC: {audit_text}
-                    """
-                    response = # Gọi với model do anh đã chọn ở Tab 6 output = call_gemini(prompt, model=st.session_state["selected_model"])
-                with ket_qua_audit_container:
-                    st.markdown("### ⚖️ Kết quả Phản biện Logic")
-                    st.markdown(response if response else "Không nhận được phản hồi từ AI.")
+                try:
+                    with st.spinner("Đang soi logic..."):
+                        prompt = f"Bạn là phản biện luận văn. Đánh giá logic đoạn văn sau: {audit_text}"
+                        response = call_gemini(prompt, model=st.session_state.get("selected_model", "gemini-3.6-flash"))
+                    with ket_qua_audit_container:
+                        st.markdown("### ⚖️ Phản biện Logic")
+                        st.markdown(response)
+                except Exception as e:
+                    st.error(f"Lỗi: {e}")
 # ------------------------------------------------------------
 # TAB 6 – NGUỒN & CẤU HÌNH HỆ THỐNG
 # ------------------------------------------------------------
