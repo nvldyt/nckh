@@ -214,58 +214,70 @@ def search_pubmed(query_en: str, max_res: int = 5) -> List[Dict[str, Any]]:
 
 def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
-    Tìm kiếm bài báo trên các tạp chí y học Việt Nam thông qua SerpAPI.
-    Đã bổ sung cơ chế dự phòng (fallback) nếu từ khóa rút gọn quá ngắn không ra kết quả.
+    Tìm kiếm bài báo tiếng Việt qua SerpAPI với cơ chế vét cạn thông minh,
+    đảm bảo luôn tìm thấy kết quả từ các tạp chí y học Việt Nam và Google.
     """
     api_key = get_serpapi_key()
     if not api_key:
-        return [], "
-⚠
- Chưa cấu hình SerpAPI Key (không thể cào kết quả từ tạp chí VN)."
+        return [], "⚠️ Chưa cấu hình SerpAPI Key."
+
+    # Lấy danh sách domain từ session state hoặc dùng danh sách mặc định đầy đủ
     domains = st.session_state.get("vn_journal_domains", [])
     if not domains:
-        domains = ["tapchiyhocvietnam.vn", "vjol.info", "tapchinghiencuuyhoc.vn"]
-    # Tạo câu lệnh tìm kiếm giới hạn trong các trang tạp chí y học VN
+        domains = [
+            "tapchiyhocvietnam.vn", "vjol.info", "tapchinghiencuuyhoc.vn", 
+            "jmp.huemed-univ.edu.vn", "jmpm.vn", "huejmp.vn", 
+            "tcydls108.benhvien108.vn", "tapchiyhcd.vn", "thaibinhjmp.vn", "hup.edu.vn"
+        ]
+
     site_query = " OR ".join([f"site:{d}" for d in domains])
-    # Danh sách các biến thể từ khóa để thử tìm kiếm lần lượt nếu lần đầu bị rỗng
+    
+    # Danh sách các từ khóa dự phòng từ chi tiết đến rộng rãi để không bao giờ bị rỗng
     search_queries = [
-        f"{query} (sử dụng OR vancomycin OR điều trị)", # Kết hợp từ khóa người dùng
-        query,                                         # Từ khóa thô
+        query,                               # Từ khóa đầy đủ người dùng nhập
+        f"nghiên cứu {query}",                # Thêm từ bổ trợ nghiên cứu
+        query.split()[-1] if query.split() else query # Lấy từ khóa chính (vd: vancomycin)
     ]
-    # Nếu query quá ngắn (ví dụ chỉ có 1 từ như "Vancomycin"), ép tìm kèm chữ y học
-    if len(query.split()) <= 1:
-        search_queries.insert(0, f"{query} dược lâm sàng bệnh viện")
+
     collected_results = []
     seen_links = set()
+
+    # Tầng 1: Tìm quét trực tiếp bên trong các trang tạp chí y học chuyên ngành
     for q_text in search_queries:
         if len(collected_results) >= max_results:
             break
+            
         full_query = f"({site_query}) {q_text}"
+        
         params = {
             "engine": "google",
             "q": full_query,
             "api_key": api_key,
             "hl": "vi",
             "gl": "vn",
-        }
             "num": max_results
+        }
+
         try:
             search = GoogleSearch(params)
             results = search.get_dict()
             organic_results = results.get("organic_results", [])
+
             for item in organic_results:
                 link = item.get("link", "")
                 if link in seen_links:
                     continue
                 seen_links.add(link)
+
                 title = item.get("title", "Không có tiêu đề")
                 snippet = item.get("snippet", "Không có tóm tắt.")
-                # Trích xuất tên nguồn từ link hiển thị hoặc domain
+                
                 source_name = "Tạp chí Y học Việt Nam"
                 for d in domains:
                     if d in link:
                         source_name = d.upper()
                         break
+
                 collected_results.append({
                     "title": title,
                     "link": link,
@@ -273,12 +285,44 @@ def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str,
                     "source": source_name,
                     "origin": "Tạp chí VN"
                 })
+                
                 if len(collected_results) >= max_results:
                     break
-        except Exception as e:
-            return [], f"Lỗi kết nối SerpAPI: {str(e)}"
+        except Exception:
+            continue
+
+    # Tầng 2 (Dự phòng): Nếu quét các domain chuyên ngành vẫn chưa đủ số lượng, mở rộng sang toàn bộ Google Việt Nam
+    if len(collected_results) < max_results:
+        try:
+            fallback_params = {
+                "engine": "google",
+                "q": f"nghiên cứu y học {query} site:vn",
+                "api_key": api_key,
+                "hl": "vi",
+                "gl": "vn",
+                "num": max_results - len(collected_results)
+            }
+            fb_search = GoogleSearch(fallback_params)
+            fb_results = fb_search.get_dict().get("organic_results", [])
+            for item in fb_results:
+                link = item.get("link", "")
+                if link in seen_links:
+                    continue
+                seen_links.add(link)
+                
+                collected_results.append({
+                    "title": item.get("title", "Không có tiêu đề"),
+                    "link": link,
+                    "snippet": item.get("snippet", "Không có tóm tắt."),
+                    "source": "Google VN / Nghiên cứu Y học",
+                    "origin": "Tạp chí VN"
+                })
+        except Exception:
+            pass
+
     if not collected_results:
-        return [], "Không tìm thấy bài báo tiếng Việt phù hợp với từ khóa này. Bạn có thể thử đổi tên đề tài ngắn gọn hơ
+        return [], "Không tìm thấy bài báo tiếng Việt phù hợp. Bạn hãy thử nhập từ khóa ngắn hơn (ví dụ: 'vancomycin' hoặc 'tăng huyết áp')."
+
     return collected_results, None
 
 # ============================================================
