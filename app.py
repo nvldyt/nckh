@@ -1418,14 +1418,20 @@ with tabs[3]:
             # ==========================================
             # 3. BẢNG CHÉO & KIỂM ĐỊNH
             # ==========================================
-            st.subheader("3. Bảng chéo và kiểm định (Chi-square / Fisher)")
+            st.subheader("3. Bảng chéo và kiểm định (Chi-square / Fisher / OR)")
             cc1, cc2 = st.columns(2)
             with cc1:
-                deps = st.multiselect("Các biến phụ thuộc", all_cols, key="cross_deps")
+                if st.checkbox("✅ Chọn tất cả biến phụ thuộc", key="chk_all_deps"):
+                    deps = st.multiselect("Các biến phụ thuộc", all_cols, default=all_cols, key="cross_deps")
+                else:
+                    deps = st.multiselect("Các biến phụ thuộc", all_cols, key="cross_deps")
             with cc2:
-                indeps = st.multiselect("Các biến độc lập cần đối chiếu", all_cols, key="cross_indeps")
+                if st.checkbox("✅ Chọn tất cả biến độc lập", key="chk_all_indeps"):
+                    indeps = st.multiselect("Các biến độc lập cần đối chiếu", all_cols, default=all_cols, key="cross_indeps")
+                else:
+                    indeps = st.multiselect("Các biến độc lập cần đối chiếu", all_cols, key="cross_indeps")
 
-            if st.button("Quét Crosstab + Kiểm định (Nạp các biến có p < 0.05 vào Giỏ)", key="calc_cross"):
+            if st.button("Quét Crosstab + Kiểm định (Nạp TẤT CẢ vào Giỏ)", key="calc_cross"):
                 if not deps or not indeps:
                     st.warning("Vui lòng chọn ít nhất 1 biến ở mỗi mục.")
                 else:
@@ -1441,32 +1447,37 @@ with tabs[3]:
 
                                 try:
                                     result = crosstab_test(df, indep, dep)
-                                    if result['p_value'] is not None and result['p_value'] < 0.05:
-                                        found_count += 1
-                                        st.markdown(f"**► Mối liên quan CÓ Ý NGHĨA giữa: [{indep}] & [{dep}]**")
-                                        st.dataframe(result["table"])
-                                        st.write(f"- **Kiểm định:** {result['test']} | **p-value:** `{result['p_value']:.6g}` 🟢")
+                                    found_count += 1
+                                    
+                                    # CHỐNG P-HACKING: Không lọc p < 0.05 nữa, đánh dấu bằng màu sắc
+                                    sig_marker = "🟢 CÓ Ý NGHĨA" if result['p_value'] < 0.05 else "⚪ KHÔNG Ý NGHĨA"
+                                    st.markdown(f"**► Mối liên quan giữa: [{indep}] & [{dep}] — {sig_marker}**")
+                                    st.dataframe(result["table"])
+                                    st.write(f"- **Kiểm định:** {result['test']} | **p-value:** `{result['p_value']:.4g}`")
+                                    
+                                    # HIỆN EFFECT SIZE NẾU CÓ
+                                    if "effect_size" in result:
+                                        st.write(f"- **Chỉ số (Effect Size):** `{result['effect_size']}`")
 
-                                        # NẠP VÀO GIỎ & LƯU BẢNG ĐỂ COPY
-                                        result_id = f"CROSS_{indep}_{dep}"
-                                        st.session_state["saved_tables"][result_id] = result["table"]
-                                        st.session_state["result_cart"].append(
-                                            CandidateResult(
-                                                id=result_id,
-                                                title=f"Mối liên quan giữa {indep} và {dep}",
-                                                result_type="association",
-                                                variables=[indep, dep],
-                                                p_value=result['p_value'],
-                                                scientific_value=4.5, clinical_importance=4.5, discussion_value=5.0
-                                            )
+                                    # NẠP VÀO GIỎ TẤT CẢ KẾT QUẢ
+                                    result_id = f"CROSS_{indep}_{dep}"
+                                    st.session_state["saved_tables"][result_id] = result["table"]
+                                    st.session_state["result_cart"].append(
+                                        CandidateResult(
+                                            id=result_id,
+                                            title=f"Mối liên quan giữa {indep} và {dep}",
+                                            result_type="association",
+                                            variables=[indep, dep],
+                                            p_value=result['p_value'],
+                                            scientific_value=4.5, clinical_importance=4.5, discussion_value=5.0
                                         )
-                                except Exception:
-                                    pass
+                                    )
+                                except Exception as e:
+                                    # HIỆN RÕ LỖI THAY VÌ PASS
+                                    st.error(f"⚠️ Lỗi phân tích chéo [{indep} & {dep}]: {str(e)}")
 
                     if found_count > 0:
-                        st.success(f"✅ Đã tìm thấy và nạp {found_count} bảng kiểm định vào Giỏ!")
-                    else:
-                        st.info("Không tìm thấy cặp biến nào có p < 0.05.")
+                        st.success(f"✅ Đã phân tích và nạp {found_count} bảng kiểm định vào Giỏ!")
 
             st.write("---")
 
@@ -1476,100 +1487,114 @@ with tabs[3]:
             st.subheader("4. So sánh biến định lượng giữa 2 nhóm (T-test / Mann-Whitney)")
             gc1, gc2 = st.columns(2)
             with gc1:
-                group_vars = st.multiselect("Biến nhóm (Tự lọc biến 2 mức)", all_cols, key="group_vars")
+                if st.checkbox("✅ Chọn tất cả biến nhóm", key="chk_all_groups"):
+                    group_vars = st.multiselect("Biến nhóm (Tự lọc biến 2 mức)", all_cols, default=all_cols, key="group_vars")
+                else:
+                    group_vars = st.multiselect("Biến nhóm (Tự lọc biến 2 mức)", all_cols, key="group_vars")
             with gc2:
-                val_vars = st.multiselect("Biến định lượng cần so sánh", numeric_candidates or all_cols, key="val_vars")
+                valid_num_cols = numeric_candidates if 'numeric_candidates' in locals() and numeric_candidates else all_cols
+                if st.checkbox("✅ Chọn tất cả biến định lượng", key="chk_all_vals"):
+                    val_vars = st.multiselect("Biến định lượng cần so sánh", valid_num_cols, default=valid_num_cols, key="val_vars")
+                else:
+                    val_vars = st.multiselect("Biến định lượng cần so sánh", valid_num_cols, key="val_vars")
 
-            if st.button("Quét kiểm định so sánh hàng loạt (Nạp vào Giỏ)", key="run_group_compare"):
+            if st.button("Quét kiểm định so sánh (Nạp TẤT CẢ vào Giỏ)", key="run_group_compare"):
                 if not group_vars or not val_vars:
                     st.warning("Vui lòng chọn ít nhất 1 biến ở mỗi mục.")
                 else:
                     found_count = 0
-                    with st.spinner("Đang rà soát và so sánh các nhóm..."):
+                    with st.spinner("Đang rà soát và tính toán..."):
                         for gv in group_vars:
                             for vv in val_vars:
                                 if gv == vv: continue
                                 try:
                                     result = compare_two_groups(df, gv, vv)
-                                    if result['p_value'] is not None and result['p_value'] < 0.05:
-                                        found_count += 1
-                                        g1n, g2n = result["group_names"]
-                                        st.markdown(f"**► Sự khác biệt CÓ Ý NGHĨA của [{vv}] giữa 2 nhóm [{gv}]**")
-                                        st.write(f"**p-value:** `{result['p_value']:.6g}` 🟢")
-                                        comp_df = pd.DataFrame({
-                                            g1n: result["group1_stats"],
-                                            g2n: result["group2_stats"],
-                                        })
+                                    found_count += 1
+                                    
+                                    sig_marker = "🟢 KHÁC BIỆT" if result['p_value'] < 0.05 else "⚪ TƯƠNG ĐỒNG"
+                                    g1n, g2n = result["group_names"]
+                                    st.markdown(f"**► Sự phân bố của [{vv}] giữa 2 nhóm [{gv}] — {sig_marker}**")
+                                    
+                                    st.write(f"- **Kiểm định:** {result['test']} | **p-value:** `{result['p_value']:.4g}`")
+                                    if "effect_size" in result:
+                                        st.write(f"- **Chỉ số (Effect Size):** `{result['effect_size']}`")
+                                    
+                                    comp_df = pd.DataFrame({
+                                        g1n: [result["group1_stats"]],
+                                        g2n: [result["group2_stats"]],
+                                    }, index=["Giá trị"])
+                                    st.dataframe(comp_df)
 
-                                        # NẠP VÀO GIỎ & LƯU BẢNG ĐỂ COPY
-                                        result_id = f"COMP_{gv}_{vv}"
-                                        st.session_state["saved_tables"][result_id] = comp_df
-                                        st.session_state["result_cart"].append(
-                                            CandidateResult(
-                                                id=result_id,
-                                                title=f"Sự khác biệt của biến {vv} giữa các nhóm {gv}",
-                                                result_type="association",
-                                                variables=[gv, vv],
-                                                p_value=result['p_value'],
-                                                scientific_value=4.5, clinical_importance=4.5, discussion_value=5.0
-                                            )
+                                    result_id = f"COMP_{gv}_{vv}"
+                                    st.session_state["saved_tables"][result_id] = comp_df
+                                    st.session_state["result_cart"].append(
+                                        CandidateResult(
+                                            id=result_id,
+                                            title=f"Sự khác biệt của biến {vv} giữa các nhóm {gv}",
+                                            result_type="association",
+                                            variables=[gv, vv],
+                                            p_value=result['p_value'],
+                                            scientific_value=4.5, clinical_importance=4.5, discussion_value=5.0
                                         )
-                                except Exception:
-                                    pass
+                                    )
+                                except Exception as e:
+                                    st.error(f"⚠️ Lỗi so sánh [{gv} & {vv}]: {str(e)}")
+                                    
                     if found_count > 0:
                         st.success(f"✅ Đã nạp {found_count} kết quả so sánh vào Giỏ!")
-                    else:
-                        st.info("Không có sự khác biệt (p < 0.05).")
 
             st.write("---")
 
             # ==========================================
             # 5. HỒI QUY LOGISTIC NHỊ PHÂN
             # ==========================================
-            st.subheader("5. Hồi quy logistic nhị phân (Tìm yếu tố nguy cơ độc lập)")
+            st.subheader("5. Hồi quy logistic nhị phân (OR và 95% CI)")
             lc1, lc2 = st.columns([1, 2])
             with lc1:
-                outcomes = st.multiselect("Biến kết cục (Tự lọc biến nhị phân)", all_cols, key="log_outcomes")
+                if st.checkbox("✅ Chọn tất cả biến kết cục", key="chk_all_outcomes"):
+                    outcomes = st.multiselect("Biến kết cục (Nhị phân)", all_cols, default=all_cols, key="log_outcomes")
+                else:
+                    outcomes = st.multiselect("Biến kết cục (Nhị phân)", all_cols, key="log_outcomes")
             with lc2:
-                predictors = st.multiselect("Các yếu tố đưa vào mô hình", all_cols, key="log_predictors")
+                if st.checkbox("✅ Chọn tất cả yếu tố dự báo", key="chk_all_predictors"):
+                    predictors = st.multiselect("Các yếu tố đưa vào mô hình", all_cols, default=all_cols, key="log_predictors")
+                else:
+                    predictors = st.multiselect("Các yếu tố đưa vào mô hình", all_cols, key="log_predictors")
 
-            if st.button("Quét Logistic Regression hàng loạt (Nạp vào Giỏ)", key="run_logistic"):
+            if st.button("Chạy Logistic Regression đa biến (Nạp vào Giỏ)", key="run_logistic"):
                 if not outcomes or not predictors:
                     st.warning("Chọn ít nhất một biến ở mỗi bên.")
                 else:
                     found_count = 0
-                    with st.spinner("Đang chạy hàng loạt mô hình hồi quy đa biến..."):
+                    with st.spinner("Đang xây dựng mô hình hồi quy..."):
                         for out in outcomes:
                             preds = [p for p in predictors if p != out]
                             if not preds: continue
                             try:
                                 result_df, summary = binary_logistic_regression(df, out, preds)
-                                sig_df = result_df[result_df['p-value'] < 0.05]
+                                found_count += 1
+                                
+                                st.markdown(f"**► MÔ HÌNH HỒI QUY ĐA BIẾN CHO KẾT CỤC: [{out}]**")
+                                st.info(summary)
+                                st.dataframe(result_df)
 
-                                if not sig_df.empty:
-                                    found_count += 1
-                                    st.markdown(f"**► CÁC YẾU TỐ ĐỘC LẬP có tác động tới kết cục: [{out}]**")
-                                    st.dataframe(sig_df)
-
-                                    # NẠP VÀO GIỎ & LƯU BẢNG ĐỂ COPY
-                                    result_id = f"LOG_{out}"
-                                    st.session_state["saved_tables"][result_id] = sig_df
-                                    st.session_state["result_cart"].append(
-                                        CandidateResult(
-                                            id=result_id,
-                                            title=f"Mô hình hồi quy đa biến cho kết cục: {out}",
-                                            result_type="regression",
-                                            variables=[out] + preds,
-                                            scientific_value=5.0, clinical_importance=5.0, discussion_value=5.0
-                                        )
+                                # NẠP TOÀN BỘ MÔ HÌNH VÀO GIỎ, KHÔNG LỌC P-VALUE NỮA
+                                result_id = f"LOG_{out}"
+                                st.session_state["saved_tables"][result_id] = result_df
+                                st.session_state["result_cart"].append(
+                                    CandidateResult(
+                                        id=result_id,
+                                        title=f"Mô hình hồi quy logistic đánh giá yếu tố liên quan đến {out}",
+                                        result_type="regression",
+                                        variables=[out] + preds,
+                                        scientific_value=5.0, clinical_importance=5.0, discussion_value=5.0
                                     )
-                            except Exception:
-                                pass
+                                )
+                            except Exception as e:
+                                st.error(f"⚠️ Không thể xây dựng mô hình cho [{out}]: {str(e)}")
 
                     if found_count > 0:
                         st.success(f"✅ Đã nạp {found_count} mô hình hồi quy vào Giỏ!")
-                    else:
-                        st.info("Không tìm thấy mô hình có ý nghĩa thống kê (p < 0.05).")
 
             st.write("---")
             # ==========================================
