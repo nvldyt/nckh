@@ -375,7 +375,7 @@ def extract_metadata_from_text_ai(text: str) -> dict:
     """Hàm nhờ AI đọc 4000 ký tự đầu tiên của file PDF để bóc tách thông tin tác giả, năm..."""
     prompt = f"""Bạn là một chuyên gia thư viện y khoa.
 Nhiệm vụ: Đọc đoạn văn bản (trích từ trang đầu của bài báo/tài liệu PDF) và tìm các thông tin thư mục.
-TRẢ VỀ DUY NHẤT MỘT CHUỖI JSON HỢP LỆ, KHÔNG GIẢI THÍCH GÌ THÊM, KHÔNG DÙNG MARKDOWN (```json):
+TRẢ VỀ DUY NHẤT MỘT CHUỖI JSON HỢP LỆ, KHÔNG GIẢI THÍCH GÌ THÊM:
 {{
     "authors": "Tên các tác giả",
     "title": "Tên bài báo / tài liệu",
@@ -392,7 +392,19 @@ Nếu không tìm thấy thông tin nào, hãy để giá trị là chuỗi rỗ
     if not res: 
         return {}
     try:
-        cleaned = res.replace("
+        # Xóa các ký tự markdown an toàn không dùng replace
+        cleaned = res.strip()
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        elif cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+            
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+            
+        return json.loads(cleaned.strip())
+    except Exception:
+        return {}
 
 # ============================================================
 # 6. EMBEDDING MODEL
