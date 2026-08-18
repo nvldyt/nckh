@@ -1340,8 +1340,8 @@ with tabs[3]:
     # ==========================================
     # BỘ DỌN RÁC TỰ ĐỘNG (AUTO-CLEAN)
     # ==========================================
-    def auto_clean_data(raw_df: pd.DataFrame):
-        logs = []
+def auto_clean_data(raw_df: pd.DataFrame):
+    logs = []
     df_clean = raw_df.copy()
     old_rows = df_clean.shape[0]
     
@@ -1360,7 +1360,8 @@ with tabs[3]:
         logs.append(f"🗑️ Đã xóa {old_rows - df_clean.shape[0]} dòng trống hoàn toàn.")
         
     # 4. Giữ nguyên vẹn giá trị gốc để bảo vệ mã ICD-10, HbA1c, eGFR
-    logs.append("🛡️ Đã giữ nguyên vẹn các giá trị gốc (không đổi hoa/thường) nhằm bảo vệ ký hiệu chuyên ngành.")     
+    logs.append("🛡️ Đã giữ nguyên vẹn các giá trị gốc (không đổi hoa/thường) nhằm bảo vệ ký hiệu chuyên ngành.")
+    
     return df_clean, logs
 
     excel_file = st.file_uploader("Tải file Excel", type=["xlsx", "xls"], key="excel_data")
