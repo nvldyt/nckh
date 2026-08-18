@@ -54,6 +54,9 @@ from evidence_engine import (
 from project_storage import save_project, load_project, list_projects, delete_project
 from citation_engine import CitationEngine
 
+# 5. Import bộ máy Xử lý Dữ liệu thô (Excel)
+from data_engine import auto_clean_data
+
 # ============================================================
 # 1. CẤU HÌNH
 # ============================================================
