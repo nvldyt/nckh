@@ -1348,38 +1348,28 @@ with tabs[3]:
     # BỘ DỌN RÁC TỰ ĐỘNG (AUTO-CLEAN)
     # ==========================================
     def auto_clean_data(raw_df: pd.DataFrame):
-        logs = []
-        df_clean = raw_df.copy()
-        old_rows = df_clean.shape[0]
+    logs = []
+    df_clean = raw_df.copy()
+    old_rows = df_clean.shape[0]
+    
+    # 1. Cắt khoảng trắng tên cột
+    df_clean.columns = df_clean.columns.str.strip()
+    
+    # 2. Xóa cột rác Unnamed
+    unnamed_cols = [c for c in df_clean.columns if "unnamed" in str(c).lower()]
+    if unnamed_cols:
+        df_clean = df_clean.drop(columns=unnamed_cols)
+        logs.append(f"🗑️ Đã xóa {len(unnamed_cols)} cột rác (Unnamed) do phần mềm xuất dư.")
         
-        # 1. Cắt khoảng trắng tên cột
-        df_clean.columns = df_clean.columns.str.strip()
+    # 3. Xóa dòng rỗng hoàn toàn
+    df_clean = df_clean.dropna(how='all')
+    if df_clean.shape[0] < old_rows:
+        logs.append(f"🗑️ Đã xóa {old_rows - df_clean.shape[0]} dòng trống hoàn toàn.")
         
-        # 2. Xóa cột rác Unnamed
-        unnamed_cols = [c for c in df_clean.columns if "unnamed" in str(c).lower()]
-        if unnamed_cols:
-            df_clean = df_clean.drop(columns=unnamed_cols)
-            logs.append(f"🗑️ Đã xóa {len(unnamed_cols)} cột rác (Unnamed) do phần mềm xuất dư.")
-            
-        # 3. Xóa dòng rỗng hoàn toàn
-        df_clean = df_clean.dropna(how='all')
-        if df_clean.shape[0] < old_rows:
-            logs.append(f"🗑️ Đã xóa {old_rows - df_clean.shape[0]} dòng trống hoàn toàn.")
-            
-        # 4. Chuẩn hóa dữ liệu dạng chữ (Categorical)
-        count_cleaned_cols = 0
-        for col in df_clean.columns:
-            if df_clean[col].dtype == 'object':
-                # Tránh chuẩn hóa nhầm các cột ngày tháng
-                if not any(kw in str(col).lower() for kw in ['ngay', 'ngày', 'date', 'thoi', 'thời']):
-                    # Xóa khoảng trắng thừa 2 đầu và in hoa chữ cái đầu tiên
-                    df_clean[col] = df_clean[col].apply(lambda x: str(x).strip().capitalize() if pd.notnull(x) else x)
-                    count_cleaned_cols += 1
+    # 4. TRÁNH TUYỆT ĐỐI việc biến đổi chữ hoa/thường (Không dùng capitalize) để bảo vệ mã ICD-10, HbA1c, eGFR.
+    logs.append("🛡️ Đã giữ nguyên vẹn các giá trị gốc (không đổi hoa/thường) nhằm bảo vệ ký hiệu chuyên ngành (HbA1c, eGFR, ICD-10).")
         
-        if count_cleaned_cols > 0:
-            logs.append(f"✨ Đã đồng nhất văn bản (cắt khoảng trắng, in hoa chữ đầu) cho {count_cleaned_cols} cột.")
-            
-        return df_clean, logs
+    return df_clean, logs
 
     excel_file = st.file_uploader("Tải file Excel", type=["xlsx", "xls"], key="excel_data")
 
