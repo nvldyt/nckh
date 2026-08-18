@@ -644,38 +644,94 @@ def generate_evidence_based(
 
     return final_text, evidence, invalid_tags
 # ============================================================
-# 17. KIỂM TRA NHẤT QUÁN SỐ LIỆU + TRÙNG LẶP NỘI BỘ
+# 17. KIỂM TRA NHẤT QUÁN SỐ LIỆU + TRÙNG LẶP NỘI BỘ (ĐÃ SỬA LỖI P0)
 # ============================================================
+import math
 
 def extract_numeric_tokens(text: str) -> List[str]:
     if not text:
         return []
+    # Cải tiến regex để bắt được số thập phân, phần trăm
     pattern = r"(?<![\w])\d+(?:[.,]\d+)?(?:\s*%)?"
     return re.findall(pattern, text)
 
+def parse_number(num_str: str) -> Optional[float]:
+    """Hàm phụ trợ chuyển chuỗi số thành float để so sánh giá trị phái sinh (Level 2)"""
+    clean_str = num_str.replace(",", ".").replace(" ", "").replace("%", "")
+    try:
+        return float(clean_str)
+    except ValueError:
+        return None
 
-def compare_numbers(source_text: str, generated_text: str) -> Dict[str, Any]:
+def compare_numbers_advanced(source_text: str, generated_text: str) -> Dict[str, Any]:
+    """
+    Audit số liệu 3 cấp độ:
+    - Level 1: Exact match (Khớp chính xác bề mặt)
+    - Level 2: Derived match (Khớp phái sinh, VD: 65% và 0.65)
+    - Level 3: Warning (Cảnh báo số liệu lạ, không có trong Evidence)
+    """
     source_nums = extract_numeric_tokens(source_text)
     generated_nums = extract_numeric_tokens(generated_text)
 
     source_normalized = set(x.replace(",", ".").replace(" ", "") for x in source_nums)
     generated_normalized = set(x.replace(",", ".").replace(" ", "") for x in generated_nums)
-    suspicious = sorted(generated_normalized - source_normalized)
+    
+    # Chuyển đổi nguồn sang giá trị số học để kiểm tra Level 2
+    source_floats = set(filter(None, [parse_number(x) for x in source_normalized]))
+
+    exact_matches = []
+    derived_matches = []
+    warnings = []
+
+    for gen_num in generated_normalized:
+        # Bỏ qua các số trích dẫn kiểu [1], [2] (Citation Engine đã lo phần này)
+        if re.match(r"^\[\d+\]$", gen_num):
+            continue
+
+        if gen_num in source_normalized:
+            exact_matches.append(gen_num)
+        else:
+            # Kiểm tra Level 2: Có phải là dạng phái sinh (VD: 0.65 và 65%)
+            gen_val = parse_number(gen_num)
+            if gen_val is not None:
+                is_derived = False
+                for src_val in source_floats:
+                    # Chấp nhận sai số nhỏ (rel_tol) và tỷ lệ x100 (tính phần trăm)
+                    if math.isclose(gen_val, src_val, rel_tol=1e-4) or \
+                       math.isclose(gen_val, src_val * 100, rel_tol=1e-4) or \
+                       math.isclose(gen_val * 100, src_val, rel_tol=1e-4):
+                        is_derived = True
+                        break
+                
+                if is_derived:
+                    derived_matches.append(gen_num)
+                else:
+                    warnings.append(gen_num)
+            else:
+                warnings.append(gen_num)
 
     return {
-        "source_numbers": sorted(source_normalized),
-        "generated_numbers": sorted(generated_normalized),
-        "suspicious_generated_numbers": suspicious,
+        "exact_matches": sorted(exact_matches),
+        "derived_matches": sorted(derived_matches),
+        "warnings": sorted(warnings),
+        "source_raw": sorted(source_normalized)
     }
 
-
 def audit_generated_text(text: str) -> Dict[str, Any]:
-    evidence = st.session_state.get("last_evidence", [])
-    source_text = "\n".join(e["text"] for e in evidence)
-    audit = compare_numbers(source_text, text)
-    citation_invalid = "[CITATION_INVALID]" in text
-    return {"invalid_citation": citation_invalid, **audit}
-
+    """
+    ĐÃ SỬA LỖI P0: Lấy đúng context của đoạn text cần audit thay vì dùng last_evidence cũ.
+    """
+    # 1. Truy xuất bằng chứng THỰC SỰ LIÊN QUAN đến đoạn văn đang được dán vào
+    relevant_evidence = retrieve_evidence(text, k=6)
+    source_text = "\n".join(e["text"] for e in relevant_evidence)
+    
+    # 2. Chạy Audit Số liệu 3 Cấp độ
+    audit = compare_numbers_advanced(source_text, text)
+    
+    return {
+        "evidence_used": relevant_evidence,
+        **audit
+    }
 
 def normalize_for_similarity(text: str) -> str:
     text = text.lower()
@@ -683,13 +739,11 @@ def normalize_for_similarity(text: str) -> str:
     text = re.sub(r"[^\w\s%.,-]", "", text)
     return text.strip()
 
-
 def ngram_set(text: str, n: int = 8) -> set:
     words = normalize_for_similarity(text).split()
     if len(words) < n:
         return set()
     return {" ".join(words[i:i + n]) for i in range(len(words) - n + 1)}
-
 
 def internal_overlap_audit(text: str, top_k: int = 5) -> List[Dict[str, Any]]:
     target = ngram_set(text)
@@ -717,8 +771,6 @@ def internal_overlap_audit(text: str, top_k: int = 5) -> List[Dict[str, Any]]:
 
     results.sort(key=lambda x: x["similarity"], reverse=True)
     return results[:top_k]
-
-
 # ============================================================
 # 18. XUẤT WORD (có phân tích heading/markdown cơ bản)
 # ============================================================
@@ -1539,7 +1591,7 @@ with tabs[3]:
             st.error(f"Lỗi đọc file Excel: {exc}")
 
 # ------------------------------------------------------------
-# TAB 5 – AUDIT
+# TAB 5 – AUDIT (ĐÃ CẬP NHẬT GIAO DIỆN KIỂM TRA 3 CẤP ĐỘ)
 # ------------------------------------------------------------
 with tabs[4]:
     st.header("🔎 Audit luận văn")
@@ -1547,10 +1599,7 @@ with tabs[4]:
     st.markdown(
         '<div class="warning-box">⚠️ <b>Giới hạn cần biết:</b> các công cụ ở '
         "tab này chỉ đưa ra <b>chỉ báo nguy cơ / gợi ý kiểm tra thêm</b>. "
-        "Không có công cụ nào (kể cả phần mềm thương mại) khẳng định chắc "
-        "chắn 100% một đoạn văn <i>không đạo văn</i> hay <i>không do AI "
-        "viết</i>. Đạo văn chỉ được đối chiếu với các nguồn đã nạp trong "
-        "Evidence Database, không phải toàn bộ internet.</div>",
+        "Không có công cụ nào khẳng định chắc chắn 100%.</div>",
         unsafe_allow_html=True,
     )
 
@@ -1567,38 +1616,59 @@ with tabs[4]:
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
-                result = audit_generated_text(audit_text)
+                with st.spinner("Đang truy xuất tài liệu khớp với đoạn văn và đối chiếu số liệu..."):
+                    result = audit_generated_text(audit_text)
+                
                 with ket_qua_audit_container:
-                    st.markdown("### 🔢 Kết quả Audit Số liệu")
-                    st.write("**Số xuất hiện trong nguồn (bằng chứng đã truy xuất gần nhất):**")
-                    st.write(result["source_numbers"])
-                    st.write("**Số xuất hiện trong bản viết:**")
-                    st.write(result["generated_numbers"])
-                    if result["suspicious_generated_numbers"]:
-                        st.error("Có số cần kiểm tra:")
-                        st.write(result["suspicious_generated_numbers"])
+                    st.markdown("### 🔢 Kết quả Audit Số liệu (3 Cấp Độ)")
+                    
+                    st.success(f"**Level 1 (Khớp chính xác bề mặt):** {', '.join(result['exact_matches']) if result['exact_matches'] else 'Không có'}")
+                    st.info(f"**Level 2 (Khớp giá trị phái sinh - VD tỷ lệ/phần trăm):** {', '.join(result['derived_matches']) if result['derived_matches'] else 'Không có'}")
+                    
+                    if result["warnings"]:
+                        st.error(f"**Level 3 (⚠️ CẢNH BÁO SỐ LIỆU LẠ):** {', '.join(result['warnings'])}")
+                        st.caption("Các số trên không xuất hiện trong các tài liệu liên quan được truy xuất. Cần đối chiếu lại bản gốc!")
                     else:
-                        st.success("Không phát hiện số mới ngoài tập bằng chứng đang truy xuất.")
+                        st.success("**Level 3:** Tuyệt vời, không phát hiện số liệu lạ bị AI bịa ra!")
+                    
+                    with st.expander("📄 Xem các bằng chứng hệ thống đã tự động rút ra để đối chiếu"):
+                        for ev in result["evidence_used"]:
+                            st.caption(f"Nguồn: {ev['file_name']} (Trang {ev['page']})")
+                            st.write(f"> {ev['text']}")
 
     with a2:
         if st.button("📚 Audit citation", key="audit_citation"):
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
-                invalid = "[CITATION_INVALID]" in audit_text
+                # Trích xuất tất cả các tag [1], [2] từ văn bản
+                citations_in_text = re.findall(r"\[(\d+)\]", audit_text)
+                current_refs = {str(ref['vancouver_index']): ref for ref in st.session_state.get("current_references", [])}
+                
                 with ket_qua_audit_container:
-                    st.markdown("### 📚 Kết quả Audit Citation")
-                    if invalid:
-                        st.error("Có citation invalid.")
+                    st.markdown("### 📚 Kết quả Audit Citation Validator")
+                    if not citations_in_text:
+                        st.info("Không tìm thấy trích dẫn định dạng [n] trong văn bản.")
                     else:
-                        st.success("Không phát hiện citation invalid theo bộ kiểm tra hiện tại.")
+                        fake_citations = [c for c in citations_in_text if c not in current_refs]
+                        if fake_citations:
+                            st.error(f"❌ Phát hiện trích dẫn ẢO không tồn tại trong danh mục: [{'], ['.join(fake_citations)}]")
+                        else:
+                            st.success("✅ Toàn bộ trích dẫn trong văn bản đều khớp với danh mục hiện tại!")
+                            
+                        with st.expander("Tra cứu nhanh nguồn của các trích dẫn trong bài"):
+                            for c in citations_in_text:
+                                if c in current_refs:
+                                    meta = current_refs[c]['metadata']
+                                    st.write(f"**[{c}]** {meta.get('authors', 'N/A')}. {meta.get('title', 'N/A')} ({meta.get('year', 'N/A')})")
 
     with a3:
         if st.button("🔍 Tìm trùng lặp nội bộ", key="audit_overlap"):
             if not audit_text.strip():
                 st.warning("Chưa có văn bản.")
             else:
-                overlaps = internal_overlap_audit(audit_text)
+                with st.spinner("Đang quét Jaccard Similarity..."):
+                    overlaps = internal_overlap_audit(audit_text)
                 with ket_qua_audit_container:
                     st.markdown("### 🔍 Kết quả tìm trùng lặp nội bộ")
                     if not overlaps:
@@ -1606,128 +1676,10 @@ with tabs[4]:
                     else:
                         for item in overlaps:
                             st.markdown(
-                                f"""**{item['file']} – trang {item['page']}**
-Similarity nội bộ: **{item['similarity']}**
-
-> {item['text']}
-"""
+                                f"**{item['file']} – trang {item['page']}**\n"
+                                f"Similarity nội bộ: **{item['similarity']}**\n\n"
+                                f"> {item['text']}"
                             )
-
-    st.write("---")
-    st.subheader("Nhóm 2: Ngôn ngữ, đạo văn diện rộng & chỉ báo AI-viết")
-    b1, b2, b3 = st.columns(3)
-
-    with b1:
-        if st.button("🔤 Kiểm tra chính tả & thuật ngữ", key="audit_spelling"):
-            if not audit_text.strip():
-                st.warning("Chưa có văn bản.")
-            else:
-                with st.spinner("AI đang rà soát chính tả & thuật ngữ..."):
-                    response = spelling_and_terminology_check(audit_text)
-                with ket_qua_audit_container:
-                    st.markdown("### 🔤 Kết quả kiểm tra Chính tả & Thuật ngữ")
-                    if response:
-                        st.markdown(response)
-                    else:
-                        st.error("Không nhận được kết quả từ AI.")
-
-    with b2:
-        if st.button("📄 Kiểm tra nguy cơ đạo văn (mở rộng)", key="audit_plagiarism"):
-            if not audit_text.strip():
-                st.warning("Chưa có văn bản.")
-            else:
-                # --- SỬA LỖI: tính overlaps ngay tại đây, không dựa vào biến
-                # còn sót lại từ lần bấm nút "Tìm trùng lặp nội bộ" (a3) ở trên,
-                # vì mỗi lần Streamlit rerun lại toàn bộ script, "overlaps" sẽ
-                # không tồn tại nếu người dùng chưa từng bấm nút đó trước.
-                with st.spinner("Đang đối chiếu n-gram và phân tích diễn đạt..."):
-                    overlaps = internal_overlap_audit(audit_text)
-                    response = plagiarism_style_review(audit_text)
-
-                with ket_qua_audit_container:
-                    st.markdown("### 📄 Kết quả kiểm tra Nguy cơ đạo văn")
-                    st.caption(
-                        "Phạm vi đối chiếu: chỉ các nguồn đã nạp trong Evidence "
-                        "Database (Tab 1 + Tab 2) của phiên hiện tại."
-                    )
-
-                    if overlaps:
-                        max_sim = max(o["similarity"] for o in overlaps)
-                        if max_sim >= 0.3:
-                            st.error(f"Tỷ lệ trùng n-gram cao nhất: {max_sim*100:.1f}% — cần xem lại diễn đạt.")
-                        elif max_sim >= 0.1:
-                            st.warning(f"Tỷ lệ trùng n-gram cao nhất: {max_sim*100:.1f}% — nên kiểm tra thêm.")
-                        else:
-                            st.info(f"Tỷ lệ trùng n-gram cao nhất: {max_sim*100:.1f}% — khá thấp.")
-
-                        with st.expander("Xem chi tiết các đoạn trùng n-gram cao nhất"):
-                            for item in overlaps:
-                                st.markdown(
-                                    f"""**{item['file']} – trang {item['page']}** — Similarity: **{item['similarity']}**
-
-> {item['text']}
-"""
-                                )
-                    else:
-                        st.info("Không phát hiện trùng cụm từ dài với nguồn đã nạp.")
-
-                    if response:
-                        st.markdown(response)
-                    else:
-                        st.error("Không nhận được nhận xét từ AI.")
-
-    with b3:
-        if st.button("🤖 Chỉ báo nguy cơ văn bản do AI viết", key="audit_ai_style"):
-            if not audit_text.strip():
-                st.warning("Chưa có văn bản.")
-            else:
-                with st.spinner("Đang phân tích phong cách văn bản..."):
-                    style_analysis = heuristic_ai_style_score(audit_text)
-
-                with ket_qua_audit_container:
-                    st.markdown("### 🤖 Chỉ báo nguy cơ văn bản do AI viết")
-                    st.caption(
-                        "Đây là đánh giá dựa trên phong cách ngôn ngữ, mang tính tham "
-                        "khảo — KHÔNG phải kết luận chắc chắn 100% văn bản do AI viết hay không."
-                    )
-
-                    if style_analysis:
-                        st.markdown(style_analysis)
-                    else:
-                        st.error("Không nhận được kết quả phân tích từ AI.")
-
-    st.write("---")
-    st.subheader("Phản biện logic bằng AI")
-
-    logic_request = st.text_area("Mô tả vấn đề hoặc dán đoạn văn", height=180, key="logic_request")
-
-    if st.button("⚖️ Phản biện logic", key="logic_review"):
-        if not logic_request.strip():
-            st.warning("Nhập nội dung cần phản biện.")
-        else:
-            with st.spinner("AI đang xử lý..."):
-                prompt = f"""
-{BASE_SYSTEM_RULES}
-Đóng vai phản biện luận văn CKI Dược lâm sàng.
-
-NỘI DUNG:
-{logic_request}
-
-Hãy kiểm tra:
-1. Có khẳng định nào không có bằng chứng?
-2. Có nhảy logic từ tương quan sang nhân quả không?
-3. Có số liệu nào không có nguồn?
-4. Có kết luận vượt quá thiết kế nghiên cứu không?
-5. Có khái niệm dược lý/lâm sàng nào bị dùng sai không?
-6. Có chỗ nào cần bổ sung bằng chứng?
-7. Có câu nào nên viết thận trọng hơn?
-
-Không được tự bổ sung tài liệu hoặc số liệu.
-"""
-                response = call_gemini(prompt)
-                if response:
-                    st.markdown(response)
-
 # ------------------------------------------------------------
 # TAB 6 – NGUỒN & CẤU HÌNH
 # ------------------------------------------------------------
