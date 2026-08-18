@@ -707,7 +707,7 @@ def compare_numbers_advanced(source_text: str, generated_text: str) -> Dict[str,
 def Audit_generated_text(text: str) -> Dict[str, Any]:
     relevant_evidence = retrieve_evidence(text, k=6)
     source_text = "\n".join(e["text"] for e in relevant_evidence)
-    Kiểm tra = compare_numbers_advanced(source_text, text)
+    Aidit = compare_numbers_advanced(source_text, text)
     return {
         "evidence_used": relevant_evidence,
         **Kiểm tra
