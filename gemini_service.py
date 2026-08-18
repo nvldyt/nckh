@@ -1,79 +1,116 @@
-import os
+# gemini_service.py
 import time
-import random
-import logging
-import google.generativeai as genai
-from google.api_core import exceptions
+import uuid
+import streamlit as st
+from typing import Optional, Tuple, List, Dict, Any
 
-# =====================================================================
-# CẤU HÌNH MODEL THEO CHUẨN MỚI
-# =====================================================================
+from google import genai
+from google.genai import types
+from evidence_engine import retrieve_evidence
+from citation_engine import CitationEngine
 
-# Model chính cho các tác vụ suy luận sâu (RAG, Viết luận văn, Diễn giải thống kê)
-DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+BASE_SYSTEM_RULES = """
+Bạn là trợ lý nghiên cứu khoa học, hỗ trợ viết luận văn Chuyên khoa cấp I ngành Dược lâm sàng.
+NGUYÊN TẮC BẮT BUỘC:
+1. Tài liệu được cung cấp là nguồn bằng chứng ưu tiên duy nhất.
+2. Không tự tạo số liệu, p-value, OR, HR, tỷ lệ, độ thanh thải hoặc cỡ mẫu nếu không có trong bằng chứng.
+3. Mọi khẳng định phải chèn MÃ ĐỊNH DANH của tài liệu ngay sau câu. VD: "Tỷ lệ này là 12% [REF-001]."
+4. TUYỆT ĐỐI KHÔNG tự đánh số [1], [2], [3] và không dùng citation dạng tác giả-năm.
+5. Dùng chính xác thuật ngữ chuyên ngành Dược lâm sàng, văn phong học thuật, khô khan và trực diện.
+6. Nếu context không đủ bằng chứng, phải nói rõ: "Tài liệu được cung cấp chưa đủ bằng chứng để kết luận phần này."
+"""
 
-# Model Lite cho các tác vụ nhẹ (Kiểm tra chính tả, Dịch thuật, Style check)
-# Đã sửa lỗi: gemini-3.5-flash-lite thay vì 3.6
-MODEL_LITE = os.getenv("GEMINI_MODEL_LITE", "gemini-3.5-flash-lite")
-
-# Khởi tạo API Key (Thường được gọi 1 lần khi app khởi động)
-def init_gemini(api_key: str):
+def get_gemini_client():
+    try: 
+        api_key = st.secrets["GEMINI_API_KEY"]
+    except Exception: 
+        import os
+        api_key = os.getenv("GEMINI_API_KEY")
+        
     if not api_key:
-        raise ValueError("Chưa cấu hình Google Gemini API Key.")
-    genai.configure(api_key=api_key)
+        return None
+    return genai.Client(api_key=api_key)
 
-# =====================================================================
-# CORE CALLER VỚI EXPONENTIAL BACKOFF VÀ ERROR HANDLING
-# =====================================================================
+def call_gemini(prompt: str, model: str = "gemini-3.6-flash", max_retries: int = 4) -> Optional[str]:
+    """Hàm gọi API Gemini với cơ chế Exponential Backoff an toàn."""
+    client = get_gemini_client()
+    if not client:
+        st.error("⚠️ Lỗi cấu hình API Key.")
+        return None
 
-def call_gemini(prompt: str, model_name: str = DEFAULT_MODEL, max_retries: int = 5) -> str:
-    """
-    Giao tiếp với Gemini API.
-    Đã loại bỏ các tham số sampling (temperature, top_k, top_p) bị deprecated.
-    Sử dụng Exponential Backoff + Jitter để chống nghẽn mạng (Rate Limit 429).
-    """
-    # Khởi tạo model
-    model = genai.GenerativeModel(model_name)
-    
     for attempt in range(max_retries):
         try:
-            # Gọi API thuần túy, để model tự quyết định cấu hình sampling tối ưu
-            response = model.generate_content(prompt)
-            
-            if response.text:
-                return response.text
-            return ""
-
-        # LỖI NHÓM 1: Lỗi từ phía Client (Không Retry)
-        except exceptions.InvalidArgument as e:
-            # Lỗi 400 - Prompt không hợp lệ, payload sai định dạng
-            logging.error(f"[Lỗi 400] Bad Request: {e}")
-            return f"❌ Lỗi cấu trúc yêu cầu (400). Chi tiết: {str(e)}"
-            
-        except (exceptions.PermissionDenied, exceptions.Unauthenticated) as e:
-            # Lỗi 401/403 - Lỗi API Key, Quota billing, Auth
-            logging.error(f"[Lỗi 401/403] Auth/Permission Error: {e}")
-            return "❌ Lỗi xác thực: Vui lòng kiểm tra lại API Key hoặc quyền truy cập."
-
-        # LỖI NHÓM 2: Lỗi từ phía Server hoặc Quá tải mạng (BẮT BUỘC RETRY)
-        except (exceptions.ResourceExhausted, exceptions.ServiceUnavailable, exceptions.InternalServerError) as e:
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=types.GenerateContentConfig(temperature=0.1) # Nhiệt độ thấp = Đề cao tính chính xác, giảm sáng tạo
+            )
+            return getattr(response, "text", "").strip()
+        except Exception as exc:
             if attempt == max_retries - 1:
-                logging.error(f"Đã thử tối đa {max_retries} lần nhưng vẫn thất bại do Server/Rate Limit.")
-                return "⚠️ Hệ thống API đang quá tải (Lỗi 429/50x). Vui lòng thử lại sau ít phút."
-            
-            # Áp dụng Exponential Backoff kèm Jitter
-            # Công thức: min(30, 2^attempt) + random(0, 1)
-            sleep_time = min(30, 2 ** attempt) + random.uniform(0, 1)
-            logging.warning(f"Server bận (Mã lỗi HTTP cho attempt {attempt+1}). Chờ {sleep_time:.2f}s để thử lại...")
-            time.sleep(sleep_time)
+                st.error(f"Lỗi kết nối Gemini: {exc}")
+                return None
+            time.sleep(2 ** attempt) # Thử lại sau 1s, 2s, 4s...
+    return None
 
-        # NHÓM LỖI KHÁC: Các ngoại lệ không lường trước
-        except Exception as e:
-            if attempt == max_retries - 1:
-                logging.error(f"Lỗi không xác định khi gọi Gemini: {e}")
-                return f"❌ Đã xảy ra lỗi không xác định: {str(e)}"
-            
-            sleep_time = min(30, 2 ** attempt) + random.uniform(0, 1)
-            time.sleep(sleep_time)
+def generate_evidence_based(task: str, query: str, k: int = 8) -> Tuple[Optional[str], List[Dict[str, Any]], List[str], List[Dict]]:
+    """
+    Quy trình: Rút trích bằng chứng -> Đăng ký Citation -> Xây dựng Prompt -> Gọi LLM -> Chuyển đổi mã Citation.
+    """
+    # 1. Truy xuất bằng chứng
+    evidence = retrieve_evidence(query, k=k)
+    if not evidence:
+        return "Tài liệu được cung cấp chưa đủ bằng chứng để kết luận.", [], [], []
 
-    return ""
+    # 2. Xây dựng Context và đăng ký Citation an toàn
+    engine = CitationEngine()
+    evidence_context = ""
+    
+    for ev in evidence:
+        meta = st.session_state.get("documents", {}).get(ev["source_id"], {})
+        # Đăng ký với CitationEngine, trả về mã REF-... (để ép LLM không bịa số)
+        ref_tag = engine.register_evidence(ev["source_id"], meta)
+        
+        table_note = f"\n(Ghi chú bảng: {ev['table_hint']})" if ev.get("table_hint") else ""
+        evidence_context += f"\n--- TÀI LIỆU {ref_tag} ---\nNguồn: {ev['file_name']} | Trang: {ev['page']}\nNội dung: {ev['text']}{table_note}\n"
+
+    # 3. Gửi Prompt cho Gemini
+    prompt = f"""{BASE_SYSTEM_RULES}
+    
+NHIỆM VỤ CỦA BẠN:
+{task}
+
+BẰNG CHỨNG ĐƯỢC PHÉP SỬ DỤNG:
+{evidence_context}
+
+LƯU Ý CUỐI: PHẢI dùng nguyên vẹn mã [REF-...] từ tài liệu trên để trích dẫn.
+"""
+    
+    selected_model = st.session_state.get("selected_model", "gemini-3.6-flash")
+    raw_output = call_gemini(prompt, model=selected_model)
+    
+    if raw_output is None: 
+        return None, evidence, [], []
+
+    # 4. Xử lý hậu kỳ (Chuyển [REF-...] thành [1][2], bắt lỗi Hallucination)
+    final_text, references, invalid_tags = engine.process_vancouver_citations(raw_output)
+    
+    if invalid_tags:
+        final_text += f"\n\n> ⚠️ CẢNH BÁO KIỂM SOÁT TỰ ĐỘNG: Phát hiện AI tự tạo mã trích dẫn không có trong bằng chứng: {', '.join(invalid_tags)}."
+
+    # 5. Lưu lại lịch sử bản nháp để phục vụ tab Audit sau này
+    draft_record = {
+        "id": f"draft_{uuid.uuid4().hex[:12]}",
+        "task": task.splitlines()[0][:50],
+        "text": final_text,
+        "references": references,
+        "evidence": evidence,
+        "created_at": time.time()
+    }
+    
+    if "draft_history" not in st.session_state:
+        st.session_state["draft_history"] = []
+    
+    st.session_state["draft_history"].append(draft_record)
+
+    return final_text, evidence, invalid_tags, references
