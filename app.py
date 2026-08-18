@@ -1194,7 +1194,7 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
                         })
 
         st.subheader("📝 Lệnh viết nhanh")
-        c1, c2, c3, c4, c5, c6 = st.columns(6)
+        c1, c2, c3, c4, c5 = st.columns(5)
         with c1:
             btn_dat_van_de = st.button("Đặt vấn đề")
         with c2:
@@ -1204,8 +1204,6 @@ Không dùng Heading 1 (#) hoặc Heading 2 (##) trong nội dung, chỉ dùng H
         with c4:
             btn_ban_luan = st.button("Bàn luận KQNC và So sánh")
         with c5:
-            btn_so_sanh = st.button("So sánh NC liên quan")
-        with c6:
             btn_tltk = st.button("Trích dẫn TLTK")
 
         st.write("---")
