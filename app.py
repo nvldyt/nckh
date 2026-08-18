@@ -1354,22 +1354,72 @@ with tabs[3]:
     if "saved_tables" not in st.session_state:
         st.session_state["saved_tables"] = {}
 
+    # ==========================================
+    # BỘ DỌN RÁC TỰ ĐỘNG (AUTO-CLEAN)
+    # ==========================================
+    def auto_clean_data(raw_df: pd.DataFrame):
+        logs = []
+        df_clean = raw_df.copy()
+        old_rows = df_clean.shape[0]
+        
+        # 1. Cắt khoảng trắng tên cột
+        df_clean.columns = df_clean.columns.str.strip()
+        
+        # 2. Xóa cột rác Unnamed
+        unnamed_cols = [c for c in df_clean.columns if "unnamed" in str(c).lower()]
+        if unnamed_cols:
+            df_clean = df_clean.drop(columns=unnamed_cols)
+            logs.append(f"🗑️ Đã xóa {len(unnamed_cols)} cột rác (Unnamed) do phần mềm xuất dư.")
+            
+        # 3. Xóa dòng rỗng hoàn toàn
+        df_clean = df_clean.dropna(how='all')
+        if df_clean.shape[0] < old_rows:
+            logs.append(f"🗑️ Đã xóa {old_rows - df_clean.shape[0]} dòng trống hoàn toàn.")
+            
+        # 4. Chuẩn hóa dữ liệu dạng chữ (Categorical)
+        count_cleaned_cols = 0
+        for col in df_clean.columns:
+            if df_clean[col].dtype == 'object':
+                # Tránh chuẩn hóa nhầm các cột ngày tháng
+                if not any(kw in str(col).lower() for kw in ['ngay', 'ngày', 'date', 'thoi', 'thời']):
+                    # Xóa khoảng trắng thừa 2 đầu và in hoa chữ cái đầu tiên
+                    df_clean[col] = df_clean[col].apply(lambda x: str(x).strip().capitalize() if pd.notnull(x) else x)
+                    count_cleaned_cols += 1
+        
+        if count_cleaned_cols > 0:
+            logs.append(f"✨ Đã đồng nhất văn bản (cắt khoảng trắng, in hoa chữ đầu) cho {count_cleaned_cols} cột.")
+            
+        return df_clean, logs
+
     excel_file = st.file_uploader("Tải file Excel", type=["xlsx", "xls"], key="excel_data")
 
     if excel_file is not None:
         try:
-            df = pd.read_excel(excel_file)
-            st.success(f"Dữ liệu: {df.shape[0]} dòng × {df.shape[1]} cột.")
+            # 1. Đọc dữ liệu thô
+            raw_df = pd.read_excel(excel_file)
+            
+            # 2. Chạy bộ dọn rác tự động
+            with st.spinner("Đang dọn dẹp và chuẩn hóa dữ liệu..."):
+                df, clean_logs = auto_clean_data(raw_df)
+            
+            st.success(f"Dữ liệu sẵn sàng: {df.shape[0]} dòng × {df.shape[1]} cột.")
+            
+            # 3. Hiển thị nhật ký dọn rác
+            if clean_logs:
+                with st.expander("🛠️ Xem nhật ký tự động dọn dẹp dữ liệu", expanded=True):
+                    for log in clean_logs:
+                        st.write(log)
 
             validation = validate_dataframe(df)
             if validation:
                 for item in validation:
                     st.warning(item)
 
-            with st.expander("Xem dữ liệu thô"):
+            with st.expander("Xem dữ liệu sau khi chuẩn hóa"):
                 st.dataframe(df)
 
             st.write("---")
+            # --- HIỂN THỊ GIỎ KẾT QUẢ ---
             # --- HIỂN THỊ GIỎ KẾT QUẢ ---
             st.markdown(f"### 🛒 Giỏ kết quả: **{len(st.session_state['result_cart'])}** bảng đã lưu")
             st.info("💡 Mỗi khi anh bấm các nút thống kê bên dưới, kết quả sẽ tự động được nạp vào Giỏ này để lát nữa AI tuyển chọn.")
