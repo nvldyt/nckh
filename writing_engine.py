@@ -145,20 +145,19 @@ NGUYÊN TẮC BẮT BUỘC:
 def generate_evidence_based(
     task_prompt: str, 
     evidence: List[Dict[str, Any]], 
-    citation_engine: Any # Nhận object CitationEngine từ bên ngoài
+    citation_engine: Any,
+    study_context: Optional[Dict[str, Any]] = None  # <--- BỔ SUNG THAM SỐ NÀY
 ) -> Tuple[Optional[str], List[Dict[str, Any]], List[str]]:
     """
-    Trái tim của Writing Pipeline. 
-    Nhận yêu cầu (task), Bằng chứng (evidence đã được lọc), và Bộ đánh số (citation_engine)
-    để sinh ra bản nháp cuối cùng.
+    Trái tim của Writing Pipeline. Nhận yêu cầu, Bằng chứng, Citation Engine, 
+    và Study Context (nếu có) để sinh bản nháp.
     """
     if not evidence:
         return "Tài liệu được cung cấp trong Evidence Database chưa đủ bằng chứng để viết mục này.", evidence, []
 
-    # 1. Định dạng bằng chứng đưa vào ngữ cảnh (Context)
+    # 1. Định dạng bằng chứng đưa vào ngữ cảnh
     evidence_context = ""
     for ev in evidence:
-        # Nhờ Citation Engine đăng ký nguồn này và lấy mã thẻ (VD: [REF-123])
         tag = citation_engine.register_evidence(ev["source_id"], ev.get("metadata", {}))
         table_note = f"\nGhi chú bảng: {ev['table_hint']}" if ev.get("table_hint") else ""
         
@@ -168,9 +167,21 @@ def generate_evidence_based(
             f"Nội dung: {ev.get('text', '')}{table_note}\n"
         )
 
-    # 2. Xây dựng Prompt
+    # 2. Xử lý Study Context (Nếu người dùng đã khai báo)
+    context_str = ""
+    if study_context and any(study_context.values()):
+        context_str = "\nBỐI CẢNH ĐỀ TÀI NGHIÊN CỨU (STUDY CONTEXT):\n"
+        context_str += "Bạn đang viết luận văn cho đề tài có các đặc điểm sau. Hãy bám sát bối cảnh này, tuyệt đối không đi lạc đề:\n"
+        if study_context.get("title"): context_str += f"- Tên đề tài: {study_context['title']}\n"
+        if study_context.get("design"): context_str += f"- Thiết kế: {study_context['design']}\n"
+        if study_context.get("population"): context_str += f"- Đối tượng: {study_context['population']}\n"
+        if study_context.get("sample_size"): context_str += f"- Cỡ mẫu: {study_context['sample_size']}\n"
+        if study_context.get("objectives"): context_str += f"- Mục tiêu: {study_context['objectives']}\n"
+
+    # 3. Xây dựng Prompt
     prompt = f"""
 {BASE_SYSTEM_RULES}
+{context_str}
 
 NHIỆM VỤ CỦA BẠN:
 {task_prompt}
@@ -183,15 +194,14 @@ YÊU CẦU TRÍCH DẪN:
 - Đặt mã [REF-...] ở ngay cuối câu chứa thông tin lấy từ nguồn đó.
 """
 
-    # 3. Gọi Gemini
+    # 4. Gọi Gemini
     raw_output = call_gemini(prompt)
     if not raw_output:
         return None, evidence, []
 
-    # 4. Hậu xử lý (Nhờ Citation Engine dịch mã [REF-...] thành [1], [2] chuẩn Vancouver)
+    # 5. Hậu xử lý trích dẫn Vancouver
     final_text, references, invalid_tags = citation_engine.process_vancouver_citations(raw_output)
 
-    # 5. Gắn cảnh báo trực tiếp vào bản nháp nếu phát hiện AI "bịa" mã trích dẫn
     if invalid_tags:
         final_text += (
             f"\n\n> ⚠️ CẢNH BÁO KIỂM ĐỊNH: Phát hiện AI tự tạo mã trích dẫn không có "
