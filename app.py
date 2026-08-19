@@ -1342,7 +1342,112 @@ DỮ LIỆU ĐẦU VÀO CẦN NHẬN XÉT:
                     with st.spinner("Đang soi logic..."):
                         prompt = f"{BASE_SYSTEM_RULES}\nĐóng vai phản biện. Chỉ ra điểm yếu logic. ĐOẠN VĂN: {Audit_text}"
                         res = call_gemini(prompt)
-                    with ket_qua_Audit_container: st.markdown("### ⚖️ Kết quả Phản biện\n" + str(res))    
+                    with ket_qua_Audit_container: st.markdown("### ⚖️ Kết quả Phản biện\n" + str(res))   
+
+    # ------------------------------------------------------------
+    # TAB 6 – QUẢN LÝ TÀI LIỆU THAM KHẢO & METADATA (TLTK)
+    # ------------------------------------------------------------
+    with tabs[5]:
+        st.header("🏷️ Quản lý Tài liệu tham khảo (Metadata)")
+        st.info("💡 Bảng dưới đây hiển thị thông tin thư mục của toàn bộ tài liệu anh đã nạp. Anh có thể **nhấp đúp chuột vào từng ô** để sửa thủ công tên tác giả, năm, tên bài... Nếu dữ liệu ở đây chuẩn, AI sẽ sinh ra danh mục Vancouver chuẩn xác.")
+        
+        docs = st.session_state.get("documents", {})
+        
+        if not docs:
+            st.warning("⚠️ Chưa có tài liệu nào trong Evidence Database.")
+        else:
+            # 1. Hiển thị Data Editor cho phép sửa thủ công
+            doc_list = []
+            for sid, meta in docs.items():
+                doc_list.append({
+                    "source_id": sid,
+                    "origin": meta.get("origin", "Khác"),
+                    "authors": meta.get("authors", ""),
+                    "title": meta.get("title", meta.get("file_name", "")),
+                    "journal": meta.get("journal", ""),
+                    "year": meta.get("year", ""),
+                    "doi": meta.get("doi", "")
+                })
+            
+            df_meta = pd.DataFrame(doc_list)
+            
+            edited_df = st.data_editor(
+                df_meta,
+                column_config={
+                    "source_id": st.column_config.TextColumn("Mã ID", disabled=True),
+                    "origin": st.column_config.TextColumn("Nguồn", disabled=True),
+                    "authors": "Tác giả",
+                    "title": "Tên bài báo / Tài liệu",
+                    "journal": "Tạp chí / NXB",
+                    "year": "Năm XB",
+                    "doi": "DOI"
+                },
+                use_container_width=True,
+                num_rows="fixed",
+                key="meta_editor"
+            )
+            
+            if st.button("💾 Lưu các chỉnh sửa bảng trên", type="primary"):
+                # Cập nhật thay đổi từ bảng vào session_state
+                for _, row in edited_df.iterrows():
+                    sid = row["source_id"]
+                    if sid in st.session_state["documents"]:
+                        st.session_state["documents"][sid]["authors"] = row["authors"]
+                        st.session_state["documents"][sid]["title"] = row["title"]
+                        st.session_state["documents"][sid]["journal"] = row["journal"]
+                        st.session_state["documents"][sid]["year"] = str(row["year"]) if pd.notna(row["year"]) else ""
+                        st.session_state["documents"][sid]["doi"] = row["doi"]
+                st.success("✅ Đã cập nhật thông tin thư mục thành công! AI sẽ sử dụng thông tin này để tạo trích dẫn Vancouver.")
+                time.sleep(1)
+                st.rerun()
+
+            st.write("---")
+            
+            col_ai, col_reg = st.columns([1, 1])
+            
+            # 2. Chức năng AI tự quét Metadata (Dời từ Tab 1 sang)
+            with col_ai:
+                st.subheader("🤖 AI Tự động quét PDF")
+                st.caption("Nếu ngại gõ tay, anh có thể nhờ AI quét trang đầu của các PDF để lấy thông tin.")
+                if st.button("🚀 Quét Metadata từ trang 1 PDF"):
+                    chunks = st.session_state.get("chunks", [])
+                    count_updated = 0
+                    
+                    with st.spinner("AI đang đọc trang đầu của các file PDF..."):
+                        for source_id, meta in st.session_state["documents"].items():
+                            if meta.get("origin") == "PDF":
+                                page_one_chunks = [
+                                    c.get("text") if isinstance(c, dict) else getattr(c, 'text', '') 
+                                    for c in chunks 
+                                    if (c.get("source_id") if isinstance(c, dict) else getattr(c, 'source_id', None)) == source_id 
+                                    and str(c.get("page", "")).lower() in ["1", "trang 1", "page 1"]
+                                ]
+                                
+                                target_text = page_one_chunks[0] if page_one_chunks else ""
+                                if target_text:
+                                    meta_ai = extract_metadata_from_text_ai_wrapper(target_text)
+                                    if meta_ai:
+                                        st.session_state["documents"][source_id].update({k: v for k, v in meta_ai.items() if v})
+                                        count_updated += 1
+                                        
+                    if count_updated > 0: 
+                        st.success(f"✅ AI đã quét và bóc tách được {count_updated} file PDF! Vui lòng kiểm tra lại bảng phía trên.")
+                        time.sleep(1.5)
+                        st.rerun()
+                    else: 
+                        st.info("AI không tìm thấy thông tin mới nào.")
+
+            # 3. Hiển thị kết quả chuẩn Vancouver hiện hành
+            with col_reg:
+                st.subheader("📖 Danh sách Vancouver hiện tại")
+                st.caption("Đây là danh sách trích dẫn đã được sử dụng trong bản nháp (Tab 3).")
+                registry = st.session_state.get("citation_registry", {})
+                if registry:
+                    bib = citation_bibliography_wrapper()
+                    st.code(bib if bib else "Chưa có trích dẫn.", language="text")
+                else:
+                    st.info("Chưa có trích dẫn nào được sinh ra trong bản nháp.")
+
 
 if __name__ == "__main__":
     main()
