@@ -1,25 +1,25 @@
-# retrieval_engine.py
 import numpy as np
-from functools import lru_cache
+import streamlit as st
 from typing import List, Dict, Any
 from sentence_transformers import SentenceTransformer, CrossEncoder
 from rank_bm25 import BM25Okapi
 
 # Khai báo model mặc định ở đây để quản lý tập trung
-DEFAULT_EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-# Khai báo Reranker đa ngôn ngữ (Nhỏ, nhẹ nhưng cực kỳ thông minh)
+# Đã đổi sang bản siêu nhẹ để chống sập RAM trên Streamlit
+DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+# Khai báo Reranker đa ngôn ngữ
 DEFAULT_RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
 
 # ============================================================
 # 1. QUẢN LÝ MÔ HÌNH (EMBEDDING & RERANKER)
 # ============================================================
 
-@lru_cache(maxsize=1)
+@st.cache_resource
 def load_embedding_model(model_name: str):
-    """Tải mô hình nhúng (Vector) vào RAM."""
+    """Tải mô hình nhúng (Vector) vào RAM và đóng băng bằng Streamlit cache."""
     return SentenceTransformer(model_name)
 
-@lru_cache(maxsize=1)
+@st.cache_resource
 def load_reranker_model(model_name: str):
     """Tải mô hình Cross-Encoder vào RAM (chỉ tải 1 lần)."""
     return CrossEncoder(model_name)
