@@ -4,9 +4,11 @@ import io
 import re
 import os
 import hashlib
+import concurrent.futures
 from serpapi import GoogleSearch
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, List, Tuple, Optional
+from semantic_chunker import SemanticChunker
 
 import requests
 import xml.etree.ElementTree as ET
@@ -105,7 +107,7 @@ def add_source_and_chunks(source: SourceDocument, chunks: List[EvidenceChunk]) -
     return True
 
 # ============================================================
-# 5. XỬ LÝ PDF
+# 5. XỬ LÝ PDF (Đã tích hợp băm ngữ nghĩa chống ảo giác)
 # ============================================================
 def extract_pdf(uploaded_file) -> Tuple[SourceDocument, List[EvidenceChunk]]:
     data = uploaded_file.getvalue()
@@ -121,17 +123,20 @@ def extract_pdf(uploaded_file) -> Tuple[SourceDocument, List[EvidenceChunk]]:
     )
 
     chunks: List[EvidenceChunk] = []
+    
+    # Khởi tạo Chunker Thông Minh
+    chunker = SemanticChunker(max_chunk_size=1200, min_chunk_size=100, chunk_overlap=250)
+    
     for page_no, page in enumerate(reader.pages, start=1):
         try:
             raw = page.extract_text() or ""
         except Exception:
             raw = ""
 
-        text = clean_text(raw)
-        if not text:
-            continue
-
-        for idx, (piece, start, end) in enumerate(split_text_into_chunks(text), start=1):
+        # Giao việc cắt đoạn cho Semantic Chunker
+        semantic_pieces = chunker.split_by_semantics(raw)
+        
+        for idx, (piece, start, end) in enumerate(semantic_pieces, start=1):
             chunks.append(
                 EvidenceChunk(
                     chunk_id=make_chunk_id(source_id, page_no, idx),
@@ -144,7 +149,6 @@ def extract_pdf(uploaded_file) -> Tuple[SourceDocument, List[EvidenceChunk]]:
                 )
             )
     return source, chunks
-
 # ============================================================
 # 6. TRA CỨU API (PUBMED & VN JOURNALS)
 # ============================================================
@@ -222,21 +226,30 @@ def generate_pubmed_queries(main_query: str) -> List[str]:
         f"{clean_q} AND (outpatient OR inpatient OR prevalence OR risk factors)"
     ]
 
+import concurrent.futures
+
 def search_pubmed_multi(main_query: str, max_res_per_query: int = 3) -> List[Dict[str, Any]]:
-    """Thực hiện tìm kiếm đa biến thể, gom kết quả và lọc trùng bằng PMID tự động."""
+    """Thực hiện tìm kiếm đa biến thể SONG SONG, gom kết quả và lọc trùng bằng PMID tự động."""
     queries = generate_pubmed_queries(main_query)
     seen_pmids = set()
     all_articles = []
     
-    for q in queries:
-        articles = search_pubmed(q, max_res=max_res_per_query)
-        for art in articles:
-            pmid = art.get("pmid")
-            if pmid and pmid not in seen_pmids:
-                seen_pmids.add(pmid)
-                all_articles.append(art)
-            elif not pmid:
-                all_articles.append(art)
+    # Bắn 4 request cùng lúc thay vì đợi tuần tự
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        future_to_query = {executor.submit(search_pubmed, q, max_res_per_query): q for q in queries}
+        
+        for future in concurrent.futures.as_completed(future_to_query):
+            try:
+                articles = future.result()
+                for art in articles:
+                    pmid = art.get("pmid")
+                    if pmid and pmid not in seen_pmids:
+                        seen_pmids.add(pmid)
+                        all_articles.append(art)
+                    elif not pmid:
+                        all_articles.append(art)
+            except Exception as exc:
+                st.error(f"Lỗi truy vấn luồng PubMed: {exc}")
                 
     return all_articles[:12]
 
