@@ -16,7 +16,7 @@ scipy>=1.13.0
 statsmodels>=0.14.0
 
 # 4. Tiện ích, Đọc/Ghi file & Crawl API
-pypdf>=5.0.0
+PyMuPDF>=1.23.0
 python-docx>=1.1.0
 openpyxl>=3.1.0
 requests>=2.31.0
