@@ -9,7 +9,7 @@ from google.genai import types
 
 # Cấu hình Model mặc định
 DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
-MODEL_LITE = "gemini-3.5-flash-lite" # Dùng cho các tác vụ phụ trợ, đọc metadata
+MODEL_LITE = "gemini-3.5-flash-lite" # Dùng cho các tác vụ phụ trợ, lập dàn ý, review
 
 # ============================================================
 # 1. QUẢN LÝ VÀ XOAY VÒNG API KEY SIÊU TỐC
@@ -23,11 +23,7 @@ def get_gemini_client(api_key: str):
 def get_api_keys() -> List[str]:
     """
     Bộ quét API Key thông minh: Tự động gom mọi Key có chữ 'GEMINI' trong secrets.
-    Anh có thể khai báo kiểu:
-    GEMINI_API_KEYS = "key1, key2, key3" 
-    Hoặc:
-    GEMINI_KEY_1 = "key1"
-    GEMINI_KEY_2 = "key2"
+    Hỗ trợ danh sách chuỗi phẩy hoặc các biến riêng lẻ.
     """
     keys_list = []
     
@@ -70,7 +66,6 @@ def call_gemini(
         
     model_name = model or DEFAULT_MODEL
     
-    # Quản lý chỉ số Key hiện tại trong session_state để xoay vòng đều đặn
     if "current_key_idx" not in st.session_state:
         st.session_state["current_key_idx"] = 0
 
@@ -96,28 +91,24 @@ def call_gemini(
         except Exception as exc:
             error_msg = str(exc).lower()
             
-            # Bắt lỗi quá tải mạng hoặc hết hạn mức của 1 Key
             if any(code in error_msg for code in ["429", "resource_exhausted", "503", "unavailable", "quota"]):
                 if total_keys > 1:
-                    # REROUTE: Nhảy sang Key tiếp theo ngay lập tức
                     st.session_state["current_key_idx"] += 1
                     next_idx = st.session_state["current_key_idx"] % total_keys
                     status = st.warning(f"🔄 Key {current_idx + 1} đang bận. Tự động chuyển sang Key {next_idx + 1}...")
-                    time.sleep(1) # Nghỉ nhịp rất ngắn để tránh bị spam block
+                    time.sleep(1) 
                     status.empty()
                     continue 
                 else:
-                    # Nếu chỉ có 1 Key duy nhất, buộc phải chờ
                     if attempt < max_retries - 1:
                         wait_time = 15  
                         status = st.warning(f"⏳ Hệ thống Google đang quá tải. Đợi {wait_time} giây rồi thử lại...")
                         time.sleep(wait_time)
                         status.empty()  
                     else:
-                        st.error("❌ Máy chủ Google Gemini hiện đang quá bận. Vui lòng đợi 1-2 phút rồi thử lại!")
+                        st.error("❌ Máy chủ Google Gemini hiện đang quá bận. Vui lòng đợi 1-2 phút rồi bấm thử lại!")
                         return None
             else:
-                # Lỗi nghiêm trọng khác (ví dụ: Key bị khóa, model không tồn tại)
                 if attempt == max_retries - 1:
                     st.error(f"Lỗi hệ thống Gemini: {error_msg}")
                     return None
@@ -126,7 +117,7 @@ def call_gemini(
     return None
 
 # ============================================================
-# 2. HỆ THỐNG PROMPT & QUẢN LÝ SINH VĂN BẢN (WRITING PIPELINE)
+# 2. HỆ THỐNG PROMPT VÀ WRITING PIPELINE 5 BƯỚC (AGENTIC WORKFLOW)
 # ============================================================
 
 BASE_SYSTEM_RULES = """
@@ -146,61 +137,98 @@ def generate_evidence_based(
     task_prompt: str, 
     evidence: List[Dict[str, Any]], 
     citation_engine: Any,
-    study_context: Optional[Dict[str, Any]] = None  # <--- BỔ SUNG THAM SỐ NÀY
+    study_context: Optional[Dict[str, Any]] = None
 ) -> Tuple[Optional[str], List[Dict[str, Any]], List[str]]:
     """
-    Trái tim của Writing Pipeline. Nhận yêu cầu, Bằng chứng, Citation Engine, 
-    và Study Context (nếu có) để sinh bản nháp.
+    Writing Pipeline 5 Bước (Agentic Workflow):
+    - Bước 1: Lập dàn ý (Outline Generation)
+    - Bước 2: Lập bản đồ bằng chứng (Evidence Mapping)
+    - Bước 3: Viết nháp có kiểm soát từng luận điểm (Controlled Drafting)
+    - Bước 4: Kiểm định trích dẫn (Citation Validation)
+    - Bước 5: Review học thuật (Scientific Reviewer)
     """
     if not evidence:
         return "Tài liệu được cung cấp trong Evidence Database chưa đủ bằng chứng để viết mục này.", evidence, []
 
-    # 1. Định dạng bằng chứng đưa vào ngữ cảnh
+    # Định dạng bằng chứng đưa vào ngữ cảnh chung
     evidence_context = ""
     for ev in evidence:
         tag = citation_engine.register_evidence(ev["source_id"], ev.get("metadata", {}))
         table_note = f"\nGhi chú bảng: {ev['table_hint']}" if ev.get("table_hint") else ""
-        
         evidence_context += (
             f"\nTài liệu {tag}:\n"
             f"Nguồn: {ev.get('file_name', 'N/A')} | Trang: {ev.get('page', 'N/A')}\n"
             f"Nội dung: {ev.get('text', '')}{table_note}\n"
         )
 
-    # 2. Xử lý Study Context (Nếu người dùng đã khai báo)
+    # Xử lý Study Context (Bối cảnh đề tài)
     context_str = ""
     if study_context and any(study_context.values()):
         context_str = "\nBỐI CẢNH ĐỀ TÀI NGHIÊN CỨU (STUDY CONTEXT):\n"
-        context_str += "Bạn đang viết luận văn cho đề tài có các đặc điểm sau. Hãy bám sát bối cảnh này, tuyệt đối không đi lạc đề:\n"
         if study_context.get("title"): context_str += f"- Tên đề tài: {study_context['title']}\n"
         if study_context.get("design"): context_str += f"- Thiết kế: {study_context['design']}\n"
         if study_context.get("population"): context_str += f"- Đối tượng: {study_context['population']}\n"
         if study_context.get("sample_size"): context_str += f"- Cỡ mẫu: {study_context['sample_size']}\n"
         if study_context.get("objectives"): context_str += f"- Mục tiêu: {study_context['objectives']}\n"
 
-    # 3. Xây dựng Prompt
-    prompt = f"""
+    # ==========================================
+    # BƯỚC 1 & 2: LẬP DÀN Ý & MAP BẰNG CHỨNG (Dùng Model LITE)
+    # ==========================================
+    outline_prompt = f"""
+{BASE_SYSTEM_RULES}
+{context_str}
+NHIỆM VỤ: Dựa vào yêu cầu và bằng chứng dưới đây, hãy lập dàn ý gồm 3-4 luận điểm chính bằng tiếng Việt trước khi viết chi tiết.
+YÊU CẦU: Chỉ trả về dàn ý ngắn gọn, gắn mỗi luận điểm với mã [REF-...] tương ứng sẽ dùng.
+YÊU CẦU GỐC: {task_prompt}
+BẰNG CHỨNG:
+{evidence_context}
+"""
+    outline_res = call_gemini(outline_prompt, model=MODEL_LITE, temperature=0.1)
+    structured_outline = outline_res if outline_res else "1. Đặt vấn đề và tổng quan\n2. Phân tích kết quả\n3. Bàn luận"
+
+    # ==========================================
+    # BƯỚC 3: VIẾT NHÁP CÓ KIỂM SOÁT (Controlled Drafting)
+    # ==========================================
+    draft_prompt = f"""
 {BASE_SYSTEM_RULES}
 {context_str}
 
-NHIỆM VỤ CỦA BẠN:
+DÀN Ý ĐÃ ĐƯỢC PHÊ DUYỆT:
+{structured_outline}
+
+NHIỆM VỤ GỐC:
 {task_prompt}
 
 BẰNG CHỨNG LÂM SÀNG ĐƯỢC PHÉP SỬ DỤNG:
 {evidence_context}
 
-YÊU CẦU TRÍCH DẪN:
-- LƯU Ý: KHÔNG ĐƯỢC tự đánh số [1], [2]. PHẢI dùng nguyên vẹn mã [REF-...] được cung cấp trong phần bằng chứng ở trên.
-- Đặt mã [REF-...] ở ngay cuối câu chứa thông tin lấy từ nguồn đó.
+YÊU CẦU VIẾT:
+- Bám sát dàn ý trên. Viết thành các đoạn văn xuôi y khoa liền mạch.
+- PHẢI dùng nguyên vẹn mã [REF-...] được cung cấp ở ngay cuối câu chứa thông tin lấy từ nguồn đó.
 """
-
-    # 4. Gọi Gemini
-    raw_output = call_gemini(prompt)
+    raw_output = call_gemini(draft_prompt, temperature=0.1)
     if not raw_output:
         return None, evidence, []
 
-    # 5. Hậu xử lý trích dẫn Vancouver
+    # ==========================================
+    # BƯỚC 4: KIỂM ĐỊNH TRÍCH DẪN (Citation Engine)
+    # ==========================================
     final_text, references, invalid_tags = citation_engine.process_vancouver_citations(raw_output)
+
+    # ==========================================
+    # BƯỚC 5: REVIEW HỌC THUẬT (Scientific Reviewer)
+    # ==========================================
+    review_prompt = f"""
+Bạn là hội đồng phản biện luận văn CKI Dược lâm sàng. Hãy rà soát đoạn văn bản học thuật sau:
+1. Đảm bảo văn phong khô khan, khách quan, không dùng từ ngữ hoa mỹ.
+2. Kiểm tra xem các trích dẫn [n] đã nằm đúng cuối câu chưa.
+ĐOẠN VĂN BẢN CẦN RÀ SOÁT:
+{final_text}
+Chỉ trả về đoạn văn bản đã được gọt giũa hoàn chỉnh, không giải thích gì thêm.
+"""
+    reviewed_output = call_gemini(review_prompt, model=MODEL_LITE, temperature=0.1)
+    if reviewed_output:
+        final_text = reviewed_output
 
     if invalid_tags:
         final_text += (
