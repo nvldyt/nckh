@@ -200,29 +200,33 @@ def add_pdf_documents(uploaded_files) -> Tuple[int, int, List[str]]:
                 new_chunks_count += len(chunks)
                 new_chunks_list.extend(chunks)
                 
-                # ==========================================================
-                # TÍNH NĂNG MỚI: TỰ ĐỘNG GỌI AI ĐỌC TRANG ĐẦU ĐỂ LẤY METADATA NGAY
-                # ==========================================================
+                # Lấy source_id an toàn (hỗ trợ cả dict và object)
                 source_id = source.get("source_id") if isinstance(source, dict) else getattr(source, "source_id", None)
-                if source_id:
-                    # Lọc tìm nội dung trang đầu tiên của file PDF vừa nạp
-                    page_one_chunks = [
-                        c.get("text") for c in chunks 
-                        if str(c.get("page", "")).lower() in ["1", "trang 1", "page 1"]
-                    ]
-                    # Nếu không tìm thấy nhãn trang 1 rõ ràng, lấy tạm chunk đầu tiên
-                    target_text = page_one_chunks[0] if page_one_chunks else (chunks[0].get("text", "") if chunks else "")
+                
+                if source_id and chunks:
+                    # Lọc nội dung trang 1 an toàn cho EvidenceChunk object
+                    page_one_chunks = []
+                    for c in chunks:
+                        c_text = c.get("text") if isinstance(c, dict) else getattr(c, 'text', '')
+                        c_page = str(c.get("page") if isinstance(c, dict) else getattr(c, 'page', '')).lower()
+                        if c_page in ["1", "trang 1", "page 1"]:
+                            page_one_chunks.append(c_text)
+                    
+                    # Nếu không tìm thấy nhãn trang 1, lấy tạm chunk đầu tiên
+                    if not page_one_chunks:
+                        first_chunk = chunks[0]
+                        target_text = first_chunk.get("text") if isinstance(first_chunk, dict) else getattr(first_chunk, 'text', '')
+                    else:
+                        target_text = page_one_chunks[0]
                     
                     if target_text:
-                        # Gọi AI trích xuất thông tin tác giả, tiêu đề, năm, tạp chí...
+                        # Gọi AI trích xuất thông tin tác giả, tiêu đề, năm... ngay lúc nạp
                         meta_ai = extract_metadata_from_text_ai_wrapper(target_text)
                         if meta_ai:
-                            # Cập nhật trực tiếp vào kho documents của session_state
                             current_docs = st.session_state.get("documents", {})
                             if source_id in current_docs:
                                 current_docs[source_id].update({k: v for k, v in meta_ai.items() if v})
-                # ==========================================================
-                
+                                
         except Exception as exc:
             errors.append(f"{uploaded_file.name}: {exc}")
             
