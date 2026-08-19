@@ -8,8 +8,8 @@ from google import genai
 from google.genai import types
 
 # Cấu hình Model mặc định
-DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-MODEL_LITE = "gemini-2.5-flash-lite" # Dùng cho các tác vụ phụ trợ, đọc metadata
+DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
+MODEL_LITE = "gemini-3.5-flash-lite" # Dùng cho các tác vụ phụ trợ, đọc metadata
 
 # ============================================================
 # 1. QUẢN LÝ VÀ XOAY VÒNG API KEY SIÊU TỐC
