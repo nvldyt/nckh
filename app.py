@@ -399,7 +399,7 @@ def main():
                     en_query = translate_query_to_mesh(t3_query)
                     st.session_state["t3_en_keyword"] = en_query
                 with st.spinner("Đang tìm & tải Abstract từ PubMed..."):
-                    st.session_state["t3_pm_data"] = search_pubmed_multi(en_query, max_res)
+                    st.session_state["t3_pm_data"] = search_pubmed(en_query, max_res)
                 with st.spinner("Đang rút gọn từ khóa & tìm trên tạp chí Y học Việt Nam..."):
                     st.session_state["t3_vn_keyword"] = t3_query 
                     vn_results, vn_err = search_vn_journals(t3_query, max_res)
