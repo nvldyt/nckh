@@ -1366,50 +1366,15 @@ DỮ LIỆU ĐẦU VÀO CẦN NHẬN XÉT:
 
             st.write("---")
             
-            col_ai, col_reg = st.columns([1, 1])
-            
-            # 2. Chức năng AI tự quét Metadata (Dời từ Tab 1 sang)
-            with col_ai:
-                st.subheader("🤖 AI Tự động quét PDF")
-                st.caption("Nếu ngại gõ tay, anh có thể nhờ AI quét trang đầu của các PDF để lấy thông tin.")
-                if st.button("🚀 Quét Metadata từ trang 1 PDF"):
-                    chunks = st.session_state.get("chunks", [])
-                    count_updated = 0
-                    
-                    with st.spinner("AI đang đọc trang đầu của các file PDF..."):
-                        for source_id, meta in st.session_state["documents"].items():
-                            if meta.get("origin") == "PDF":
-                                page_one_chunks = [
-                                    c.get("text") if isinstance(c, dict) else getattr(c, 'text', '') 
-                                    for c in chunks 
-                                    if (c.get("source_id") if isinstance(c, dict) else getattr(c, 'source_id', None)) == source_id 
-                                    and str(c.get("page", "")).lower() in ["1", "trang 1", "page 1"]
-                                ]
-                                
-                                target_text = page_one_chunks[0] if page_one_chunks else ""
-                                if target_text:
-                                    meta_ai = extract_metadata_from_text_ai_wrapper(target_text)
-                                    if meta_ai:
-                                        st.session_state["documents"][source_id].update({k: v for k, v in meta_ai.items() if v})
-                                        count_updated += 1
-                                        
-                    if count_updated > 0: 
-                        st.success(f"✅ AI đã quét và bóc tách được {count_updated} file PDF! Vui lòng kiểm tra lại bảng phía trên.")
-                        time.sleep(1.5)
-                        st.rerun()
-                    else: 
-                        st.info("AI không tìm thấy thông tin mới nào.")
-
-            # 3. Hiển thị kết quả chuẩn Vancouver hiện hành
-            with col_reg:
-                st.subheader("📖 Danh sách Vancouver hiện tại")
-                st.caption("Đây là danh sách trích dẫn đã được sử dụng trong bản nháp (Tab 3).")
-                registry = st.session_state.get("citation_registry", {})
-                if registry:
-                    bib = citation_bibliography_wrapper()
-                    st.code(bib if bib else "Chưa có trích dẫn.", language="text")
-                else:
-                    st.info("Chưa có trích dẫn nào được sinh ra trong bản nháp.")
+            # Đã xóa phần chia cột và nút AI quét lại, chỉ giữ lại phần hiển thị Vancouver tràn viền
+            st.subheader("📖 Danh sách Vancouver hiện tại")
+            st.caption("Đây là danh sách trích dẫn đã được sử dụng trong bản nháp (Tab 3).")
+            registry = st.session_state.get("citation_registry", {})
+            if registry:
+                bib = citation_bibliography_wrapper()
+                st.code(bib if bib else "Chưa có trích dẫn.", language="text")
+            else:
+                st.info("Chưa có trích dẫn nào được sinh ra trong bản nháp.")
 
 
 if __name__ == "__main__":
