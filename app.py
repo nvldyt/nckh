@@ -391,7 +391,7 @@ def main():
         with col_search: t3_query = st.text_input("Tên đề tài nghiên cứu (tiếng Việt):", key=ui_key("t3_query_input"))
         with col_btn: max_res = st.number_input("Số bài/nguồn", min_value=2, max_value=10, value=5, key=ui_key("t3_max_res"))
     
-        if st.button("🚀 Tra cứu song song 2 nguồn", type="primary", key="t3_btn_search"):
+    if st.button("🚀 Tra cứu song song 2 nguồn", type="primary", key="t3_btn_search"):
         if not t3_query.strip():
             st.warning("Vui lòng nhập tên đề tài nghiên cứu!")
         else:
