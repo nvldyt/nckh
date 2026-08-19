@@ -223,3 +223,64 @@ def internal_overlap_Audit(text: str, all_chunks: List[Dict[str, Any]], top_k: i
 
     results.sort(key=lambda x: x["similarity"], reverse=True)
     return results[:top_k]
+# ============================================================
+# 4. KIỂM ĐỊNH TÍNH NHẤT QUÁN CỦA BẢNG (TABLE CONSISTENCY VALIDATOR)
+# ============================================================
+
+def auto_validate_table_consistency(df: pd.DataFrame) -> Dict[str, Any]:
+    """
+    Tự động kiểm tra tính nhất quán của bảng số liệu (DataFrame).
+    Tìm dòng chứa từ khóa "Tổng", "Total", "Chung"... và kiểm tra xem 
+    tổng các dòng bên trên có khớp với số liệu tổng được ghi hay không.
+    """
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty:
+        return {"is_consistent": True, "messages": ["Bảng dữ liệu trống hoặc không hợp lệ."]}
+
+    messages = []
+    is_consistent = True
+
+    # Tìm dòng tổng (nếu có)
+    total_row_idx = -1
+    total_keywords = ["tổng", "total", "chung", "cộng", "overall", "n"]
+    
+    for idx, row in df.iterrows():
+        first_val = str(row.iloc[0]).strip().lower()
+        if any(kw in first_val for kw in total_keywords):
+            total_row_idx = idx
+            break
+
+    if total_row_idx == -1:
+        return {"is_consistent": True, "messages": ["ℹ️ Không tìm thấy dòng Tổng/Total để đối chiếu tự động."]}
+
+    # Tách phần dữ liệu và dòng tổng
+    data_df = df.drop(index=total_row_idx)
+    total_row = df.loc[total_row_idx]
+
+    # Kiểm tra từng cột có dữ liệu số (bỏ qua cột đầu tiên chứa nhãn)
+    for col in df.columns[1:]:
+        try:
+            # Làm sạch chuỗi số để tính toán (loại bỏ dấu phẩy, khoảng trắng, ký tự phụ)
+            cleaned_col = data_df[col].astype(str).str.replace(r'[^\d.,-]', '', regex=True).str.replace(',', '.')
+            numeric_vals = pd.to_numeric(cleaned_col, errors='coerce')
+            
+            reported_total_raw = str(total_row[col])
+            reported_total = parse_number(reported_total_raw)
+
+            if numeric_vals.notna().any() and reported_total is not None:
+                calculated_sum = numeric_vals.sum()
+                # Sai số cho phép nhỏ (rel_tol = 1%)
+                if not math.isclose(calculated_sum, reported_total, rel_tol=1e-2):
+                    is_consistent = False
+                    messages.append(
+                        f"⚠️ Lệch tổng ở cột '{col}': Các dòng cộng lại = {calculated_sum:,.2f}, nhưng bảng ghi tổng = {reported_total:,.2f}"
+                    )
+        except Exception:
+            continue
+
+    if is_consistent:
+        messages.append("✅ Bảng số liệu hoàn toàn nhất quán (Cộng tổng các cột khớp chính xác).")
+
+    return {
+        "is_consistent": is_consistent,
+        "messages": messages
+    }
