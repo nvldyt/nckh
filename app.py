@@ -377,8 +377,14 @@ def main():
                 st.rerun()
             except Exception as e: 
                 st.error(f"❌ Lỗi: {str(e)}")
-    tabs = st.tabs(["📚 1. Tài liệu (PDF)", "🔍 2. Tra cứu TLTK", "✍️ 3. Viết luận văn", "📊 4. Phân tích số liệu", "🔎 5. Kiểm tra luận văn"])
-    
+    tabs = st.tabs([
+        "📚 1. Tài liệu (PDF)", 
+        "🔍 2. Tra cứu TLTK", 
+        "✍️ 3. Viết luận văn", 
+        "📊 4. Phân tích số liệu", 
+        "🔎 5. Kiểm tra luận văn", 
+        "🏷️ 6. Quản lý TLTK" # <-- Thêm Tab mới này
+    ])
     # ------------------------------------------------------------
     # TAB 1 – TÀI LIỆU PDF
     # ------------------------------------------------------------
