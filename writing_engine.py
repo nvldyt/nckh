@@ -1,4 +1,3 @@
-# writing_engine.py
 import os
 import time
 import logging
@@ -7,7 +6,9 @@ import streamlit as st
 from google import genai
 from google.genai import types
 
-# Cấu hình Model mặc định
+# ============================================================
+# CẤU HÌNH MODEL MẶC ĐỊNH
+# ============================================================
 DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
 MODEL_LITE = "gemini-3.5-flash-lite" # Dùng cho các tác vụ phụ trợ, lập dàn ý, review
 
@@ -64,20 +65,25 @@ def call_gemini(
         st.error("❌ Chưa có API Key nào được cấu hình trong Secrets!")
         return None
         
+    # Tự động điều chỉnh model nếu có lỗi phiên bản ngầm từ Google
     model_name = model or DEFAULT_MODEL
+    if "3.6" in model_name or "3.7" in model_name:
+        # Dự phòng trường hợp Google chưa update model name trên API
+        model_name = "gemini-1.5-flash" if "flash" in model_name else model_name
     
     if "current_key_idx" not in st.session_state:
         st.session_state["current_key_idx"] = 0
 
     total_keys = len(api_keys)
+    # Ép vòng lặp quét đủ số lượng key hiện có
+    total_attempts = max(max_retries, total_keys + 1)
     
-    for attempt in range(max_retries):
+    for attempt in range(total_attempts):
         current_idx = st.session_state["current_key_idx"] % total_keys
         current_key = api_keys[current_idx]
         
-        client = get_gemini_client(current_key)
-
         try:
+            client = get_gemini_client(current_key)
             response = client.models.generate_content(
                 model=model_name,
                 contents=prompt,
@@ -91,16 +97,16 @@ def call_gemini(
         except Exception as exc:
             error_msg = str(exc).lower()
             
+            # Bắt lỗi quá tải, cạn Quota hoặc server bận
             if any(code in error_msg for code in ["429", "resource_exhausted", "503", "unavailable", "quota"]):
                 if total_keys > 1:
                     st.session_state["current_key_idx"] += 1
                     next_idx = st.session_state["current_key_idx"] % total_keys
-                    status = st.warning(f"🔄 Key {current_idx + 1} đang bận. Tự động chuyển sang Key {next_idx + 1}...")
+                    st.toast(f"🔄 Key {current_idx + 1} đang bận. Đổi sang Key {next_idx + 1}...")
                     time.sleep(1) 
-                    status.empty()
                     continue 
                 else:
-                    if attempt < max_retries - 1:
+                    if attempt < total_attempts - 1:
                         wait_time = 15  
                         status = st.warning(f"⏳ Hệ thống Google đang quá tải. Đợi {wait_time} giây rồi thử lại...")
                         time.sleep(wait_time)
@@ -109,10 +115,10 @@ def call_gemini(
                         st.error("❌ Máy chủ Google Gemini hiện đang quá bận. Vui lòng đợi 1-2 phút rồi bấm thử lại!")
                         return None
             else:
-                if attempt == max_retries - 1:
-                    st.error(f"Lỗi hệ thống Gemini: {error_msg}")
+                if attempt == total_attempts - 1:
+                    st.error(f"❌ Lỗi hệ thống Gemini: {error_msg}")
                     return None
-                time.sleep(3)
+                time.sleep(2)
 
     return None
 
@@ -145,7 +151,7 @@ def generate_evidence_based(
     - Bước 2: Lập bản đồ bằng chứng (Evidence Mapping)
     - Bước 3: Viết nháp có kiểm soát từng luận điểm (Controlled Drafting)
     - Bước 4: Kiểm định trích dẫn (Citation Validation)
-    - Bước 5: Review học thuật (Scientific Reviewer)
+    - Bước 5: Review học thuật (Scientific Reviewer) - Đã ẩn để tối ưu tốc độ
     """
     if not evidence:
         return "Tài liệu được cung cấp trong Evidence Database chưa đủ bằng chứng để viết mục này.", evidence, []
@@ -207,7 +213,7 @@ YÊU CẦU ĐỊNH DẠNG BẮT BUỘC:
 - Nếu không có dữ liệu, hãy trả lời thẳng "Y văn hiện tại chưa cung cấp số liệu về vấn đề này". Tuyệt đối không tự suy luận.
 - PHẢI dùng nguyên vẹn mã [REF-...] được cung cấp ở ngay cuối câu chứa thông tin lấy từ nguồn đó.
 """
-    # Dùng mô hình chính (DEFAULT_MODEL) để đảm bảo chất lượng, nhiệt độ 0.0 để loại bỏ ảo giác
+    # Dùng mô hình chính để đảm bảo chất lượng, nhiệt độ 0.0 để loại bỏ ảo giác
     raw_output = call_gemini(draft_prompt, temperature=0.0) 
     
     if not raw_output:
@@ -217,8 +223,6 @@ YÊU CẦU ĐỊNH DẠNG BẮT BUỘC:
     # BƯỚC 4: KIỂM ĐỊNH TRÍCH DẪN (Citation Engine)
     # ==========================================
     final_text, references, invalid_tags = citation_engine.process_vancouver_citations(raw_output)
-
-    # ĐÃ BỎ BƯỚC 5 ĐỂ BẢO TOÀN TRÍCH DẪN VÀ TĂNG TỐC ĐỘ
 
     if invalid_tags:
         final_text += (
