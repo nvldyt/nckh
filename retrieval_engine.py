@@ -62,60 +62,62 @@ def retrieve_evidence(
     matrix: np.ndarray, 
     bm25: BM25Okapi, 
     top_k: int = 8, 
-    hybrid_top_k: int = 30, # Lấy 30 ứng viên để Rerank
+    hybrid_top_k: int = 30,
     model_name: str = DEFAULT_EMBEDDING_MODEL,
     reranker_name: str = DEFAULT_RERANKER_MODEL
 ) -> List[Dict[str, Any]]:
-    """
-    Tìm kiếm bằng chứng thông minh (Agentic Retrieval):
-    - Giai đoạn 1: Lọc thô bằng Hybrid (Vector + BM25) lấy Top 30.
-    - Giai đoạn 2: Cross-Encoder Reranker soi xét lại Top 30 để chắt lọc Top 8 chuẩn nhất.
-    """
-    if not chunks or matrix is None or bm25 is None:
+    
+    if not chunks or matrix is None or bm25 is None or len(chunks) == 0:
         return []
 
-    # --- STAGE 1: HYBRID SEARCH (Lọc thô Top 30) ---
+    # --- STAGE 1: HYBRID SEARCH ---
     query_vector = get_embeddings([query], model_name)[0]
     semantic_scores = matrix @ query_vector
 
+    # An toàn hóa việc chuẩn hóa Semantic
     sem_min, sem_max = semantic_scores.min(), semantic_scores.max()
     if sem_max > sem_min:
         semantic_scores = (semantic_scores - sem_min) / (sem_max - sem_min)
     else:
-        semantic_scores = np.zeros_like(semantic_scores)
+        semantic_scores = np.ones_like(semantic_scores) # Hoặc zeros tùy logic
 
     tokenized_query = query.lower().split()
     bm25_scores = np.array(bm25.get_scores(tokenized_query))
 
+    # An toàn hóa việc chuẩn hóa BM25
     bm25_min, bm25_max = bm25_scores.min(), bm25_scores.max()
     if bm25_max > bm25_min:
         bm25_scores = (bm25_scores - bm25_min) / (bm25_max - bm25_min)
     else:
-        bm25_scores = np.zeros_like(bm25_scores)
+        bm25_scores = np.ones_like(bm25_scores)
 
+    # Tính điểm Hybrid
     final_scores = (0.65 * semantic_scores) + (0.35 * bm25_scores)
     
     stage1_k = min(hybrid_top_k, len(chunks))
     stage1_indices = np.argsort(final_scores)[::-1][:stage1_k]
     
-    candidate_chunks = [dict(chunks[idx]) for idx in stage1_indices]
+    candidate_chunks = []
+    for idx in stage1_indices:
+        chunk_copy = dict(chunks[idx])
+        chunk_copy["hybrid_score"] = float(final_scores[idx]) # Lưu vết điểm vòng 1
+        candidate_chunks.append(chunk_copy)
 
-    # NẾU DỮ LIỆU CÓ ÍT HƠN SỐ LƯỢNG YÊU CẦU, TRẢ VỀ LUÔN KHÔNG CẦN RERANK
     if len(candidate_chunks) <= top_k:
+        # Nếu ít dữ liệu, gán luôn điểm rerank bằng hybrid để tương thích cấu trúc
+        for doc in candidate_chunks:
+            doc["score"] = doc["hybrid_score"]
         return candidate_chunks[:top_k]
 
-    # --- STAGE 2: CROSS-ENCODER RERANKING (Tinh chỉnh Top K) ---
+    # --- STAGE 2: CROSS-ENCODER RERANKING ---
     reranker = load_reranker_model(reranker_name)
     
-    # Tạo cặp câu (Query, Document_Text) để chấm điểm chéo
     sentence_pairs = [[query, doc["text"]] for doc in candidate_chunks]
     rerank_scores = reranker.predict(sentence_pairs)
     
-    # Cập nhật điểm chuẩn xác từ Reranker và sắp xếp lại
     for i, doc in enumerate(candidate_chunks):
-        doc["score"] = float(rerank_scores[i]) 
+        doc["score"] = float(rerank_scores[i]) # Điểm quyết định cuối cùng
         
     candidate_chunks.sort(key=lambda x: x["score"], reverse=True)
 
-    # Chỉ trả về Top K tinh túy nhất cho AI
     return candidate_chunks[:top_k]
