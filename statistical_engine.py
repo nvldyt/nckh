@@ -184,9 +184,45 @@ def compare_two_groups(df: pd.DataFrame, group_col: str, value_col: str) -> Dict
 # ============================================================
 
 @st.cache_data(show_spinner=False)
-def binary_logistic_regression(df: pd.DataFrame, outcome: str, predictors: List[str]):
-    cols = [outcome] + predictors
-    tmp = df[cols].dropna().copy()
+def binary_logistic_regression(df: pd.DataFrame, outcome: str, predictors: List[str]) -> Tuple[pd.DataFrame, str]:
+    import statsmodels.api as sm
+    import pandas as pd
+    
+    # 1. Chuẩn bị dữ liệu
+    data = df[[outcome] + predictors].dropna().copy()
+    
+    # 2. Mã hóa các biến phân loại (Biến chữ sang 0/1)
+    # drop_first=True giúp tránh lỗi đa cộng tuyến hoàn hảo
+    X = pd.get_dummies(data[predictors], drop_first=True, dtype=int)
+    y = data[outcome]
+    
+    # Mã hóa biến kết cục nếu nó là dạng chữ
+    if y.dtype == 'object':
+        y = pd.factorize(y)[0]
+        
+    # Thêm cột hằng số (Intercept) cho mô hình
+    X = sm.add_constant(X)
+    
+    try:
+        # 3. Chạy mô hình
+        model = sm.Logit(y, X).fit(disp=0)
+        
+        # 4. Lấy kết quả OR (Odds Ratio) và CI 95%
+        params = model.params
+        conf = model.conf_int()
+        conf['OR'] = params
+        conf.columns = ['2.5%', '97.5%', 'OR']
+        
+        # Chuyển đổi sang OR (exp)
+        import numpy as np
+        final_result = np.exp(conf)
+        final_result['P-value'] = model.pvalues
+        
+        summary = f"Mô hình Logistic cho biến [{outcome}]. (Đã tự động xử lý biến phân loại)."
+        return final_result, summary
+        
+    except Exception as e:
+        raise ValueError(f"Không thể xây dựng mô hình: {str(e)}. Hãy thử bỏ bớt các biến có quá nhiều nhóm giá trị (như Hoạt chất, Chẩn đoán).")
 
     if tmp.empty:
         raise ValueError("Không còn dữ liệu sau khi loại bỏ ô trống (Missing).")
