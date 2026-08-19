@@ -2,17 +2,6 @@
 # ============================================================
 # QUẢN LÝ CHECKPOINT / DỰ ÁN LUẬN VĂN (LƯU CỤC BỘ XUỐNG ĐĨA)
 # ============================================================
-#
-# Module này cho phép lưu lại toàn bộ trạng thái làm việc hiện tại
-# (Evidence Database, Citation Registry, Result Database của Tab 4,
-# cấu trúc Chương 3 đã tuyển chọn, bản nháp gần nhất...) xuống một
-# file .pkl trên đĩa của máy chủ, để có thể khôi phục lại sau khi
-# app bị restart / mất phiên Streamlit.
-#
-# Lưu ý: đây là lưu trữ CỤC BỘ theo máy chủ đang chạy app. Nếu deploy
-# trên Streamlit Community Cloud, thư mục này có thể bị xóa khi app
-# "ngủ đông" / redeploy — nên xem đây là checkpoint tạm thời trong
-# phiên làm việc, không phải nơi lưu trữ vĩnh viễn duy nhất.
 
 import pickle
 from datetime import datetime
@@ -21,10 +10,11 @@ from typing import List, Tuple
 
 import streamlit as st
 
-# Thư mục lưu các file checkpoint dự án (sử dụng pathlib hiện đại)
+# Thư mục lưu các file checkpoint dự án
 PROJECTS_DIR = Path.cwd() / "saved_projects"
 
-# Các key trong st.session_state sẽ được đóng gói khi lưu 1 dự án.
+# Các key trong st.session_state sẽ được đóng gói khi lưu dự án.
+# (Đã đồng bộ chuẩn hóa viết hoa/thường để tránh mất mát dữ liệu Audit)
 PROJECT_STATE_KEYS = [
     # Evidence Database (Tab 1 + Tab 2)
     "documents",
@@ -36,10 +26,12 @@ PROJECT_STATE_KEYS = [
     "t3_vn_data",
     "t3_en_keyword",
     "t3_query",
-    # Viết luận văn (Tab 3)
+    
+    # Viết luận văn & Kiểm định (Tab 3 & Tab 5)
     "last_generated",
     "last_evidence",
-    "audit_log",
+    "Audit_log",  # Đồng bộ chữ A viết hoa khớp với app.py và audit_engine
+    
     # Phân tích số liệu & cấu trúc Chương 3 (Tab 4)
     "result_cart",
     "saved_tables",
@@ -63,13 +55,13 @@ def _safe_filename(name: str) -> str:
 
 
 def save_project(project_name: str) -> Tuple[bool, str]:
-    """Lưu snapshot toàn bộ trạng thái nghiên cứu hiện tại xuống đĩa."""
+    """Lưu snapshot toàn bộ trạng thái nghiên cứu hiện tại xuống đĩa cục bộ."""
     try:
         _ensure_dir()
         filename = _safe_filename(project_name)
         filepath = PROJECTS_DIR / f"{filename}.pkl"
 
-        # Đóng gói dữ liệu bằng dict comprehension để mã gọn và nhanh hơn
+        # Đóng gói dữ liệu từ st.session_state
         snapshot = {
             key: st.session_state[key]
             for key in PROJECT_STATE_KEYS
@@ -83,7 +75,7 @@ def save_project(project_name: str) -> Tuple[bool, str]:
         with filepath.open("wb") as f:
             pickle.dump(snapshot, f)
 
-        n_keys = len(snapshot) - 2  # trừ 2 key metadata
+        n_keys = len(snapshot) - 2  # Trừ 2 key metadata
         return True, (
             f"✅ Đã lưu checkpoint dự án **'{project_name}'** lúc {saved_at} "
             f"({n_keys} nhóm dữ liệu đã đóng gói)."
@@ -100,7 +92,6 @@ def load_project(project_name: str) -> Tuple[bool, str]:
         filepath = PROJECTS_DIR / f"{filename}.pkl"
 
         if not filepath.exists():
-            # project_name có thể đã là tên file gốc, thử tìm trực tiếp
             alt_path = PROJECTS_DIR / project_name
             if alt_path.suffix != ".pkl":
                 alt_path = alt_path.with_suffix(".pkl")
@@ -125,20 +116,18 @@ def load_project(project_name: str) -> Tuple[bool, str]:
 
 
 def list_projects() -> List[str]:
-    """Liệt kê các checkpoint đã lưu, mới nhất lên trước."""
+    """Liệt kê các checkpoint đã lưu, sắp xếp theo thời gian mới nhất lên trước."""
     try:
         _ensure_dir()
-        # Lấy tất cả file .pkl và sắp xếp theo thời gian sửa đổi (mới nhất đầu tiên)
         files = list(PROJECTS_DIR.glob("*.pkl"))
         files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
-        # Trả về tên file bỏ đuôi .pkl (dùng f.stem)
         return [f.stem for f in files]
     except Exception:
         return []
 
 
 def delete_project(project_name: str) -> Tuple[bool, str]:
-    """Xóa 1 checkpoint dự án khỏi đĩa (tuỳ chọn, dùng khi cần dọn dẹp)."""
+    """Xóa 1 checkpoint dự án khỏi đĩa."""
     try:
         _ensure_dir()
         filename = _safe_filename(project_name)
