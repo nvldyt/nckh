@@ -1194,25 +1194,49 @@ DỮ LIỆU ĐẦU VÀO CẦN NHẬN XÉT:
     # ------------------------------------------------------------
     with tabs[5]:
         st.header("⚙️ Nguồn, citation và cấu hình")
-        st.subheader("🤖 AI Tự động quét và lưu Metadata hàng loạt")
-        if st.button("🚀 AI Tự động đọc toàn bộ file PDF và lưu Metadata", type="primary"):
+        st.subheader("🤖 AI Tự động quét và lưu Metadata hàng loạt từ Trang 1 PDF")
+        if st.button("🚀 AI Tự động đọc trang đầu PDF và lưu Metadata", type="primary"):
             docs = st.session_state.get("documents", {})
             chunks = st.session_state.get("chunks", [])
             count_updated = 0
-            if not docs: st.warning("⚠️ Evidence Database đang trống!")
+            
+            if not docs: 
+                st.warning("⚠️ Evidence Database đang trống!")
             else:
-                with st.spinner("AI đang quét trang đầu của tất cả các file PDF..."):
+                with st.spinner("AI đang quét trang đầu của tất cả các file PDF để bóc tách thông tin..."):
                     for source_id, meta in docs.items():
                         if meta.get("origin") == "PDF":
-                            chunk_text = next((c.get("text") if isinstance(c, dict) else getattr(c, 'text', '') for c in chunks if (c.get("source_id") if isinstance(c, dict) else getattr(c, 'source_id', None)) == source_id), "")
-                            if chunk_text:
-                                meta_ai = extract_metadata_from_text_ai_wrapper(chunk_text)
+                            # Ưu tiên tìm chính xác chunk thuộc trang 1 của tài liệu này
+                            page_one_chunks = [
+                                c.get("text") if isinstance(c, dict) else getattr(c, 'text', '') 
+                                for c in chunks 
+                                if (c.get("source_id") if isinstance(c, dict) else getattr(c, 'source_id', None)) == source_id 
+                                and str(c.get("page", "")).lower() in ["1", "trang 1", "page 1"]
+                            ]
+                            
+                            # Nếu không tìm thấy nhãn trang 1 rõ ràng, lấy tạm chunk đầu tiên của file
+                            if not page_one_chunks:
+                                fallback_chunks = [
+                                    c.get("text") if isinstance(c, dict) else getattr(c, 'text', '') 
+                                    for c in chunks 
+                                    if (c.get("source_id") if isinstance(c, dict) else getattr(c, 'source_id', None)) == source_id
+                                ]
+                                target_text = fallback_chunks[0] if fallback_chunks else ""
+                            else:
+                                target_text = page_one_chunks[0]
+
+                            if target_text:
+                                meta_ai = extract_metadata_from_text_ai_wrapper(target_text)
                                 if meta_ai:
                                     meta.update({k: v for k, v in meta_ai.items() if v})
                                     st.session_state["documents"][source_id] = meta
                                     count_updated += 1
-                if count_updated > 0: st.success(f"✅ Đã cập nhật metadata cho {count_updated} file PDF!"); st.rerun()
-                else: st.warning("Không tìm thấy dữ liệu.")
+                                    
+                if count_updated > 0: 
+                    st.success(f"✅ Đã trích xuất và cập nhật thành công metadata cho {count_updated} file PDF!")
+                    st.rerun()
+                else: 
+                    st.warning("Không tìm thấy nội dung để quét.")
 
         st.write("---")
         st.subheader("Citation Registry & Metadata thủ công")
@@ -1226,20 +1250,25 @@ DỮ LIỆU ĐẦU VÀO CẦN NHẬN XÉT:
         c_exp1, c_exp2 = st.columns(2)
         with c_exp1:
             if st.button("📄 Xuất bản nháp hiện tại ra Word", use_container_width=True):
-                if not st.session_state["last_generated"]: st.warning("Chưa có bản nháp.")
+                if not st.session_state["last_generated"]: 
+                    st.warning("Chưa có bản nháp.")
                 else:
                     docx_data = create_word_document(title="Bản nháp hỗ trợ nghiên cứu", body=st.session_state["last_generated"], bibliography=citation_bibliography_wrapper())
                     st.download_button("📥 Tải Word", data=docx_data, file_name="Ban_nhap.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
         with c_exp2:
-            if st.button("🧹 Làm mới Giao diện", use_container_width=True): reset_ui_state(); st.rerun()
+            if st.button("🧹 Làm mới Giao diện", use_container_width=True): 
+                reset_ui_state()
+                st.rerun()
        
         st.write("---")
         st.subheader("💾 Lưu trữ dự án dài hạn (.json)")
         col_ex1, col_ex2 = st.columns(2)
         with col_ex1:
             project_data = {
-                "documents": st.session_state.get("documents", {}), "chunks": st.session_state.get("chunks", []),
-                "citation_registry": st.session_state.get("citation_registry", {}), "current_references": st.session_state.get("current_references", []),
+                "documents": st.session_state.get("documents", {}), 
+                "chunks": st.session_state.get("chunks", []),
+                "citation_registry": st.session_state.get("citation_registry", {}), 
+                "current_references": st.session_state.get("current_references", []),
                 "result_cart": [vars(item) if hasattr(item, "__dict__") else item for item in st.session_state.get("result_cart", [])],
                 "saved_tables": {k: v.to_dict(orient='split') for k, v in st.session_state.get("saved_tables", {}).items()}
             }
@@ -1252,9 +1281,14 @@ DỮ LIỆU ĐẦU VÀO CẦN NHẬN XÉT:
                     st.session_state.update({k: loaded_data.get(k, defaults[k]) for k in ["documents", "chunks", "citation_registry", "current_references"]})
                     st.session_state["result_cart"] = [CandidateResult(**item) if isinstance(item, dict) else item for item in loaded_data.get("result_cart", [])]
                     st.session_state["saved_tables"] = {k: pd.DataFrame.from_dict(v, orient='split') for k, v in loaded_data.get("saved_tables", {}).items()}
-                    with st.spinner("Đang xây dựng lại index tìm kiếm..."): rebuild_index()
-                    st.success("🎉 Khôi phục thành công!"); time.sleep(1); reset_ui_state(); st.rerun()
-                except Exception as e: st.error(f"❌ Lỗi: {str(e)}")
+                    with st.spinner("Đang xây dựng lại index tìm kiếm..."): 
+                        rebuild_index()
+                    st.success("🎉 Khôi phục thành công!")
+                    time.sleep(1)
+                    reset_ui_state()
+                    st.rerun()
+                except Exception as e: 
+                    st.error(f"❌ Lỗi: {str(e)}")
 
 if __name__ == "__main__":
     main()
