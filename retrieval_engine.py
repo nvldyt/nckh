@@ -2,23 +2,27 @@
 import numpy as np
 from functools import lru_cache
 from typing import List, Dict, Any
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, CrossEncoder
 from rank_bm25 import BM25Okapi
 
 # Khai báo model mặc định ở đây để quản lý tập trung
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+# Khai báo Reranker đa ngôn ngữ (Nhỏ, nhẹ nhưng cực kỳ thông minh)
+DEFAULT_RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
 
 # ============================================================
-# 1. QUẢN LÝ MÔ HÌNH NHÚNG (EMBEDDING MODEL)
+# 1. QUẢN LÝ MÔ HÌNH (EMBEDDING & RERANKER)
 # ============================================================
 
 @lru_cache(maxsize=1)
 def load_embedding_model(model_name: str):
-    """
-    Tải mô hình nhúng và lưu vào RAM (cache) để không phải tải lại mỗi lần gọi.
-    Chỉ giữ tối đa 1 model trong bộ nhớ để tránh tràn RAM.
-    """
+    """Tải mô hình nhúng (Vector) vào RAM."""
     return SentenceTransformer(model_name)
+
+@lru_cache(maxsize=1)
+def load_reranker_model(model_name: str):
+    """Tải mô hình Cross-Encoder vào RAM (chỉ tải 1 lần)."""
+    return CrossEncoder(model_name)
 
 def get_embeddings(texts: List[str], model_name: str = DEFAULT_EMBEDDING_MODEL) -> np.ndarray:
     """Chuyển đổi danh sách văn bản thành ma trận vector ngữ nghĩa."""
@@ -36,12 +40,12 @@ def build_bm25_index(chunks: List[Dict[str, Any]]) -> BM25Okapi:
     return BM25Okapi(tokenized_corpus)
 
 def build_embedding_index(chunks: List[Dict[str, Any]], model_name: str = DEFAULT_EMBEDDING_MODEL) -> np.ndarray:
-    """Dựng ma trận vector cho toàn bộ văn bản (Dùng khi nạp mới hoàn toàn)."""
+    """Dựng ma trận vector cho toàn bộ văn bản."""
     texts = [c["text"] for c in chunks]
     return get_embeddings(texts, model_name)
 
 def update_embedding_index(new_chunks: List[Dict[str, Any]], existing_matrix: np.ndarray, model_name: str = DEFAULT_EMBEDDING_MODEL) -> np.ndarray:
-    """Nối thêm vector của văn bản mới vào ma trận cũ để tiết kiệm thời gian tính toán."""
+    """Nối thêm vector của văn bản mới vào ma trận cũ."""
     new_texts = [c["text"] for c in new_chunks]
     new_matrix = get_embeddings(new_texts, model_name)
     if existing_matrix is not None and existing_matrix.size > 0:
@@ -49,7 +53,7 @@ def update_embedding_index(new_chunks: List[Dict[str, Any]], existing_matrix: np
     return new_matrix
 
 # ============================================================
-# 3. THUẬT TOÁN TRUY XUẤT (HYBRID RETRIEVAL)
+# 3. THUẬT TOÁN TRUY XUẤT 2 GIAI ĐOẠN (HYBRID + RERANKER)
 # ============================================================
 
 def retrieve_evidence(
@@ -57,17 +61,20 @@ def retrieve_evidence(
     chunks: List[Dict[str, Any]], 
     matrix: np.ndarray, 
     bm25: BM25Okapi, 
-    k: int = 8, 
-    model_name: str = DEFAULT_EMBEDDING_MODEL
+    top_k: int = 8, 
+    hybrid_top_k: int = 30, # Lấy 30 ứng viên để Rerank
+    model_name: str = DEFAULT_EMBEDDING_MODEL,
+    reranker_name: str = DEFAULT_RERANKER_MODEL
 ) -> List[Dict[str, Any]]:
     """
-    Thuật toán Hybrid Search: Trộn điểm Vector (65%) và BM25 (35%).
-    (Sẵn sàng tích hợp Reranker ở bước này trong tương lai).
+    Tìm kiếm bằng chứng thông minh (Agentic Retrieval):
+    - Giai đoạn 1: Lọc thô bằng Hybrid (Vector + BM25) lấy Top 30.
+    - Giai đoạn 2: Cross-Encoder Reranker soi xét lại Top 30 để chắt lọc Top 8 chuẩn nhất.
     """
     if not chunks or matrix is None or bm25 is None:
         return []
 
-    # 1. Semantic Search (Đo khoảng cách Vector)
+    # --- STAGE 1: HYBRID SEARCH (Lọc thô Top 30) ---
     query_vector = get_embeddings([query], model_name)[0]
     semantic_scores = matrix @ query_vector
 
@@ -77,7 +84,6 @@ def retrieve_evidence(
     else:
         semantic_scores = np.zeros_like(semantic_scores)
 
-    # 2. Keyword Search (Đo độ khớp từ khóa bằng BM25)
     tokenized_query = query.lower().split()
     bm25_scores = np.array(bm25.get_scores(tokenized_query))
 
@@ -87,22 +93,29 @@ def retrieve_evidence(
     else:
         bm25_scores = np.zeros_like(bm25_scores)
 
-    # 3. Hybrid Scoring
     final_scores = (0.65 * semantic_scores) + (0.35 * bm25_scores)
     
-    # 4. Lấy Top-K ứng viên xuất sắc nhất
-    # (Tương lai: Có thể lấy Top-30, rồi dùng Reranker lọc lại Top-8 tại vị trí này)
-    k = min(k, len(chunks))
-    indices = np.argsort(final_scores)[::-1][:k]
+    stage1_k = min(hybrid_top_k, len(chunks))
+    stage1_indices = np.argsort(final_scores)[::-1][:stage1_k]
+    
+    candidate_chunks = [dict(chunks[idx]) for idx in stage1_indices]
 
-    results = []
-    for idx in indices:
-        item = dict(chunks[idx])  # Sao chép để không ảnh hưởng dữ liệu gốc
-        item["score"] = float(final_scores[idx])
-        results.append(item)
+    # NẾU DỮ LIỆU CÓ ÍT HƠN SỐ LƯỢNG YÊU CẦU, TRẢ VỀ LUÔN KHÔNG CẦN RERANK
+    if len(candidate_chunks) <= top_k:
+        return candidate_chunks[:top_k]
 
-    return results
+    # --- STAGE 2: CROSS-ENCODER RERANKING (Tinh chỉnh Top K) ---
+    reranker = load_reranker_model(reranker_name)
+    
+    # Tạo cặp câu (Query, Document_Text) để chấm điểm chéo
+    sentence_pairs = [[query, doc["text"]] for doc in candidate_chunks]
+    rerank_scores = reranker.predict(sentence_pairs)
+    
+    # Cập nhật điểm chuẩn xác từ Reranker và sắp xếp lại
+    for i, doc in enumerate(candidate_chunks):
+        doc["score"] = float(rerank_scores[i]) 
+        
+    candidate_chunks.sort(key=lambda x: x["score"], reverse=True)
 
-# Lưu ý: Các hàm liên lạc API ngoài (PubMed, VN Journals) đã được giữ 
-# ở file `evidence_engine.py` vì chúng thuộc nhóm "Nạp dữ liệu", 
-# còn file này chuyên trị về "Tính toán & Truy xuất nội bộ".
+    # Chỉ trả về Top K tinh túy nhất cho AI
+    return candidate_chunks[:top_k]
