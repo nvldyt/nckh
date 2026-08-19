@@ -440,6 +440,44 @@ def main():
                 }
                 st.success("✅ Đã lưu bối cảnh! Bộ não AI đã được đồng bộ hóa với đề tài của anh.")
 
+        # ============================================================
+        # TÍNH NĂNG MỚI: MA TRẬN TỔNG HỢP Y VĂN (LITERATURE SYNTHESIS MATRIX)
+        # ============================================================
+        with st.expander("🌟 Tự động lập Ma trận tổng hợp y văn từ Evidence Database", expanded=False):
+            st.info("💡 Tính năng này tự động quét tất cả các tài liệu / bài báo bạn đã nạp, tổng hợp thành bảng so sánh chuẩn y khoa (Tác giả, Năm, Thiết kế, Cỡ mẫu, Kết quả chính).")
+            
+            if st.button("🚀 Khởi tạo Ma trận Tổng hợp Y văn", type="primary", key="btn_build_matrix"):
+                docs = st.session_state.get("documents", {})
+                chunks = st.session_state.get("chunks", [])
+                
+                if not docs:
+                    st.warning("⚠️ Evidence Database đang trống! Hãy nạp tài liệu PDF hoặc bài báo từ PubMed/Tạp chí VN trước.")
+                else:
+                    with st.spinner("AI đang phân tích và cấu trúc hóa ma trận y văn..."):
+                        matrix_df = build_literature_matrix(docs, chunks)
+                        
+                    if not matrix_df.empty:
+                        st.success("✅ Đã lập thành công Ma trận tổng hợp y văn!")
+                        st.dataframe(matrix_df, use_container_width=True)
+                        
+                        st.session_state["literature_matrix_df"] = matrix_df
+                        
+                        md_table = "### Ma trận tổng hợp y văn\n\n" + matrix_df.to_markdown(index=False)
+                        matrix_word_bytes = create_word_document(
+                            title="Ma trận Tổng hợp Y văn",
+                            body=md_table,
+                            bibliography=""
+                        )
+                        st.download_button(
+                            label="📥 Tải Ma trận Y văn ra file Word",
+                            data=matrix_word_bytes,
+                            file_name="Ma_tran_Tong_hop_Y_van.docx",
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            key="download_matrix_word"
+                        )
+                    else:
+                        st.error("❌ Không thể trích xuất dữ liệu ma trận. Vui lòng thử lại.")
+        
         st.markdown("### 📊 Dữ liệu nghiên cứu của riêng anh")
         if "ai_pending_remark" in st.session_state:
             st.session_state[ui_key("my_table_remarks")] = st.session_state["ai_pending_remark"]
