@@ -6,7 +6,7 @@ from typing import Optional, Tuple, List, Dict, Any
 
 from google import genai
 from google.genai import types
-from evidence_engine import retrieve_evidence
+from retrieval_engine import retrieve_evidence
 from citation_engine import CitationEngine
 
 BASE_SYSTEM_RULES = """
