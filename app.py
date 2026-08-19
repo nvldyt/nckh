@@ -426,7 +426,7 @@ def main():
                 st.success("Đã xóa dữ liệu trong phiên hiện tại."); st.rerun()
 
         st.write("---")
-        st.subheader("Nguồn đã nạp (tất cả nguồn gốc)")
+        st.subheader("Nguồn PDF đã nạp")
         docs = list(st.session_state["documents"].values())
         if docs: st.dataframe(pd.DataFrame(docs))
         else: st.info("Chưa có tài liệu.")
@@ -451,7 +451,7 @@ def main():
     # TAB 2 – Tra cứu TLTK
     # ------------------------------------------------------------
     with tabs[1]:
-        st.header("🔍 Tra cứu TLTK: PubMed (Quốc tế) + Tạp chí Y học Việt Nam")
+        st.header("🔍 Tra cứu TLTK: PubMed + Bài báo khoa học")
         st.info("Nhập tên đề tài bằng tiếng Việt. Hệ thống tự dịch sang từ khoá MeSH để tìm trên PubMed, đồng thời tìm bài báo tiếng Việt liên quan.")
         render_evidence_database_status()
 
@@ -460,7 +460,7 @@ def main():
         with col_btn: max_res = st.number_input("Số bài/nguồn", min_value=2, max_value=10, value=5, key=ui_key("t3_max_res"))
         
         # Đã thụt lề toàn bộ khối if này vào trong (thêm 4 dấu cách)
-        if st.button("🚀 Tra cứu song song 2 nguồn", type="primary", key="t3_btn_search"):
+        if st.button("🚀 Tra cứu TLTK", type="primary", key="t3_btn_search"):
             if not t3_query.strip():
                 st.warning("Vui lòng nhập tên đề tài nghiên cứu!")
             else:
