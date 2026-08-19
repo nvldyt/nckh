@@ -1311,7 +1311,7 @@ DỮ LIỆU ĐẦU VÀO CẦN NHẬN XÉT:
     # TAB 6 – QUẢN LÝ TÀI LIỆU THAM KHẢO & METADATA (TLTK)
     # ------------------------------------------------------------
     with tabs[5]:
-        st.header("🏷️ Quản lý Tài liệu tham khảo (Metadata)")
+        st.header("🏷️ Tài liệu tham khảo")
         st.info("💡 Bảng dưới đây hiển thị thông tin thư mục của toàn bộ tài liệu anh đã nạp. Anh có thể **nhấp đúp chuột vào từng ô** để sửa thủ công tên tác giả, năm, tên bài... Nếu dữ liệu ở đây chuẩn, AI sẽ sinh ra danh mục Vancouver chuẩn xác.")
         
         docs = st.session_state.get("documents", {})
