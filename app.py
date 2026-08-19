@@ -560,146 +560,265 @@ def main():
     # ------------------------------------------------------------
     with tabs[3]:
         st.header("📊 Phân tích số liệu bệnh án")
+
         excel_file = st.file_uploader("Tải file Excel", type=["xlsx", "xls"], key=ui_key("excel_data"))
+
         if excel_file is not None:
             try:
                 raw_df = pd.read_excel(excel_file)
                 with st.spinner("Đang dọn dẹp và chuẩn hóa dữ liệu bằng Data Engine..."):
                     df, clean_logs = auto_clean_data(raw_df)
+                st.session_state["excel_df"] = df
+                st.session_state["clean_logs"] = clean_logs
                 st.success(f"Dữ liệu sẵn sàng: {df.shape[0]} dòng × {df.shape[1]} cột.")
-                if clean_logs:
-                    with st.expander("🛠️ Xem nhật ký tự động dọn dẹp dữ liệu", expanded=True):
-                        for log in clean_logs: st.write(log)
-                validation = validate_dataframe(df)
-                if validation:
-                    for item in validation: st.warning(item)
-                with st.expander("Xem dữ liệu sau khi chuẩn hóa"): st.dataframe(df)
+            except Exception as exc:
+                st.error(f"Lỗi khi đọc hoặc xử lý file Excel: {exc}")
+                st.session_state["excel_df"] = None
 
-                st.write("---")
-                st.markdown(f"### 🛒 Giỏ kết quả: **{len(st.session_state.get('result_cart', []))}** bảng đã lưu")
-                col_cart1, col_cart2 = st.columns(2)
-                with col_cart1:
-                    if st.button("🗑️ Xóa toàn bộ Giỏ kết quả", use_container_width=True):
-                        st.session_state["result_cart"] = []; st.session_state["saved_tables"] = {}; st.rerun()
-                with col_cart2:
-                    saved_tabs = st.session_state.get("saved_tables", {})
-                    if saved_tabs:
-                        md_content = ""
-                        for table_id, df_table in saved_tabs.items():
-                            md_content += f"### Kết quả Thống kê: {table_id}\n\n"
-                            header = "| " + " | ".join(str(c) for c in df_table.columns) + " |"
-                            separator = "|" + "|".join(["---"] * len(df_table.columns)) + "|"
-                            rows = ["| " + " | ".join(str(x) for x in row.values) + " |" for _, row in df_table.iterrows()]
-                            md_content += "\n".join([header, separator] + rows) + "\n\n"
-                        docx_data = create_word_document(title="Phụ lục Số liệu", body=md_content, bibliography="")
-                        st.download_button(label="📥 Tải TẤT CẢ bảng ra file Word", data=docx_data, file_name="Phu_luc.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
-                    else: st.button("📥 Tải TẤT CẢ bảng ra file Word", disabled=True, use_container_width=True)
+        df = st.session_state.get("excel_df")
 
-                st.write("---")
-                st.subheader("📋 Bộ máy tuyển chọn & Sắp xếp bảng cho Chương Kết quả")
-                with st.expander("🎯 Khai báo Mục tiêu nghiên cứu"):
-                    obj_input_1 = st.text_input("Mục tiêu 1", value="ĐẶC ĐIỂM BỆNH NHÂN NGHIÊN CỨU", key=ui_key("obj_1"))
-                    obj_input_2 = st.text_input("Mục tiêu 2", value="PHÂN TÍCH THỰC TRẠNG SỬ DỤNG THUỐC", key=ui_key("obj_2"))
-                    objectives = [
-                        StudyObjective(id="MT1", title=obj_input_1, keywords=["tuổi", "giới", "bệnh", "đặc điểm"]),
-                        StudyObjective(id="MT2", title=obj_input_2, keywords=["thuốc", "phù hợp", "liều", "chỉ định", "hoạt chất"]),
-                    ]
-                if st.button("🚀 Chạy Table Selection Engine", type="primary", key="run_engine"):
-                    if not st.session_state["result_cart"]: st.error("❌ Giỏ kết quả đang trống!")
+        if df is not None and not df.empty:
+            clean_logs = st.session_state.get("clean_logs", [])
+            if clean_logs:
+                with st.expander("🛠️ Xem nhật ký tự động dọn dẹp dữ liệu", expanded=True):
+                    for log in clean_logs:
+                        st.write(log)
+
+            validation = validate_dataframe(df)
+            if validation:
+                for item in validation:
+                    st.warning(item)
+
+            with st.expander("Xem dữ liệu sau khi chuẩn hóa"):
+                st.dataframe(df)
+
+            # ==========================================
+            # HIỂN THỊ GIỎ KẾT QUẢ VÀ TẢI VỀ WORD
+            # ==========================================
+            st.write("---")
+            st.markdown(f"### 🛒 Giỏ kết quả: **{len(st.session_state.get('result_cart', []))}** bảng đã lưu")
+            st.info("💡 Mỗi khi anh bấm các nút thống kê bên dưới, kết quả tự động được nạp vào Giỏ này để lát nữa AI tuyển chọn hoặc xuất ra Word.")
+
+            col_cart1, col_cart2 = st.columns(2)
+
+            with col_cart1:
+                if st.button("🗑️ Xóa toàn bộ Giỏ kết quả", use_container_width=True):
+                    st.session_state["result_cart"] = []
+                    st.session_state["saved_tables"] = {}
+                    st.rerun()
+
+            with col_cart2:
+                saved_tabs = st.session_state.get("saved_tables", {})
+                if saved_tabs:
+                    md_content = ""
+                    for table_id, df_table in saved_tabs.items():
+                        md_content += f"### Kết quả Thống kê: {table_id}\n\n"
+                        header = "| " + " | ".join(str(c) for c in df_table.columns) + " |"
+                        separator = "|" + "|".join(["---"] * len(df_table.columns)) + "|"
+                        rows = ["| " + " | ".join(str(x) for x in row.values) + " |" for _, row in df_table.iterrows()]
+                        md_content += "\n".join([header, separator] + rows) + "\n\n"
+
+                    docx_data = create_word_document(
+                        title="Phụ lục Số liệu Thống kê (Xuất từ Giỏ kết quả)",
+                        body=md_content,
+                        bibliography=""
+                    )
+
+                    st.download_button(
+                        label="📥 Tải TẤT CẢ bảng ra file Word",
+                        data=docx_data,
+                        file_name="Phu_luc_So_lieu_Thong_ke.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        use_container_width=True
+                    )
+                else:
+                    st.button("📥 Tải TẤT CẢ bảng ra file Word", disabled=True, use_container_width=True)
+
+            st.write("---")
+
+            # ==========================================
+            # BỘ MÁY TUYỂN CHỌN
+            # ==========================================
+            st.subheader("📋 Bộ máy tuyển chọn & Sắp xếp bảng cho Chương Kết quả")
+            with st.expander("🎯 Khai báo Mục tiêu nghiên cứu (Gợi ý: Dùng chính xác tên cột trong Excel làm từ khóa)"):
+                obj_input_1 = st.text_input("Mục tiêu 1", value="ĐẶC ĐIỂM BỆNH NHÂN NGHIÊN CỨU", key=ui_key("obj_1"))
+                obj_input_2 = st.text_input("Mục tiêu 2", value="PHÂN TÍCH THỰC TRẠNG SỬ DỤNG THUỐC", key=ui_key("obj_2"))
+
+                objectives = [
+                    StudyObjective(id="MT1", title=obj_input_1, keywords=["tuổi", "tuoi", "giới", "gioi", "bệnh", "benh", "đặc điểm", "nhân khẩu", "bmi", "SoBHYT", "NgaySinh"]),
+                    StudyObjective(id="MT2", title=obj_input_2, keywords=["thuốc", "thuoc", "phù hợp", "phu hop", "liều", "lieu", "chỉ định", "chi dinh", "hoạt chất", "icd", "TenHang"]),
+                ]
+
+            if st.button("🚀 Chạy Table Selection Engine & Lập mạch kể chuyện", type="primary", key="run_engine"):
+                if not st.session_state["result_cart"]:
+                    st.error("❌ Giỏ kết quả đang trống! Anh cần cuộn xuống dưới, bấm các nút thống kê để nạp số liệu vào Giỏ trước.")
+                else:
+                    engine = TableSelectionEngine(objectives, st.session_state["result_cart"])
+                    decisions = engine.run()
+                    narrative_plan = NarrativePlanner.build(decisions)
+
+                    st.session_state["selection_decisions"] = decisions
+                    st.session_state["narrative_plan"] = narrative_plan
+                    st.success("✅ Đã hoàn thành tuyển chọn, lọc trùng và sắp xếp cấu trúc Chương Kết quả!")
+
+            if st.session_state.get("selection_decisions"):
+                st.write("### 📊 Bảng tổng hợp đề xuất cấu trúc Chương 3")
+                display_rows = []
+                for d in st.session_state["selection_decisions"]:
+                    display_rows.append({
+                        "Thứ tự": d.recommended_order or "Phụ lục",
+                        "Mức độ": d.priority.value,
+                        "Hình thức": d.presentation.value,
+                        "Điểm": d.total_score,
+                        "Tiêu đề bảng": d.title,
+                        "Lý do đề xuất": d.reason
+                    })
+                st.dataframe(pd.DataFrame(display_rows))
+
+                st.write("### 🖨️ XEM & COPY CÁC BẢNG ĐÃ ĐƯỢC CHỌN (Sẵn sàng đưa vào Word)")
+                for d in st.session_state["selection_decisions"]:
+                    if d.result_id in st.session_state["saved_tables"]:
+                        st.markdown(f"**Bảng {d.recommended_order or '*'}. {d.title}** *(Xếp loại: {d.priority.value})*")
+                        df_table = st.session_state["saved_tables"][d.result_id]
+                        html_table = df_table.to_html(index=False, justify='center', border=1)
+                        st.markdown(html_table, unsafe_allow_html=True)
+                        st.write("<br>", unsafe_allow_html=True)
+
+                st.write("### 📖 Mạch kể chuyện (Result Story / Narrative Plan)")
+                st.json(st.session_state["narrative_plan"])
+
+            st.write("---")
+
+            # ==========================================
+            # 1. THỐNG KÊ MÔ TẢ
+            # ==========================================
+            st.subheader("1. Thống kê mô tả (biến phân loại)")
+            all_cols = df.columns.tolist()
+            desc_vars = st.multiselect("Chọn biến phân loại", all_cols, key=ui_key("desc_vars"))
+
+            if st.button("Tính tần số và tỷ lệ (Tự động nạp vào Giỏ)", key="calc_desc"):
+                if not desc_vars:
+                    st.warning("Vui lòng chọn ít nhất 1 biến.")
+                else:
+                    for var in desc_vars:
+                        result = descriptive_table(df, var)
+                        if not result.empty:
+                            st.markdown(f"**► Biến: {var}**")
+                            st.dataframe(result)
+
+                            result_id = f"DESC_{var}"
+                            st.session_state["saved_tables"][result_id] = result
+                            st.session_state["result_cart"].append(
+                                CandidateResult(
+                                    id=result_id, title=f"Đặc điểm phân bố của biến {var}",
+                                    result_type="demographic", variables=[var],
+                                    scientific_value=3.5, clinical_importance=4.0, discussion_value=3.0
+                                )
+                            )
+                    st.success(f"✅ Đã nạp {len(desc_vars)} bảng mô tả vào Giỏ!")
+
+            st.write("---")
+
+            # ==========================================
+            # 2. BIẾN ĐỊNH LƯỢNG
+            # ==========================================
+            st.subheader("2. Biến định lượng — Mô tả")
+            numeric_candidates = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
+            if numeric_candidates:
+                num_vars = st.multiselect("Chọn biến định lượng", numeric_candidates, key=ui_key("num_vars"))
+                if st.button("Tính Mean/SD và Median/IQR (Tự động nạp vào Giỏ)", key="calc_num"):
+                    if not num_vars:
+                        st.warning("Vui lòng chọn ít nhất 1 biến.")
                     else:
-                        engine = TableSelectionEngine(objectives, st.session_state["result_cart"])
-                        decisions = engine.run()
-                        narrative_plan = NarrativePlanner.build(decisions)
-                        st.session_state["selection_decisions"] = decisions
-                        st.session_state["narrative_plan"] = narrative_plan
-                        st.success("✅ Đã hoàn thành tuyển chọn, lọc trùng và sắp xếp cấu trúc Chương Kết quả!")
+                        for var in num_vars:
+                            summary = numeric_summary(df, var)
+                            if summary:
+                                st.markdown(f"**► Biến: {var}**")
+                                num_df = pd.DataFrame([{
+                                    "N": summary['n'],
+                                    "Mean ± SD": f"{summary['mean']:.2f} ± {summary['sd']:.2f}",
+                                    "Median (IQR)": f"{summary['median']:.2f} ({summary['q1']:.2f} - {summary['q3']:.2f})",
+                                    "Min-Max": f"{summary['min']:.2f} - {summary['max']:.2f}"
+                                }])
+                                st.dataframe(num_df)
 
-                if st.session_state.get("selection_decisions"):
-                    display_rows = [{"Thứ tự": d.recommended_order, "Mức độ": d.priority.value, "Hình thức": d.presentation.value, "Điểm": d.total_score, "Tiêu đề": d.title} for d in st.session_state["selection_decisions"]]
-                    st.dataframe(pd.DataFrame(display_rows))
+                                result_id = f"NUM_{var}"
+                                st.session_state["saved_tables"][result_id] = num_df
+                                st.session_state["result_cart"].append(
+                                    CandidateResult(
+                                        id=result_id, title=f"Đặc điểm định lượng của biến {var}",
+                                        result_type="baseline", variables=[var],
+                                        scientific_value=3.5, clinical_importance=4.0, discussion_value=3.0
+                                    )
+                                )
+                        st.success(f"✅ Đã nạp {len(num_vars)} bảng định lượng vào Giỏ!")
 
-                st.write("---")
-                # Thống kê cơ bản
-                st.subheader("1. Thống kê mô tả (biến phân loại)")
-                all_cols = df.columns.tolist()
-                desc_vars = st.multiselect("Chọn biến phân loại", all_cols, key=ui_key("desc_vars"))
-                if st.button("Tính tần số và tỷ lệ (Nạp vào Giỏ)", key="calc_desc"):
-                    if not desc_vars: st.warning("Vui lòng chọn ít nhất 1 biến.")
+            st.write("---")
+
+            # ==========================================
+            # 8. DIỄN GIẢI KẾT QUẢ BẰNG AI (NHẬN XÉT BẢNG CHUYÊN SÂU)
+            # ==========================================
+            st.subheader("8. Diễn giải kết quả bằng AI (Nhận xét bảng chuẩn khoa học)")
+            st.info("💡 Anh có thể chọn một bảng riêng lẻ hoặc chọn **'🌟 Chọn TẤT CẢ các bảng trong Giỏ'** để AI tổng hợp nhận xét toàn bộ số liệu.")
+
+            saved_tables = st.session_state.get("saved_tables", {})
+            table_options = ["-- Chỉ dùng số liệu dán tay bên dưới --", "🌟 Chọn TẤT CẢ các bảng trong Giỏ"] + list(saved_tables.keys())
+
+            selected_table_key = st.selectbox(
+                "Lựa chọn bảng hoặc nguồn dữ liệu:",
+                options=table_options,
+                key=ui_key("select_ai_table")
+            )
+
+            interpretation_request = st.text_area(
+                "Số liệu bổ sung hoặc yêu cầu cụ thể (nếu có):",
+                height=100,
+                key=ui_key("interpretation_request")
+            )
+
+            if st.button("🤖 AI Viết Nhận Xét Bảng", type="primary", key="ai_interpret"):
+                final_data = ""
+
+                if selected_table_key == "🌟 Chọn TẤT CẢ các bảng trong Giỏ":
+                    if not saved_tables:
+                        st.warning("⚠️ Giỏ kết quả đang trống, chưa có bảng nào được lưu!")
                     else:
-                        for var in desc_vars:
-                            result = descriptive_table(df, var)
-                            if not result.empty:
-                                st.markdown(f"**► Biến: {var}**"); st.dataframe(result)
-                                result_id = f"DESC_{var}"
-                                st.session_state["saved_tables"][result_id] = result
-                                st.session_state["result_cart"].append(CandidateResult(id=result_id, title=f"Đặc điểm phân bố của biến {var}", result_type="demographic", variables=[var], scientific_value=3.5, clinical_importance=4.0, discussion_value=3.0))
-                        st.success(f"✅ Đã nạp bảng mô tả vào Giỏ!")
+                        for t_key, df_t in saved_tables.items():
+                            final_data += f"### BẢNG: {t_key}\n"
+                            final_data += df_t.to_markdown(index=False) + "\n\n"
+                elif selected_table_key != "-- Chỉ dùng số liệu dán tay bên dưới --":
+                    df_target = saved_tables[selected_table_key]
+                    final_data += f"### BẢNG: {selected_table_key}\n"
+                    final_data += df_target.to_markdown(index=False) + "\n\n"
 
-                st.write("---")
-                st.subheader("8. Diễn giải kết quả bằng AI (Nhận xét bảng chuẩn khoa học)")
-                st.info("💡 Anh có thể chọn một bảng riêng lẻ hoặc chọn **'🌟 Chọn TẤT CẢ các bảng trong Giỏ'** để AI tổng hợp nhận xét toàn bộ số liệu.")
+                if interpretation_request.strip():
+                    final_data += f"SỐ LIỆU / YÊU CẦU BỔ SUNG:\n{interpretation_request.strip()}"
 
-                saved_tables = st.session_state.get("saved_tables", {})
-                
-                # Thêm option chọn tất cả vào đầu danh sách
-                table_options = ["-- Chỉ dùng số liệu dán tay bên dưới --", "🌟 Chọn TẤT CẢ các bảng trong Giỏ"] + list(saved_tables.keys())
-
-                selected_table_key = st.selectbox(
-                    "Lựa chọn bảng hoặc nguồn dữ liệu:",
-                    options=table_options,
-                    key=ui_key("select_ai_table")
-                )
-
-                interpretation_request = st.text_area(
-                    "Số liệu bổ sung hoặc yêu cầu cụ thể (nếu có):",
-                    height=100,
-                    key=ui_key("interpretation_request")
-                )
-
-                if st.button("🤖 AI Viết Nhận Xét Bảng", type="primary", key="ai_interpret"):
-                    final_data = ""
-
-                    if selected_table_key == "🌟 Chọn TẤT CẢ các bảng trong Giỏ":
-                        if not saved_tables:
-                            st.warning("⚠️ Giỏ kết quả đang trống, chưa có bảng nào được lưu!")
-                        else:
-                            for t_key, df_t in saved_tables.items():
-                                final_data += f"### BẢNG: {t_key}\n"
-                                final_data += df_t.to_markdown(index=False) + "\n\n"
-                    elif selected_table_key != "-- Chỉ dùng số liệu dán tay bên dưới --":
-                        df_target = saved_tables[selected_table_key]
-                        final_data += f"### BẢNG: {selected_table_key}\n"
-                        final_data += df_target.to_markdown(index=False) + "\n\n"
-
-                    if interpretation_request.strip():
-                        final_data += f"SỐ LIỆU / YÊU CẦU BỔ SUNG:\n{interpretation_request.strip()}"
-
-                    if not final_data.strip():
-                        st.warning("⚠️ Anh chưa chọn bảng nào hoặc chưa dán số liệu!")
-                    else:
-                        try:
-                            # PROMPT CHUẨN: Chỉ đưa ra số liệu, ngắn gọn, khoa học, không bàn luận
-                            strict_remark_prompt = f"""
+                if not final_data.strip():
+                    st.warning("⚠️ Anh chưa chọn bảng nào hoặc chưa dán số liệu!")
+                else:
+                    try:
+                        strict_remark_prompt = f"""
 {BASE_SYSTEM_RULES}
 Nhiệm vụ của bạn là viết phần **'Nhận xét'** cho các bảng số liệu thống kê trong luận văn Dược lâm sàng.
 QUY TẮC VÀNG BẮT BUỘC:
 1. CHỈ ĐƯA RA SỐ LIỆU: Chỉ diễn giải các số liệu, tần số, tỷ lệ % nổi bật (giá trị cao nhất, thấp nhất, trung vị, v.v.) có trong bảng.
 2. VĂN PHONG KHOA HỌC: Câu văn logic, ngắn gọn, dễ hiểu, mạch lạc.
-3. TUYỆT ĐỐI KHÔNG BÀN LUẬN: Không giải thích nguyên nhân, không suy diễn cơ chế lâm sàng, không so sánh với các nghiên cứu khác ngoài y văn được cung cấp.
+3. TUYỆT ĐỐI KHÔNG BÀN LUẬN: Không giải thích nguyên nhân, không suy diễn cơ chế lâm sàng, không so sánh với các nghiên cứu khác.
 4. Trình bày thành các đoạn văn xuôi y khoa liền mạch, chuẩn mực.
 
 DỮ LIỆU ĐẦU VÀO CẦN NHẬN XÉT:
 {final_data}
 """
 
-                            with st.spinner("AI đang phân tích số liệu và soạn nhận xét chuyên sâu..."):
-                                output = call_gemini(strict_remark_prompt, model=DEFAULT_MODEL)
-                                if output:
-                                    st.markdown("### 📝 Kết quả Nhận xét Bảng:")
-                                    st.markdown(output)
-                        except Exception as exc:
-                            st.error(f"Lỗi gọi AI: {exc}")
-
+                        with st.spinner("AI đang phân tích số liệu và soạn nhận xét chuyên sâu..."):
+                            output = call_gemini(strict_remark_prompt, model=DEFAULT_MODEL)
+                            if output:
+                                st.markdown("### 📝 Kết quả Nhận xét Bảng:")
+                                st.markdown(output)
+                    except Exception as exc:
+                        st.error(f"Lỗi gọi AI: {exc}")
+                        
     # ------------------------------------------------------------
     # TAB 5 – Audit
     # ------------------------------------------------------------
