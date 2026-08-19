@@ -402,9 +402,14 @@ def main():
                 st.session_state["t3_en_keyword"] = en_query
                 
             with st.spinner("Đang tìm & tải Abstract từ PubMed..."):
-                clean_en_query = en_query.split("###")[0].strip()
-                if not clean_en_query:
-                    clean_en_query = t3_query
+                # Cắt bỏ phần rườm rà bằng cả '###' hoặc '---'
+                clean_en_query = en_query.split("###")[0].split("---")[0].strip()
+                
+                # Nếu chuỗi sau khi cắt vẫn chứa tiếng Việt hoặc quá lộn xộn, dùng luôn từ khóa gốc của anh
+                vietnamese_markers = ["hoặc", "nếu", "về", "trong", "đề tài", "từ khóa"]
+                if not clean_en_query or any(marker in clean_en_query.lower() for marker in vietnamese_markers):
+                    clean_en_query = t3_query.strip()
+                    
                 st.session_state["t3_pm_data"] = search_pubmed(clean_en_query, max_res)
                 
             with st.spinner("Đang rút gọn từ khóa & tìm trên tạp chí Y học Việt Nam..."):
@@ -413,7 +418,6 @@ def main():
                 st.session_state["t3_vn_data"] = vn_results
                 if vn_err: 
                     st.warning(vn_err)
-
         if st.session_state.get("t3_pm_data") or st.session_state.get("t3_vn_data"):
             st.write("---")
             col_vn, col_pm = st.columns(2)
