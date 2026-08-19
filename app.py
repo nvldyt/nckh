@@ -2,32 +2,71 @@
 # ============================================================
 # HỖ TRỢ NGHIÊN CỨU KHOA HỌC – EVIDENCE-BASED RAG
 # Bản tối ưu cho luận văn Chuyên khoa cấp I – Dược lâm sàng
-# (Đã rà soát & sửa lỗi logic, giữ nguyên toàn bộ chức năng gốc)
+# Kiến trúc Modular 4 Engines (Sẵn sàng cho Agentic AI)
 # ============================================================
 
 import io
 import os
 import re
 import time
-import math
-import uuid
 import json
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 import streamlit as st
-
-# Google Gemini SDK mới: pip install google-genai
-from google import genai
-from google.genai import types
-
-# Embedding & BM25
-from sentence_transformers import SentenceTransformer
-from rank_bm25 import BM25Okapi
-
-# DOCX
 from docx import Document
+
+# ============================================================
+# IMPORT TỪ CÁC MODULE CHUYÊN MÔN (ĐÃ CÓ TỪ TRƯỚC)
+# ============================================================
+# 1. Bộ máy tuyển chọn bảng
+from table_selection_engine import (
+    StudyObjective, CandidateResult,
+    TableSelectionEngine, NarrativePlanner,
+    Priority, Presentation
+)
+
+# 2. Bộ máy Thống kê Toán học
+from statistical_engine import (
+    validate_dataframe, descriptive_table, numeric_summary,
+    crosstab_test, compare_two_groups, binary_logistic_regression,
+    create_clinical_groups, generate_baseline_table
+)
+
+# 3. Bộ máy Xử lý Bằng chứng (PDF, PubMed, VN Journals)
+from evidence_engine import (
+    SourceDocument, EvidenceChunk, get_serpapi_key,
+    extract_pdf, search_pubmed, search_vn_journals,
+    ingest_pubmed_article, ingest_vn_article, add_source_and_chunks
+)
+
+# 4. Bộ máy Quản lý Checkpoint / Dự án
+from project_storage import save_project, load_project, list_projects, delete_project
+
+# 5. Bộ máy Xử lý Dữ liệu thô (Excel)
+from data_engine import auto_clean_data
+
+# ============================================================
+# IMPORT 4 ENGINE CỐT LÕI AI (VỪA MỚI TÁI CẤU TRÚC)
+# ============================================================
+# 6. Bộ máy Quản lý Trích dẫn Vancouver
+from citation_engine import CitationEngine
+
+# 7. Bộ máy Kiểm định, Bắt lỗi số liệu và Đạo văn
+from audit_engine import Audit_generated_text, internal_overlap_Audit
+
+# 8. Bộ máy Index & Tìm kiếm Hybrid RAG
+from retrieval_engine import (
+    get_embeddings, build_bm25_index, build_embedding_index, 
+    update_embedding_index, retrieve_evidence
+)
+
+# 9. Bộ máy Sinh văn bản & Giao tiếp Gemini
+from writing_engine import (
+    call_gemini, generate_evidence_based, 
+    BASE_SYSTEM_RULES, MODEL_LITE, DEFAULT_MODEL
+)
 
 # ============================================================
 # IMPORT TỪ CÁC MODULE ĐÃ ĐƯỢC BÓC TÁCH
