@@ -431,7 +431,7 @@ def main():
                             st.markdown(f"**[{art['title']}]({art['link']})**" if art.get("link") else f"**{art['title']}**")
                             st.caption(art["source"])
                             st.write(art["snippet"])
-                            if st.button("➕ Nạp vào Evidence Database", key=ui_key(f"vn_ingest_{i}")):
+                        if st.button("➕ Nạp vào Evidence Database", key=ui_key(f"vn_ingest_{i}")):
                             if ingest_vn_article(art): 
                                 rebuild_index()
                                 st.success("Đã nạp. Nhớ Audit bản gốc trước khi dùng số liệu chi tiết.")
@@ -448,7 +448,7 @@ def main():
                             st.markdown(f"**[{art['title']}]({art['url']})**")
                             st.caption(f"✍️ {art['authors']} ({art['year']}) — {art['journal']}")
                             with st.expander("Xem tóm tắt (Abstract)"): st.write(art["abstract"])
-                            if st.button("➕ Nạp vào Evidence Database", key=ui_key(f"pm_ingest_{i}")):
+                        if st.button("➕ Nạp vào Evidence Database", key=ui_key(f"pm_ingest_{i}")):
                             if ingest_pubmed_article(art): 
                                 rebuild_index()
                                 st.success("Đã nạp vào Evidence Database.")
