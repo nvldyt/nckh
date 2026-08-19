@@ -1,4 +1,3 @@
-# gemini_service.py
 import time
 import uuid
 import streamlit as st
@@ -20,37 +19,64 @@ NGUYÊN TẮC BẮT BUỘC:
 6. Nếu context không đủ bằng chứng, phải nói rõ: "Tài liệu được cung cấp chưa đủ bằng chứng để kết luận phần này."
 """
 
-def get_gemini_client():
-    try: 
-        api_key = st.secrets["GEMINI_API_KEY"]
-    except Exception: 
+def get_all_api_keys() -> List[str]:
+    """Lấy danh sách toàn bộ API Keys đã cấu hình (ngăn cách bằng dấu phẩy)."""
+    keys = []
+    try:
+        raw_keys = st.secrets.get("GEMINI_API_KEYS") or st.secrets.get("GEMINI_API_KEY")
+        if isinstance(raw_keys, list):
+            keys = raw_keys
+        elif isinstance(raw_keys, str):
+            keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
+    except Exception:
         import os
-        api_key = os.getenv("GEMINI_API_KEY")
+        raw_env = os.getenv("GEMINI_API_KEYS") or os.getenv("GEMINI_API_KEY", "")
+        keys = [k.strip() for k in raw_env.split(",") if k.strip()]
         
-    if not api_key:
-        return None
-    return genai.Client(api_key=api_key)
+    return keys
 
-def call_gemini(prompt: str, model: str = "gemini-3.6-flash", max_retries: int = 4) -> Optional[str]:
-    """Hàm gọi API Gemini với cơ chế Exponential Backoff an toàn."""
-    client = get_gemini_client()
-    if not client:
-        st.error("⚠️ Lỗi cấu hình API Key.")
+def call_gemini(prompt: str, model: str = "gemini-3.6-flash", max_retries: int = 5) -> Optional[str]:
+    """Hàm gọi API Gemini với cơ chế Tự động Xoay Vòng Key (Round-Robin) khi bị quá tải."""
+    keys = get_all_api_keys()
+    if not keys:
+        st.error("⚠️ Lỗi: Không tìm thấy API Key nào trong cấu hình.")
         return None
+
+    # Biến nhớ vị trí Key đang dùng trong session
+    if "current_key_idx" not in st.session_state:
+        st.session_state.current_key_idx = 0
 
     for attempt in range(max_retries):
+        # Lấy Key theo vòng lặp (hết danh sách tự động quay lại key đầu tiên)
+        current_idx = st.session_state.current_key_idx % len(keys)
+        current_key = keys[current_idx]
+        
         try:
+            client = genai.Client(api_key=current_key)
             response = client.models.generate_content(
                 model=model,
                 contents=prompt,
-                config=types.GenerateContentConfig(temperature=0.1) # Nhiệt độ thấp = Đề cao tính chính xác, giảm sáng tạo
+                config=types.GenerateContentConfig(temperature=0.1)
             )
             return getattr(response, "text", "").strip()
+            
         except Exception as exc:
+            err_msg = str(exc).lower()
+            
+            # Bắt lỗi 429 (Too many requests) hoặc Quota Limit của Google
+            if "429" in err_msg or "quota" in err_msg or "exhausted" in err_msg:
+                st.toast(f"🔄 Key thứ {current_idx + 1} bị quá tải. Đang tự động đổi sang Key khác...")
+                st.session_state.current_key_idx += 1
+                time.sleep(1.5) # Nghỉ 1 nhịp ngắn để chuyển key
+                continue # Nhảy ngay sang lần thử tiếp theo với Key mới
+            
+            # Nếu là lỗi khác (như đứt mạng)
             if attempt == max_retries - 1:
-                st.error(f"Lỗi kết nối Gemini: {exc}")
+                st.error(f"❌ Đã thử xoay vòng key nhưng vẫn lỗi kết nối Gemini: {exc}")
                 return None
-            time.sleep(2 ** attempt) # Thử lại sau 1s, 2s, 4s...
+                
+            time.sleep(2 ** attempt)
+            
     return None
 
 def generate_evidence_based(task: str, query: str, k: int = 8) -> Tuple[Optional[str], List[Dict[str, Any]], List[str], List[Dict]]:
