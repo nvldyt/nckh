@@ -422,7 +422,7 @@ def main():
                     for ev in evidence:
                         meta = st.session_state["documents"].get(ev["source_id"], {})
                         st.markdown(f"**{ev['chunk_id']}** _({meta.get('origin', '')})_\nNguồn: {ev.get('file_name','')} — Trang/mục: {ev.get('page','')}\nĐiểm: {ev.get('score', 0):.4f}\n\n> {ev['text']}")
-         st.write("---")
+        st.write("---")
         st.subheader("🤖 Cập nhật Metadata & Quản lý Citation")
         
         col_meta1, col_meta2 = st.columns([1, 1])
