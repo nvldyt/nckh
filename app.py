@@ -34,6 +34,7 @@ from audit_engine import Audit_generated_text, internal_overlap_Audit
 from retrieval_engine import build_bm25_index, build_embedding_index, update_embedding_index, retrieve_evidence
 from writing_engine import call_gemini, generate_evidence_based, BASE_SYSTEM_RULES, MODEL_LITE, DEFAULT_MODEL
 from synthesis_engine import build_literature_matrix
+from chapter_assembler_engine import assemble_results_and_discussion_chapter
 
 # ============================================================
 # 1. CẤU HÌNH GIAO DIỆN & STATE
@@ -727,6 +728,57 @@ def main():
 
             st.write("---")
 
+            # ==========================================
+            # TRÌNH LẮP RÁP TỰ ĐỘNG TOÀN BỘ CHƯƠNG KẾT QUẢ & BÀN LUẬN
+            # ==========================================
+            st.write("---")
+            st.subheader("🚀 Trình lắp ráp tự động Chương Kết quả & Bàn luận (Auto-Assembler Agent)")
+            st.info("💡 Hệ thống sẽ tự động kích hoạt Loop Agent: Duyệt qua từng bảng theo mạch kể chuyện, tự viết nhận xét, tự tìm bằng chứng đối chiếu và lắp ráp thành toàn bộ bản thảo 2 chương lớn.")
+
+            if st.button("🪄 Tự động lập bản thảo toàn bộ Chương 3 & Chương 4", type="primary", key="btn_auto_assemble"):
+                decisions = st.session_state.get("selection_decisions", [])
+                saved_tabs = st.session_state.get("saved_tables", {})
+                chunks_db = st.session_state.get("chunks", [])
+                embeddings_matrix = st.session_state.get("embeddings")
+                bm25_index = st.session_state.get("bm25")
+                citation_eng = get_citation_engine()
+                study_ctx = st.session_state.get("study_context", {})
+
+                if not decisions or not saved_tabs:
+                    st.warning("⚠️ Bạn cần chạy 'Table Selection Engine' để thiết lập mạch kể chuyện và lưu bảng vào Giỏ trước!")
+                else:
+                    with st.spinner("Agent đang tự động quét, viết nhận xét, truy xuất y văn và lắp ráp hai chương... (Quá trình này có thể mất từ 30-60 giây)"):
+                        ch3_text, ch4_text = assemble_results_and_discussion_chapter(
+                            selection_decisions=decisions,
+                            saved_tables=saved_tabs,
+                            chunks=chunks_db,
+                            embeddings=embeddings_matrix,
+                            bm25=bm25_index,
+                            citation_engine=citation_eng,
+                            study_context=study_ctx
+                        )
+
+                    st.session_state["assembled_ch3"] = ch3_text
+                    st.session_state["assembled_ch4"] = ch4_text
+                    st.success("🎉 Đã lắp ráp thành công toàn bộ bản thảo hai chương!")
+
+            # Hiển thị kết quả nếu đã lắp ráp xong
+            if st.session_state.get("assembled_ch3") and st.session_state.get("assembled_ch4"):
+                tab_ch3, tab_ch4 = st.tabs(["📄 Chương 3: Kết quả", "📄 Chương 4: Bàn luận"])
+                
+                with tab_ch3:
+                    st.markdown(st.session_state["assembled_ch3"])
+                    docx_ch3 = create_word_document(title="Chương 3: Kết quả nghiên cứu", body=st.session_state["assembled_ch3"])
+                    st.download_button("📥 Tải Chương 3 ra file Word", data=docx_ch3, file_name="Chuong_3_Ket_qua.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", key="dl_ch3")
+
+                with tab_ch4:
+                    st.markdown(st.session_state["assembled_ch4"])
+                    bib_text = citation_bibliography_wrapper()
+                    docx_ch4 = create_word_document(title="Chương 4: Bàn luận", body=st.session_state["assembled_ch4"], bibliography=bib_text)
+                    st.download_button("📥 Tải Chương 4 ra file Word (kèm TLTK)", data=docx_ch4, file_name="Chuong_4_Ban_luan.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", key="dl_ch4")
+
+            st.write("---")
+            
             # ==========================================
             # 1. THỐNG KÊ MÔ TẢ (BIẾN PHÂN LOẠI)
             # ==========================================
