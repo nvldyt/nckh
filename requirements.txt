@@ -1,6 +1,7 @@
 # 1. Ép hệ thống tải PyTorch bản CPU (Nhẹ RAM, chống crash trên Streamlit Cloud)
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch>=2.0.0
+torchvision>=0.15.0
 
 # 2. Các Engine cốt lõi AI và RAG
 streamlit>=1.30.0
