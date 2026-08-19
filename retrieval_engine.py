@@ -4,11 +4,15 @@ from typing import List, Dict, Any
 from sentence_transformers import SentenceTransformer, CrossEncoder
 from rank_bm25 import BM25Okapi
 
-# Khai báo model mặc định ở đây để quản lý tập trung
-# Đã đổi sang bản siêu nhẹ để chống sập RAM trên Streamlit
+# ============================================================
+# CẤU HÌNH MÔ HÌNH (Đã chuyển sang các bản Siêu Nhẹ)
+# ============================================================
+
+# Model Embedding siêu nhẹ (~80MB RAM)
 DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-# Khai báo Reranker đa ngôn ngữ
-DEFAULT_RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"
+
+# Reranker siêu nhẹ (~90MB RAM) thay cho bản BAAI cũ (rất nặng CPU)
+DEFAULT_RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 # ============================================================
 # 1. QUẢN LÝ MÔ HÌNH (EMBEDDING & RERANKER)
@@ -62,7 +66,7 @@ def retrieve_evidence(
     matrix: np.ndarray, 
     bm25: BM25Okapi, 
     top_k: int = 8, 
-    hybrid_top_k: int = 30,
+    hybrid_top_k: int = 12,  # Đã giảm từ 30 xuống 12 để cứu CPU
     model_name: str = DEFAULT_EMBEDDING_MODEL,
     reranker_name: str = DEFAULT_RERANKER_MODEL
 ) -> List[Dict[str, Any]]:
@@ -79,7 +83,7 @@ def retrieve_evidence(
     if sem_max > sem_min:
         semantic_scores = (semantic_scores - sem_min) / (sem_max - sem_min)
     else:
-        semantic_scores = np.ones_like(semantic_scores) # Hoặc zeros tùy logic
+        semantic_scores = np.ones_like(semantic_scores)
 
     tokenized_query = query.lower().split()
     bm25_scores = np.array(bm25.get_scores(tokenized_query))
@@ -100,11 +104,10 @@ def retrieve_evidence(
     candidate_chunks = []
     for idx in stage1_indices:
         chunk_copy = dict(chunks[idx])
-        chunk_copy["hybrid_score"] = float(final_scores[idx]) # Lưu vết điểm vòng 1
+        chunk_copy["hybrid_score"] = float(final_scores[idx])
         candidate_chunks.append(chunk_copy)
 
     if len(candidate_chunks) <= top_k:
-        # Nếu ít dữ liệu, gán luôn điểm rerank bằng hybrid để tương thích cấu trúc
         for doc in candidate_chunks:
             doc["score"] = doc["hybrid_score"]
         return candidate_chunks[:top_k]
@@ -116,7 +119,7 @@ def retrieve_evidence(
     rerank_scores = reranker.predict(sentence_pairs)
     
     for i, doc in enumerate(candidate_chunks):
-        doc["score"] = float(rerank_scores[i]) # Điểm quyết định cuối cùng
+        doc["score"] = float(rerank_scores[i])
         
     candidate_chunks.sort(key=lambda x: x["score"], reverse=True)
 
