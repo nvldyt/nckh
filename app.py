@@ -33,7 +33,7 @@ from citation_engine import CitationEngine
 from audit_engine import Audit_generated_text, internal_overlap_Audit
 from retrieval_engine import build_bm25_index, build_embedding_index, update_embedding_index, retrieve_evidence
 from writing_engine import call_gemini, generate_evidence_based, BASE_SYSTEM_RULES, MODEL_LITE, DEFAULT_MODEL
-
+from synthesis_engine import build_literature_matrix
 
 # ============================================================
 # 1. CẤU HÌNH GIAO DIỆN & STATE
