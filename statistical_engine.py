@@ -194,21 +194,29 @@ def binary_logistic_regression(df: pd.DataFrame, outcome: str, predictors: List[
     if tmp.empty:
         raise ValueError("Không còn dữ liệu sau khi loại bỏ ô trống (Missing).")
 
-    # 2. Kiểm tra biến kết cục phải là nhị phân (2 mức)
+    # 2. Kiểm tra biến kết cục phải là nhị phân (2 mức) và mã hóa sang dạng số (0 và 1)
     y_levels = tmp[outcome].unique()
     if len(y_levels) != 2:
-        raise ValueError(f"Biến kết cục '{outcome}' phải có đúng 2 mức (ví dụ: Có/Không, 0/1). Hiện tại có: {len(y_levels)} mức.")
+        raise ValueError(f"Biến kết cục '{outcome}' phải có đúng 2 mức (ví dụ: Nam/Nữ, Có/Không). Hiện tại có: {len(y_levels)} mức.")
+
+    # Tự động ánh xạ biến chữ thành 0 và 1 cho statsmodels
+    mapping = {y_levels[0]: 0, y_levels[1]: 1}
+    tmp["_Y_NUMERIC_"] = tmp[outcome].map(mapping)
 
     # 3. Xây dựng công thức hồi quy (Formula)
-    # Tự động nhận diện biến định lượng (không bọc C) và biến phân loại (bọc C)
     formula_parts = []
     for p in predictors:
+        if p == outcome:  # Tránh tự đưa biến kết cục vào làm biến dự báo
+            continue
         if pd.api.types.is_numeric_dtype(tmp[p]):
             formula_parts.append(f"Q('{p}')")
         else:
-            formula_parts.append(f"C(Q('{p}'))") # C() chỉ định đây là biến phân loại cho statsmodels
+            formula_parts.append(f"C(Q('{p}'))")
 
-    formula = f"Q('{outcome}') ~ " + " + ".join(formula_parts)
+    if not formula_parts:
+        raise ValueError("Danh sách biến dự báo trống hoặc không hợp lệ.")
+
+    formula = "_Y_NUMERIC_ ~ " + " + ".join(formula_parts)
     
     # 4. Chạy mô hình và BẮT LỖI THỐNG KÊ (Robust Error Handling)
     try:
@@ -218,7 +226,7 @@ def binary_logistic_regression(df: pd.DataFrame, outcome: str, predictors: List[
         if "singular" in err or "linalg" in err:
             raise ValueError("Lỗi ma trận (Singular Matrix): Đa cộng tuyến quá mạnh hoặc cỡ mẫu quá nhỏ cho số biến đã chọn.")
         if "separation" in err:
-            raise ValueError("Lỗi Perfect Separation: Một biến dự báo phân tách hoàn hảo kết cục (ví dụ: mọi bệnh nhân nhóm A đều khỏi bệnh).")
+            raise ValueError("Lỗi Perfect Separation: Một biến dự báo phân tách hoàn hảo kết cục.")
         raise ValueError(f"Lỗi hệ thống khi chạy mô hình: {str(e)}")
 
     # 5. Trích xuất kết quả OR, 95% CI và P-value
@@ -241,10 +249,10 @@ def binary_logistic_regression(df: pd.DataFrame, outcome: str, predictors: List[
     # Loại bỏ dòng Intercept (không ý nghĩa lâm sàng)
     output = output[~output["Biến"].str.contains("Intercept")].reset_index(drop=True)
     
-    # Làm đẹp tên biến trong bảng kết quả (xóa bớt ký tự thừa do formula tạo ra)
+    # Làm đẹp tên biến trong bảng kết quả
     output["Biến"] = output["Biến"].str.replace("Q('", "").str.replace("')", "").str.replace("C(", "").str.replace(")", "")
 
-    return output, "Mô hình hồi quy Logistic đa biến thành công."
+    return output, f"Mô hình hồi quy Logistic đa biến thành công cho biến kết cục: [{outcome}] (0 ứng với '{y_levels[0]}', 1 ứng với '{y_levels[1]}')."
 
 # ============================================================
 # 5. TỔNG HỢP BẢNG ĐẶC ĐIỂM CHUNG CHUẨN LUẬN VĂN (BASELINE)
