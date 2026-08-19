@@ -194,13 +194,25 @@ def binary_logistic_regression(df: pd.DataFrame, outcome: str, predictors: List[
     if tmp.empty:
         raise ValueError("Không còn dữ liệu sau khi loại bỏ ô trống (Missing).")
 
-    # 2. Kiểm tra biến kết cục phải là nhị phân (2 mức) và mã hóa sang dạng số (0 và 1)
-    y_levels = tmp[outcome].unique()
+    # 2. Kiểm tra biến kết cục phải là nhị phân và mã hóa CHUẨN LÂM SÀNG
+    y_levels = list(tmp[outcome].unique())
     if len(y_levels) != 2:
-        raise ValueError(f"Biến kết cục '{outcome}' phải có đúng 2 mức (ví dụ: Nam/Nữ, Có/Không). Hiện tại có: {len(y_levels)} mức.")
+        raise ValueError(f"Biến kết cục '{outcome}' phải có đúng 2 mức. Hiện tại có: {len(y_levels)} mức.")
 
-    # Tự động ánh xạ biến chữ thành 0 và 1 cho statsmodels
-    mapping = {y_levels[0]: 0, y_levels[1]: 1}
+    # Tự động nhận diện nhóm Tham chiếu (Reference = 0) dựa trên từ khóa y khoa
+    negative_keywords = ["không", "âm tính", "sống", "khỏi", "bình thường", "ổn định", "0", "false", "no"]
+    
+    level_0 = y_levels[0] # Mặc định
+    level_1 = y_levels[1]
+    
+    for lvl in y_levels:
+        if str(lvl).strip().lower() in negative_keywords:
+            level_0 = lvl
+            level_1 = [y for y in y_levels if y != lvl][0]
+            break
+
+    # Ánh xạ chuẩn: 0 = Nhóm tham chiếu, 1 = Nhóm biến cố (Cần đánh giá)
+    mapping = {level_0: 0, level_1: 1}
     tmp["_Y_NUMERIC_"] = tmp[outcome].map(mapping)
 
     # 3. Xây dựng công thức hồi quy (Formula)
