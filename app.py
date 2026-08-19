@@ -714,8 +714,7 @@ def main():
         with c2: btn_tong_quan = st.button("Tổng quan tài liệu")
         with c3: btn_phuong_phap = st.button("Phương pháp NC")
         with c4: btn_ban_luan = st.button("Bàn luận KQNC")
-        with c5: btn_tltk = st.button("Trích dẫn TLTK")
-
+      
         st.write("---")
         st.subheader("Lệnh tùy chỉnh")
         custom_prompt = st.text_area("Nhập câu lệnh khác:", key=ui_key("custom_prompt_tab3"))
@@ -741,17 +740,7 @@ def main():
                 context = f"SỐ LIỆU BẢNG:\n{my_research_data}\n\nNHẬN XÉT DIỄN GIẢI:\n{my_table_remarks}"
                 task = f"DỮ LIỆU NGHIÊN CỨU:\n{context}\nYÊU CẦU: Viết BÀN LUẬN TOÀN DIỆN. Giải thích nguyên nhân và so sánh với y văn. Viết liền mạch, không dùng nhãn phân chia.\n{citation_rules}"
                 run_quick_task("Bàn luận và So sánh toàn diện", context, task, k=8)
-        if btn_tltk:
-            query = "Tài liệu tham khảo, tác giả, năm xuất bản, tạp chí"
-            task = f"Chỉ liệt kê các SOURCE_TAG bạn thấy phù hợp là tài liệu tham khảo chính...\n{citation_rules}"
-            with st.spinner("AI đang soạn: Trích dẫn TLTK..."):
-                output, evidence, invalid = generate_evidence_based_wrapper(task, query, k=10)
-                if output:
-                    with ket_qua_container:
-                        st.write("---")
-                        st.subheader("Danh mục Tài liệu tham khảo (từ Citation Registry)")
-                        bib = citation_bibliography_wrapper()
-                        st.code(bib if bib else "Chưa có citation registry.", language="text")
+        
         if btn_custom:
             if not custom_prompt.strip(): st.warning("Vui lòng nhập yêu cầu!")
             else:
