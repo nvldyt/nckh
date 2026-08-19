@@ -332,9 +332,53 @@ def main():
     init_state()
     st.title("🔬 HỖ TRỢ NGHIÊN CỨU KHOA HỌC")
     st.caption("Evidence-Based RAG • Tra cứu TLTK • Citation Registry • Statistical Engine • Audit")
-
-    tabs = st.tabs(["📚 1. Tài liệu (PDF)", "🔍 2. Tra cứu TLTK", "✍️ 3. Viết luận văn", "📊 4. Phân tích số liệu", "🔎 5. Kiểm tra luận văn", "⚙️ 6. Nguồn & cấu hình"])
-
+    # ============================================================
+    # SIDEBAR - QUẢN LÝ DỰ ÁN (Chuyển từ Tab 6 cũ ra ngoài)
+    # ============================================================
+    with st.sidebar:
+        st.header("⚙️ Quản lý dự án")
+        
+        if st.button("🧹 Làm mới Giao diện", use_container_width=True): 
+            reset_ui_state()
+            st.rerun()
+            
+        st.divider()
+        st.subheader("💾 Lưu & Khôi phục (.json)")
+        
+        # Nút tải xuống
+        project_data = {
+            "documents": st.session_state.get("documents", {}), 
+            "chunks": st.session_state.get("chunks", []),
+            "citation_registry": st.session_state.get("citation_registry", {}), 
+            "current_references": st.session_state.get("current_references", []),
+            "result_cart": [vars(item) if hasattr(item, "__dict__") else item for item in st.session_state.get("result_cart", [])],
+            "saved_tables": {k: v.to_dict(orient='split') for k, v in st.session_state.get("saved_tables", {}).items()}
+        }
+        st.download_button("📥 Tải file dự án", data=json.dumps(project_data, ensure_ascii=False, indent=4), file_name="Du_An_Luan_Van.json", mime="application/json", use_container_width=True)
+        
+        # Nút tải lên
+        uploaded_proj = st.file_uploader("Khôi phục từ file:", type=["json"])
+        if uploaded_proj and st.button("🚀 Khôi phục", type="primary", use_container_width=True):
+            try:
+                loaded_data = json.load(uploaded_proj)
+                fallback_defaults = {"documents": {}, "chunks": [], "citation_registry": {}, "current_references": []}
+                st.session_state.update({k: loaded_data.get(k, fallback_defaults[k]) for k in fallback_defaults.keys()})
+                
+                # Phục hồi object phức tạp an toàn
+                if "CandidateResult" in globals():
+                    st.session_state["result_cart"] = [CandidateResult(**item) if isinstance(item, dict) else item for item in loaded_data.get("result_cart", [])]
+                st.session_state["saved_tables"] = {k: pd.DataFrame.from_dict(v, orient='split') for k, v in loaded_data.get("saved_tables", {}).items()}
+                
+                with st.spinner("Đang xây dựng lại index..."): 
+                    rebuild_index()
+                st.success("🎉 Khôi phục thành công!")
+                time.sleep(1)
+                reset_ui_state()
+                st.rerun()
+            except Exception as e: 
+                st.error(f"❌ Lỗi: {str(e)}")
+    tabs = st.tabs(["📚 1. Tài liệu (PDF)", "🔍 2. Tra cứu TLTK", "✍️ 3. Viết luận văn", "📊 4. Phân tích số liệu", "🔎 5. Kiểm tra luận văn"])
+    
     # ------------------------------------------------------------
     # TAB 1 – TÀI LIỆU PDF
     # ------------------------------------------------------------
