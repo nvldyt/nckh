@@ -1,9 +1,10 @@
+# audit_engine.py
 import re
 import math
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable, Tuple
 
 # ============================================================
-# 1. KIỂM ĐỊNH SỐ LIỆU (NUMERIC AUDIT)
+# 1. MÁY HỌC SUY LUẬN SỐ LIỆU (NUMERIC REASONING ENGINE)
 # ============================================================
 
 def extract_numeric_tokens(text: str) -> List[str]:
@@ -22,20 +23,49 @@ def parse_number(num_str: str) -> Optional[float]:
         return None
 
 def _strip_citation_markers(text: str) -> str:
-    """
-    Loại bỏ các mã trích dẫn dạng [1], [2]... hoặc REF-xxx 
-    để thuật toán không nhận nhầm số thứ tự tài liệu thành số liệu thống kê.
-    """
+    """Loại bỏ các mã trích dẫn để thuật toán không nhận nhầm thành số liệu thống kê."""
     if not text:
         return text
     cleaned = re.sub(r"\[\s*\d+\s*\]", " ", text)
     cleaned = re.sub(r"REF-[A-Za-z0-9\-]+", " ", cleaned)
     return cleaned
 
+def check_numeric_relationship(gen_val: float, source_floats: set) -> Tuple[bool, str]:
+    """
+    Suy luận toán học: Kiểm tra xem số liệu do AI sinh ra (gen_val) có phải là kết quả 
+    của các phép toán (Tỷ lệ %, Cộng, Trừ) từ các số liệu gốc không.
+    """
+    src_list = list(source_floats)
+    n = len(src_list)
+    
+    # 1. Kiểm tra phép chia (Tính Tỷ lệ / Tỷ lệ phần trăm)
+    for i in range(n):
+        for j in range(n):
+            if i == j or src_list[j] == 0:
+                continue
+            a, b = src_list[i], src_list[j]
+            
+            # Khớp tỷ lệ nguyên (VD: 90/150 = 0.6)
+            if math.isclose(a / b, gen_val, rel_tol=1e-3):
+                return True, f"{a} / {b} = {gen_val}"
+            # Khớp tỷ lệ phần trăm (VD: (90/150)*100 = 60%)
+            if math.isclose((a / b) * 100, gen_val, rel_tol=1e-3):
+                return True, f"({a} / {b}) * 100 = {gen_val}%"
+            
+    # 2. Kiểm tra phép cộng / trừ (Tính Tổng, phần bù)
+    for i in range(n):
+        for j in range(i+1, n):
+            a, b = src_list[i], src_list[j]
+            if math.isclose(a + b, gen_val, rel_tol=1e-3):
+                return True, f"{a} + {b} = {gen_val}"
+            if math.isclose(abs(a - b), gen_val, rel_tol=1e-3):
+                return True, f"|{a} - {b}| = {gen_val}"
+            
+    return False, ""
+
 def compare_numbers_advanced(source_text: str, generated_text: str) -> Dict[str, Any]:
     """
-    So sánh số liệu giữa bài viết của AI và văn bản gốc.
-    Phân loại thành: Khớp chính xác, Khớp phái sinh (toán học), và Số liệu lạ.
+    So sánh số liệu với 3 cấp độ: Khớp chính xác -> Khớp nội suy/Toán học -> Số liệu lạ.
     """
     generated_text_clean = _strip_citation_markers(generated_text)
 
@@ -50,6 +80,7 @@ def compare_numbers_advanced(source_text: str, generated_text: str) -> Dict[str,
     exact_matches = []
     derived_matches = []
     warnings = []
+    reasoning_logs = [] # Lịch sử giải thích toán học
 
     for gen_num in generated_normalized:
         # Level 1: Khớp chính xác hoàn toàn 1-1
@@ -58,33 +89,82 @@ def compare_numbers_advanced(source_text: str, generated_text: str) -> Dict[str,
         else:
             gen_val = parse_number(gen_num)
             if gen_val is not None:
+                # Level 2A: Kiểm tra khớp định dạng thập phân (0.5 == 50)
                 is_derived = False
-                # Level 2: Khớp phái sinh (Ví dụ: 0.5 == 50%)
                 for src_val in source_floats:
                     if math.isclose(gen_val, src_val, rel_tol=1e-4) or \
                        math.isclose(gen_val, src_val * 100, rel_tol=1e-4) or \
                        math.isclose(gen_val * 100, src_val, rel_tol=1e-4):
                         is_derived = True
+                        derived_matches.append(gen_num)
+                        reasoning_logs.append(f"Số [{gen_num}] được quy đổi định dạng từ ({src_val})")
                         break
-
-                if is_derived:
-                    derived_matches.append(gen_num)
-                else:
-                    warnings.append(gen_num)
+                
+                # Level 2B: Máy học suy luận toán học (Numeric Reasoning)
+                if not is_derived:
+                    is_math, math_log = check_numeric_relationship(gen_val, source_floats)
+                    if is_math:
+                        derived_matches.append(gen_num)
+                        reasoning_logs.append(f"Số [{gen_num}] hợp lệ do AI tự tính: {math_log}")
+                    else:
+                        warnings.append(gen_num)
             else:
+                # Level 3: Báo động Số liệu lạ
                 warnings.append(gen_num)
 
     return {
         "exact_matches": sorted(exact_matches),
         "derived_matches": sorted(derived_matches),
         "warnings": sorted(warnings),
+        "reasoning_logs": reasoning_logs,
         "source_raw": sorted(source_normalized)
     }
 
+# ============================================================
+# 2. KIỂM ĐỊNH TỪNG LUẬN ĐIỂM (CLAIM-LEVEL AUDIT)
+# ============================================================
+
+def split_into_claims(text: str) -> List[str]:
+    """Chẻ đoạn văn dài thành từng câu luận điểm độc lập."""
+    # Tách câu dựa trên dấu chấm, hỏi, than, theo sau là khoảng trắng
+    claims = re.split(r'(?<=[.!?])\s+', text.strip())
+    return [c.strip() for c in claims if len(c.strip()) > 15]
+
+def claim_level_audit(
+    generated_text: str, 
+    retriever_func: Callable[[str, int], List[Dict[str, Any]]], 
+    top_k_evidence: int = 4
+) -> List[Dict[str, Any]]:
+    """
+    Quy trình Audit theo chuẩn Agentic: Soi từng câu, lấy bằng chứng riêng rẽ.
+    """
+    claims = split_into_claims(generated_text)
+    audit_results = []
+    
+    for claim in claims:
+        # Gọi RAG tìm bằng chứng MỚI chỉ tập trung hỗ trợ cho riêng LUẬN ĐIỂM NÀY
+        evidence = retriever_func(claim, top_k_evidence)
+        source_text = "\n".join(e["text"] for e in evidence)
+        
+        # Kiểm tra toán học trong phạm vi bằng chứng hẹp này
+        num_audit = compare_numbers_advanced(source_text, claim)
+        
+        # Trích xuất mã Citation đang có trong câu
+        citations_in_claim = re.findall(r"\[(REF-[a-zA-Z0-9_-]+)\]", claim)
+        citations_in_claim += re.findall(r"\[(\d+)\]", claim)
+        
+        audit_results.append({
+            "claim": claim,
+            "evidence_used": evidence,
+            "citations_found": citations_in_claim,
+            "numeric_audit": num_audit
+        })
+        
+    return audit_results
+
 def Audit_generated_text(text: str, relevant_evidence: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
-    Hàm tổng hợp để kiểm định một đoạn văn bản.
-    Nhận vào đoạn văn của AI và danh sách các chunks bằng chứng để đối chiếu.
+    Hàm tổng hợp để kiểm định toàn bộ đoạn văn bản (Dùng cho giao diện hiện tại).
     """
     source_text = "\n".join(e["text"] for e in relevant_evidence)
     audit_result = compare_numbers_advanced(source_text, text)
@@ -94,7 +174,7 @@ def Audit_generated_text(text: str, relevant_evidence: List[Dict[str, Any]]) -> 
     }
 
 # ============================================================
-# 2. KIỂM ĐỊNH TRÙNG LẶP / ĐẠO VĂN (PLAGIARISM & OVERLAP)
+# 3. KIỂM ĐỊNH TRÙNG LẶP / ĐẠO VĂN (PLAGIARISM & OVERLAP)
 # ============================================================
 
 def normalize_for_similarity(text: str) -> str:
