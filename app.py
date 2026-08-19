@@ -709,11 +709,11 @@ def main():
                         st.session_state["Audit_log"].append({"type": task_label, "invalid_citation": invalid, "Audit": Audit})
 
         st.subheader("📝 Lệnh viết nhanh")
-        c1, c2, c3, c4, c5 = st.columns(5)
+        c1, c2, c3, c4 = st.columns(4)
         with c1: btn_dat_van_de = st.button("Đặt vấn đề")
         with c2: btn_tong_quan = st.button("Tổng quan tài liệu")
         with c3: btn_phuong_phap = st.button("Phương pháp NC")
-        with c4: btn_ban_luan = st.button("Bàn luận KQNC")
+        with c4: btn_ban_luan = st.button("Bàn luận KQNC và So sánh")
       
         st.write("---")
         st.subheader("Lệnh tùy chỉnh")
