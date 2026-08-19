@@ -446,50 +446,7 @@ def main():
                         meta = st.session_state["documents"].get(ev["source_id"], {})
                         st.markdown(f"**{ev['chunk_id']}** _({meta.get('origin', '')})_\nNguồn: {ev.get('file_name','')} — Trang/mục: {ev.get('page','')}\nĐiểm: {ev.get('score', 0):.4f}\n\n> {ev['text']}")
         st.write("---")
-        st.subheader("🤖 Cập nhật Metadata & Quản lý Citation")
-        
-        col_meta1, col_meta2 = st.columns([1, 1])
-        with col_meta1:
-            if st.button("🚀 AI tự động bóc tách Metadata từ trang 1 PDF", type="primary"):
-                docs = st.session_state.get("documents", {})
-                chunks = st.session_state.get("chunks", [])
-                count_updated = 0
-                
-                if not docs: 
-                    st.warning("⚠️ Evidence Database đang trống!")
-                else:
-                    with st.spinner("AI đang quét trang đầu của tất cả các file PDF..."):
-                        for source_id, meta in docs.items():
-                            if meta.get("origin") == "PDF":
-                                page_one_chunks = [
-                                    c.get("text") if isinstance(c, dict) else getattr(c, 'text', '') 
-                                    for c in chunks 
-                                    if (c.get("source_id") if isinstance(c, dict) else getattr(c, 'source_id', None)) == source_id 
-                                    and str(c.get("page", "")).lower() in ["1", "trang 1", "page 1"]
-                                ]
-                                
-                                target_text = page_one_chunks[0] if page_one_chunks else ""
-                                if target_text:
-                                    meta_ai = extract_metadata_from_text_ai_wrapper(target_text)
-                                    if meta_ai:
-                                        meta.update({k: v for k, v in meta_ai.items() if v})
-                                        st.session_state["documents"][source_id] = meta
-                                        count_updated += 1
-                                        
-                    if count_updated > 0: 
-                        st.success(f"✅ Cập nhật thành công metadata cho {count_updated} file PDF!")
-                        st.rerun()
-                    else: 
-                        st.info("Không tìm thấy dữ liệu trang 1 để bóc tách.")
 
-        with col_meta2:
-            st.markdown("**Sổ đăng ký trích dẫn (Citation Registry)**")
-            registry = st.session_state.get("citation_registry", {})
-            if registry:
-                registry_rows = [{"Citation": f"[{number}]", "File": source_metadata(sid).get("file_name", "")} for sid, number in sorted(registry.items(), key=lambda x: x[1])]
-                st.dataframe(pd.DataFrame(registry_rows), use_container_width=True)
-            else:
-                st.info("Chưa có trích dẫn nào được sinh ra.")  
     # ------------------------------------------------------------
     # TAB 2 – Tra cứu TLTK
     # ------------------------------------------------------------
