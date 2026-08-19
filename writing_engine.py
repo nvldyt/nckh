@@ -9,7 +9,7 @@ from google.genai import types
 # ============================================================
 # CẤU HÌNH MODEL MẶC ĐỊNH
 # ============================================================
-DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
+DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 MODEL_LITE = "gemini-3.5-flash-lite" # Dùng cho các tác vụ phụ trợ, lập dàn ý, review
 
 # ============================================================
@@ -69,7 +69,7 @@ def call_gemini(
     model_name = model or DEFAULT_MODEL
     if "3.6" in model_name or "3.7" in model_name:
         # Dự phòng trường hợp Google chưa update model name trên API
-        model_name = "gemini-1.5-flash" if "flash" in model_name else model_name
+        model_name = "gemini-3.5-flash-lite" if "flash" in model_name else model_name
     
     if "current_key_idx" not in st.session_state:
         st.session_state["current_key_idx"] = 0
