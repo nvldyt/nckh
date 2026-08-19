@@ -13,7 +13,7 @@ from semantic_chunker import SemanticChunker
 import requests
 import xml.etree.ElementTree as ET
 import streamlit as st
-from pypdf import PdfReader
+import fitz
 
 # ============================================================
 # 1. CẤU TRÚC DỮ LIỆU BẰNG CHỨNG
@@ -107,14 +107,13 @@ def add_source_and_chunks(source: SourceDocument, chunks: List[EvidenceChunk]) -
     return True
 
 # ============================================================
-# 5. XỬ LÝ PDF (Đã tích hợp băm ngữ nghĩa chống ảo giác)
+# 5. XỬ LÝ PDF (Bằng PyMuPDF - Xử lý thông minh 2 cột và bảng biểu)
 # ============================================================
 def extract_pdf(uploaded_file) -> Tuple[SourceDocument, List[EvidenceChunk]]:
     data = uploaded_file.getvalue()
     file_hash = sha256_bytes(data)
     source_id = make_source_id(uploaded_file.name, file_hash)
 
-    reader = PdfReader(io.BytesIO(data))
     source = SourceDocument(
         source_id=source_id,
         file_name=uploaded_file.name,
@@ -127,28 +126,40 @@ def extract_pdf(uploaded_file) -> Tuple[SourceDocument, List[EvidenceChunk]]:
     # Khởi tạo Chunker Thông Minh
     chunker = SemanticChunker(max_chunk_size=1200, min_chunk_size=100, chunk_overlap=250)
     
-    for page_no, page in enumerate(reader.pages, start=1):
-        try:
-            raw = page.extract_text() or ""
-        except Exception:
-            raw = ""
-
-        # Giao việc cắt đoạn cho Semantic Chunker
-        semantic_pieces = chunker.split_by_semantics(raw)
+    try:
+        # Dùng thư viện fitz (PyMuPDF) để mở file từ RAM
+        doc = fitz.open(stream=data, filetype="pdf")
         
-        for idx, (piece, start, end) in enumerate(semantic_pieces, start=1):
-            chunks.append(
-                EvidenceChunk(
-                    chunk_id=make_chunk_id(source_id, page_no, idx),
-                    source_id=source_id,
-                    file_name=uploaded_file.name,
-                    page=page_no,
-                    text=piece,
-                    char_start=start,
-                    char_end=end,
+        for page_no in range(len(doc)):
+            page = doc[page_no]
+            
+            # Tham số sort=True là "phép thuật" giúp đọc chuẩn bố cục 2 cột và bảng biểu
+            raw = page.get_text("text", sort=True) or ""
+            
+            if not raw.strip():
+                continue
+
+            # Giao việc cắt đoạn cho Semantic Chunker
+            semantic_pieces = chunker.split_by_semantics(raw)
+            
+            for idx, (piece, start, end) in enumerate(semantic_pieces, start=1):
+                chunks.append(
+                    EvidenceChunk(
+                        chunk_id=make_chunk_id(source_id, page_no + 1, idx), # Đếm số trang từ 1
+                        source_id=source_id,
+                        file_name=uploaded_file.name,
+                        page=page_no + 1,
+                        text=piece,
+                        char_start=start,
+                        char_end=end,
+                    )
                 )
-            )
+        doc.close()
+    except Exception as e:
+        st.error(f"Lỗi khi đọc file {uploaded_file.name}: {str(e)}")
+
     return source, chunks
+    
 # ============================================================
 # 6. TRA CỨU API (PUBMED & VN JOURNALS)
 # ============================================================
