@@ -392,7 +392,7 @@ def main():
         with col_btn: max_res = st.number_input("Số bài/nguồn", min_value=2, max_value=10, value=5, key=ui_key("t3_max_res"))
 
         if st.button("🚀 Tra cứu song song 2 nguồn", type="primary", key="t3_btn_search"):
-        if not t3_query.strip(): 
+        if not t3_query.strip():
             st.warning("Vui lòng nhập tên đề tài nghiên cứu!")
         else:
             st.session_state["t3_query"] = t3_query
@@ -402,11 +402,9 @@ def main():
                 st.session_state["t3_en_keyword"] = en_query
                 
             with st.spinner("Đang tìm & tải Abstract từ PubMed..."):
-                # LÀM SẠCH QUERY: Cắt bỏ phần giải thích tiếng Việt (từ dấu ### trở đi do AI sinh ra)
                 clean_en_query = en_query.split("###")[0].strip()
                 if not clean_en_query:
-                    clean_en_query = t3_query # Fallback nếu chuỗi rỗng
-                    
+                    clean_en_query = t3_query
                 st.session_state["t3_pm_data"] = search_pubmed(clean_en_query, max_res)
                 
             with st.spinner("Đang rút gọn từ khóa & tìm trên tạp chí Y học Việt Nam..."):
