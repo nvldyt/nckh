@@ -162,12 +162,29 @@ def generate_evidence_based_wrapper(task: str, query: str, k: int = 8) -> Tuple[
     return final_text, evidence, invalid_tags
 
 def extract_metadata_from_text_ai_wrapper(text: str) -> dict:
-    prompt = f"""Bạn là chuyên gia thư viện y khoa. Đọc đoạn văn bản và tìm thông tin thư mục.
-TRẢ VỀ DUY NHẤT MỘT CHUỖI JSON HỢP LỆ, KHÔNG GIẢI THÍCH GÌ THÊM:
-{{ "authors": "...", "title": "...", "year": "...", "journal": "...", "doi": "...", "pmid": "..." }}
-Nếu không có thông tin, để chuỗi rỗng "". ĐOẠN VĂN:
-{text[:4000]}"""
-    res = call_gemini(prompt, model=MODEL_LITE, temperature=0.1)
+    prompt = f"""Bạn là chuyên gia thư viện y khoa. Nhiệm vụ của bạn là trích xuất siêu dữ liệu (metadata) từ văn bản thô của trang đầu tiên của một bài báo nghiên cứu.
+    
+ĐẶC BIỆT LƯU Ý VỚI BÀI BÁO TIẾNG VIỆT:
+1. Tác giả (authors): Thường nằm ngay dưới tiêu đề bài báo. Hãy lọc bỏ tên cơ quan/bệnh viện/đại học. Gom các tên người lại, cách nhau bằng dấu phẩy (VD: Nguyễn Văn A, Trần Thị B).
+2. Tạp chí (journal): Tìm các cụm từ bắt đầu bằng "Tạp chí", "Y học", "Nghiên cứu", "Y dược", "Journal".
+3. Năm xuất bản (year): Tìm con số 4 chữ số hợp lý nhất (VD: 2021, 2023).
+
+TRẢ VỀ DUY NHẤT MỘT CHUỖI JSON HỢP LỆ, KHÔNG GIẢI THÍCH GÌ THÊM.
+Cấu trúc JSON bắt buộc:
+{{
+    "authors": "...",
+    "title": "...",
+    "year": "...",
+    "journal": "...",
+    "doi": "..."
+}}
+Nếu không tìm thấy trường nào, hãy để chuỗi rỗng "". 
+
+ĐOẠN VĂN BẢN QUÉT ĐƯỢC TỪ TRANG 1:
+{text[:4500]}"""
+
+    # Gọi mô hình mạnh thay vì mô hình Lite, ép nhiệt độ = 0 để tăng tính chính xác tuyệt đối
+    res = call_gemini(prompt, model=DEFAULT_MODEL, temperature=0.0)
     if not res: return {}
     try:
         cleaned = res.strip()
