@@ -199,14 +199,17 @@ DÀN Ý ĐÃ ĐƯỢC PHÊ DUYỆT:
 NHIỆM VỤ GỐC:
 {task_prompt}
 
-BẰNG CHỨNG LÂM SÀNG ĐƯỢC PHÉP SỬ DỤNG:
+BẰNG CHỨNG LÂM SÀNG ĐƯỢC PHÉP SỬ DỤNG (ƯU TIÊN TỐI THƯỢNG):
 {evidence_context}
 
-YÊU CẦU VIẾT:
-- Bám sát dàn ý trên. Viết thành các đoạn văn xuôi y khoa liền mạch.
+YÊU CẦU ĐỊNH DẠNG BẮT BUỘC:
+- Bám sát dàn ý trên. Viết thành các đoạn văn xuôi y khoa liền mạch, văn phong khô khan, khách quan, không dùng từ ngữ hoa mỹ.
+- Nếu không có dữ liệu, hãy trả lời thẳng "Y văn hiện tại chưa cung cấp số liệu về vấn đề này". Tuyệt đối không tự suy luận.
 - PHẢI dùng nguyên vẹn mã [REF-...] được cung cấp ở ngay cuối câu chứa thông tin lấy từ nguồn đó.
 """
-    raw_output = call_gemini(draft_prompt, temperature=0.1)
+    # Dùng mô hình chính (DEFAULT_MODEL) để đảm bảo chất lượng, nhiệt độ 0.0 để loại bỏ ảo giác
+    raw_output = call_gemini(draft_prompt, temperature=0.0) 
+    
     if not raw_output:
         return None, evidence, []
 
@@ -215,20 +218,7 @@ YÊU CẦU VIẾT:
     # ==========================================
     final_text, references, invalid_tags = citation_engine.process_vancouver_citations(raw_output)
 
-    # ==========================================
-    # BƯỚC 5: REVIEW HỌC THUẬT (Scientific Reviewer)
-    # ==========================================
-    review_prompt = f"""
-Bạn là hội đồng phản biện luận văn CKI Dược lâm sàng. Hãy rà soát đoạn văn bản học thuật sau:
-1. Đảm bảo văn phong khô khan, khách quan, không dùng từ ngữ hoa mỹ.
-2. Kiểm tra xem các trích dẫn [n] đã nằm đúng cuối câu chưa.
-ĐOẠN VĂN BẢN CẦN RÀ SOÁT:
-{final_text}
-Chỉ trả về đoạn văn bản đã được gọt giũa hoàn chỉnh, không giải thích gì thêm.
-"""
-    reviewed_output = call_gemini(review_prompt, model=MODEL_LITE, temperature=0.1)
-    if reviewed_output:
-        final_text = reviewed_output
+    # ĐÃ BỎ BƯỚC 5 ĐỂ BẢO TOÀN TRÍCH DẪN VÀ TĂNG TỐC ĐỘ
 
     if invalid_tags:
         final_text += (
