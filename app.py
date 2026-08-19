@@ -432,8 +432,12 @@ def main():
                             st.caption(art["source"])
                             st.write(art["snippet"])
                             if st.button("➕ Nạp vào Evidence Database", key=ui_key(f"vn_ingest_{i}")):
-                                if ingest_vn_article(art): rebuild_index(); st.success("Đã nạp. Nhớ Audit bản gốc trước khi dùng số liệu chi tiết.")
-                                else: st.info("Nguồn này đã có trong Evidence Database.")
+                            if ingest_vn_article(art): 
+                                rebuild_index()
+                                st.success("Đã nạp. Nhớ Audit bản gốc trước khi dùng số liệu chi tiết.")
+                                st.rerun() # <--- Thêm dòng này để cập nhật giao diện ngay lập tức
+                            else: 
+                                st.info("Nguồn này đã có trong Evidence Database.")
             with col_pm:
                 st.markdown("### 🌍 PubMed (Quốc tế)")
                 if st.session_state.get("t3_en_keyword"): st.success(f"🔑 Từ khoá MeSH: **{st.session_state['t3_en_keyword']}**")
@@ -445,8 +449,12 @@ def main():
                             st.caption(f"✍️ {art['authors']} ({art['year']}) — {art['journal']}")
                             with st.expander("Xem tóm tắt (Abstract)"): st.write(art["abstract"])
                             if st.button("➕ Nạp vào Evidence Database", key=ui_key(f"pm_ingest_{i}")):
-                                if ingest_pubmed_article(art): rebuild_index(); st.success("Đã nạp vào Evidence Database.")
-                                else: st.info("Nguồn này đã có trong Evidence Database.")
+                            if ingest_pubmed_article(art): 
+                                rebuild_index()
+                                st.success("Đã nạp vào Evidence Database.")
+                                st.rerun() # <--- Thêm dòng này để cập nhật giao diện ngay lập tức
+                            else: 
+                                st.info("Nguồn này đã có trong Evidence Database.")
 
             st.write("---")
             if st.button("➕ Nạp TẤT CẢ kết quả ở trên vào Evidence Database", key="t3_ingest_all"):
