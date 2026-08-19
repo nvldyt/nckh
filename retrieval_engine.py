@@ -38,19 +38,28 @@ def get_embeddings(texts: List[str], model_name: str = DEFAULT_EMBEDDING_MODEL) 
 # 2. XÂY DỰNG CHỈ MỤC TÌM KIẾM (INDEX BUILDER)
 # ============================================================
 
-def build_bm25_index(chunks: List[Dict[str, Any]]) -> BM25Okapi:
-    """Dựng chỉ mục từ khóa truyền thống BM25."""
-    tokenized_corpus = [c["text"].lower().split() for c in chunks]
-    return BM25Okapi(tokenized_corpus)
+def _safe_get_text(chunk: Any) -> str:
+    """Hàm hỗ trợ lấy text an toàn bất kể chunk là Dictionary hay Object."""
+    return chunk.get("text", "") if isinstance(chunk, dict) else getattr(chunk, "text", "")
 
-def build_embedding_index(chunks: List[Dict[str, Any]], model_name: str = DEFAULT_EMBEDDING_MODEL) -> np.ndarray:
+def build_bm25_index(chunks: List[Any]) -> BM25Okapi:
+    """Dựng chỉ mục từ khóa truyền thống BM25."""
+    tokenized_corpus = [_safe_get_text(c).lower().split() for c in chunks if _safe_get_text(c)]
+    return BM25Okapi(tokenized_corpus) if tokenized_corpus else None
+
+def build_embedding_index(chunks: List[Any], model_name: str = DEFAULT_EMBEDDING_MODEL) -> np.ndarray:
     """Dựng ma trận vector cho toàn bộ văn bản."""
-    texts = [c["text"] for c in chunks]
+    texts = [_safe_get_text(c) for c in chunks if _safe_get_text(c)]
+    if not texts:
+        return np.array([])
     return get_embeddings(texts, model_name)
 
-def update_embedding_index(new_chunks: List[Dict[str, Any]], existing_matrix: np.ndarray, model_name: str = DEFAULT_EMBEDDING_MODEL) -> np.ndarray:
+def update_embedding_index(new_chunks: List[Any], existing_matrix: np.ndarray, model_name: str = DEFAULT_EMBEDDING_MODEL) -> np.ndarray:
     """Nối thêm vector của văn bản mới vào ma trận cũ."""
-    new_texts = [c["text"] for c in new_chunks]
+    new_texts = [_safe_get_text(c) for c in new_chunks if _safe_get_text(c)]
+    if not new_texts:
+        return existing_matrix
+        
     new_matrix = get_embeddings(new_texts, model_name)
     if existing_matrix is not None and existing_matrix.size > 0:
         return np.vstack([existing_matrix, new_matrix])
