@@ -191,6 +191,7 @@ def internal_overlap_Audit_wrapper(text: str, top_k: int = 5) -> List[Dict[str, 
 def add_pdf_documents(uploaded_files) -> Tuple[int, int, List[str]]:
     new_sources, new_chunks_count, errors = 0, 0, []
     new_chunks_list = []
+    
     for uploaded_file in uploaded_files:
         try:
             source, chunks = extract_pdf(uploaded_file)
@@ -198,9 +199,36 @@ def add_pdf_documents(uploaded_files) -> Tuple[int, int, List[str]]:
                 new_sources += 1
                 new_chunks_count += len(chunks)
                 new_chunks_list.extend(chunks)
+                
+                # ==========================================================
+                # TÍNH NĂNG MỚI: TỰ ĐỘNG GỌI AI ĐỌC TRANG ĐẦU ĐỂ LẤY METADATA NGAY
+                # ==========================================================
+                source_id = source.get("source_id") if isinstance(source, dict) else getattr(source, "source_id", None)
+                if source_id:
+                    # Lọc tìm nội dung trang đầu tiên của file PDF vừa nạp
+                    page_one_chunks = [
+                        c.get("text") for c in chunks 
+                        if str(c.get("page", "")).lower() in ["1", "trang 1", "page 1"]
+                    ]
+                    # Nếu không tìm thấy nhãn trang 1 rõ ràng, lấy tạm chunk đầu tiên
+                    target_text = page_one_chunks[0] if page_one_chunks else (chunks[0].get("text", "") if chunks else "")
+                    
+                    if target_text:
+                        # Gọi AI trích xuất thông tin tác giả, tiêu đề, năm, tạp chí...
+                        meta_ai = extract_metadata_from_text_ai_wrapper(target_text)
+                        if meta_ai:
+                            # Cập nhật trực tiếp vào kho documents của session_state
+                            current_docs = st.session_state.get("documents", {})
+                            if source_id in current_docs:
+                                current_docs[source_id].update({k: v for k, v in meta_ai.items() if v})
+                # ==========================================================
+                
         except Exception as exc:
             errors.append(f"{uploaded_file.name}: {exc}")
-    if new_sources: rebuild_index(new_chunks=new_chunks_list)
+            
+    if new_sources: 
+        rebuild_index(new_chunks=new_chunks_list)
+        
     return new_sources, new_chunks_count, errors
 
 def evidence_database_summary() -> Dict[str, Any]:
