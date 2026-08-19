@@ -190,40 +190,58 @@ class TableSelectionEngine:
                 score += 0.2
         return min(round(score, 2), 3.0)
 
-    def find_duplicates(self) -> Dict[str, List[str]]:
-        duplicates = {c.id: [] for c in self.candidates}
+    def calculate_independence_scores(self) -> Tuple[Dict[str, float], Dict[str, List[str]]]:
+        """
+        Thuật toán Alpha-Clustering: Giải quyết triệt để hiện tượng 'Cùng nhau chìm xuồng'.
+        Bảng chất lượng tốt hơn (Bản gốc/Alpha) giữ nguyên 5.0 điểm, chỉ phạt các bản sao yếu hơn.
+        """
+        base_quality = {}
+        for res in self.candidates:
+            q_score = (
+                res.scientific_value + 
+                res.clinical_importance + 
+                res.discussion_value + 
+                self.statistical_score(res)
+            )
+            base_quality[res.id] = q_score
 
-        for i, a in enumerate(self.candidates):
-            for b in self.candidates[i + 1:]:
-                if result_similarity(a, b) >= self.duplicate_threshold:
-                    duplicates[a.id].append(b.id)
-                    duplicates[b.id].append(a.id)
+        # Sắp xếp từ bảng xuất sắc nhất đến kém nhất
+        sorted_cands = sorted(self.candidates, key=lambda x: base_quality[x.id], reverse=True)
+        
+        independence_scores = {c.id: 5.0 for c in self.candidates}
+        duplicates_map = {c.id: [] for c in self.candidates}
+        seen_alphas = []
 
-        return duplicates
+        for c in sorted_cands:
+            if c.parent_result_id:
+                independence_scores[c.id] = 3.0
+                continue
+                
+            is_duplicate = False
+            for alpha in seen_alphas:
+                if result_similarity(c, alpha) >= self.duplicate_threshold:
+                    # Chỉ phạt bản sao, giữ nguyên điểm bản gốc (Alpha)
+                    independence_scores[c.id] = max(1.0, independence_scores[c.id] - 2.0)
+                    duplicates_map[c.id].append(alpha.id)
+                    is_duplicate = True
+            
+            if not is_duplicate:
+                seen_alphas.append(c)
 
-    def independence_score(
-        self,
-        result: CandidateResult,
-        duplicates: Dict[str, List[str]],
-    ) -> float:
-        dups = duplicates.get(result.id, [])
-        if not dups:
-            return 5.0
-        if result.parent_result_id:
-            return 3.0
-        return max(1.0, 5.0 - 1.25 * len(dups))
+        return independence_scores, duplicates_map
 
     def total_score(
         self,
         result: CandidateResult,
-        duplicates: Dict[str, List[str]],
+        independence_score: float,
     ) -> Tuple[float, Dict[str, float]]:
+        """Tính điểm tổng hợp đa tiêu chí (MCDA) dựa trên điểm độc lập đã phân rã."""
         scores = {
             "objective": self.objective_score(result),
             "scientific": min(max(result.scientific_value, 0), 5),
             "clinical": min(max(result.clinical_importance, 0), 5),
             "discussion": min(max(result.discussion_value, 0), 5),
-            "independence": self.independence_score(result, duplicates),
+            "independence": independence_score,
             "statistical": self.statistical_score(result),
         }
 
@@ -328,7 +346,10 @@ class TableSelectionEngine:
             or [999]
         )
 
-        type_order = {
+        # Khớp loại kết quả linh hoạt bằng toán tử 'in' thay vì so khớp cứng nhắc
+        res_type_lower = result.result_type.lower()
+        type_weight = 50
+        type_order_map = {
             "demographic": 1,
             "baseline": 2,
             "clinical": 3,
@@ -343,21 +364,27 @@ class TableSelectionEngine:
             "regression": 12,
             "figure": 13,
         }
+        for k, v in type_order_map.items():
+            if k in res_type_lower:
+                type_weight = v
+                break
 
         return (
             obj_index,
-            type_order.get(result.result_type.lower(), 50),
+            type_weight,
             -decision.total_score,
             result.title.lower(),
         )
 
     def run(self) -> List[SelectionDecision]:
-        duplicates = self.find_duplicates()
+        # Tích hợp thuật toán tính điểm độc lập thông minh
+        ind_scores_map, duplicates_map = self.calculate_independence_scores()
         raw = []
 
         for result in self.candidates:
             objective_ids = self.infer_objectives(result)
-            total, scores = self.total_score(result, duplicates)
+            ind_score = ind_scores_map[result.id]
+            total, scores = self.total_score(result, ind_score)
             priority = self.classify(
                 result, total, scores["independence"]
             )
@@ -376,7 +403,7 @@ class TableSelectionEngine:
                 total_score=total,
                 priority=priority,
                 presentation=presentation,
-                duplicate_with=duplicates.get(result.id, []),
+                duplicate_with=duplicates_map.get(result.id, []),
                 parent_result_id=result.parent_result_id,
                 locked=bool(
                     result.locked_priority
