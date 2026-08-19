@@ -185,94 +185,66 @@ def compare_two_groups(df: pd.DataFrame, group_col: str, value_col: str) -> Dict
 
 @st.cache_data(show_spinner=False)
 def binary_logistic_regression(df: pd.DataFrame, outcome: str, predictors: List[str]) -> Tuple[pd.DataFrame, str]:
-    import statsmodels.api as sm
+    import statsmodels.formula.api as smf
+    import numpy as np
     import pandas as pd
-    
-    # 1. Chuẩn bị dữ liệu
-    data = df[[outcome] + predictors].dropna().copy()
-    
-    # 2. Mã hóa các biến phân loại (Biến chữ sang 0/1)
-    # drop_first=True giúp tránh lỗi đa cộng tuyến hoàn hảo
-    X = pd.get_dummies(data[predictors], drop_first=True, dtype=int)
-    y = data[outcome]
-    
-    # Mã hóa biến kết cục nếu nó là dạng chữ
-    if y.dtype == 'object':
-        y = pd.factorize(y)[0]
-        
-    # Thêm cột hằng số (Intercept) cho mô hình
-    X = sm.add_constant(X)
-    
-    try:
-        # 3. Chạy mô hình
-        model = sm.Logit(y, X).fit(disp=0)
-        
-        # 4. Lấy kết quả OR (Odds Ratio) và CI 95%
-        params = model.params
-        conf = model.conf_int()
-        conf['OR'] = params
-        conf.columns = ['2.5%', '97.5%', 'OR']
-        
-        # Chuyển đổi sang OR (exp)
-        import numpy as np
-        final_result = np.exp(conf)
-        final_result['P-value'] = model.pvalues
-        
-        summary = f"Mô hình Logistic cho biến [{outcome}]. (Đã tự động xử lý biến phân loại)."
-        return final_result, summary
-        
-    except Exception as e:
-        raise ValueError(f"Không thể xây dựng mô hình: {str(e)}. Hãy thử bỏ bớt các biến có quá nhiều nhóm giá trị (như Hoạt chất, Chẩn đoán).")
 
+    # 1. Chuẩn bị dữ liệu: Lọc bỏ dòng chứa dữ liệu trống (Missing)
+    tmp = df[[outcome] + predictors].dropna().copy()
     if tmp.empty:
         raise ValueError("Không còn dữ liệu sau khi loại bỏ ô trống (Missing).")
 
-    y_levels = tmp[outcome].unique().tolist()
+    # 2. Kiểm tra biến kết cục phải là nhị phân (2 mức)
+    y_levels = tmp[outcome].unique()
     if len(y_levels) != 2:
-        raise ValueError(f"Biến kết cục '{outcome}' phải có đúng 2 mức (Nhị phân).")
+        raise ValueError(f"Biến kết cục '{outcome}' phải có đúng 2 mức (ví dụ: Có/Không, 0/1). Hiện tại có: {len(y_levels)} mức.")
 
-    mapping = {y_levels[0]: 0, y_levels[1]: 1}
-    tmp["_Y_"] = tmp[outcome].map(mapping)
-
+    # 3. Xây dựng công thức hồi quy (Formula)
+    # Tự động nhận diện biến định lượng (không bọc C) và biến phân loại (bọc C)
     formula_parts = []
     for p in predictors:
         if pd.api.types.is_numeric_dtype(tmp[p]):
-            formula_parts.append(p)
+            formula_parts.append(f"Q('{p}')")
         else:
-            formula_parts.append(f"C(Q('{p}'))")
+            formula_parts.append(f"C(Q('{p}'))") # C() chỉ định đây là biến phân loại cho statsmodels
 
-    formula = "_Y_ ~ " + " + ".join(formula_parts)
+    formula = f"Q('{outcome}') ~ " + " + ".join(formula_parts)
     
-    # BẮT LỖI THỐNG KÊ (Perfect Separation, Singular Matrix)
+    # 4. Chạy mô hình và BẮT LỖI THỐNG KÊ (Robust Error Handling)
     try:
-        model = smf.logit(formula=formula, data=tmp).fit(disp=False)
-    except np.linalg.LinAlgError:
-        raise ValueError("Lỗi ma trận (LinAlgError): Đa cộng tuyến mạnh hoặc cỡ mẫu quá nhỏ.")
+        model = smf.logit(formula=formula, data=tmp).fit(disp=0)
     except Exception as e:
-        if "Perfect separation" in str(e) or "singular" in str(e).lower():
-            raise ValueError("Lỗi Perfect Separation: Một biến dự báo phân tách hoàn hảo kết cục. Không thể hồi quy.")
-        raise ValueError(f"Lỗi chạy mô hình: {str(e)}")
+        err = str(e).lower()
+        if "singular" in err or "linalg" in err:
+            raise ValueError("Lỗi ma trận (Singular Matrix): Đa cộng tuyến quá mạnh hoặc cỡ mẫu quá nhỏ cho số biến đã chọn.")
+        if "separation" in err:
+            raise ValueError("Lỗi Perfect Separation: Một biến dự báo phân tách hoàn hảo kết cục (ví dụ: mọi bệnh nhân nhóm A đều khỏi bệnh).")
+        raise ValueError(f"Lỗi hệ thống khi chạy mô hình: {str(e)}")
 
+    # 5. Trích xuất kết quả OR, 95% CI và P-value
     conf = model.conf_int()
     params = model.params
-
-    # Cấu trúc lại bảng kết quả chuẩn Y khoa
+    
+    # Tạo DataFrame kết quả
     output = pd.DataFrame({
         "Biến": params.index,
         "OR": np.exp(params.values).round(2),
         "CI_Lower": np.exp(conf.iloc[:, 0].values),
         "CI_Upper": np.exp(conf.iloc[:, 1].values),
-        "p-value": model.pvalues.values,
+        "P-value": model.pvalues.values,
     })
     
+    # Định dạng cột 95% CI
     output["95% CI"] = output.apply(lambda row: f"{row['CI_Lower']:.2f} - {row['CI_Upper']:.2f}", axis=1)
     output = output.drop(columns=["CI_Lower", "CI_Upper"])
     
-    # Loại bỏ dòng Constant (Intercept) vì không mang ý nghĩa lâm sàng
+    # Loại bỏ dòng Intercept (không ý nghĩa lâm sàng)
     output = output[~output["Biến"].str.contains("Intercept")].reset_index(drop=True)
+    
+    # Làm đẹp tên biến trong bảng kết quả (xóa bớt ký tự thừa do formula tạo ra)
+    output["Biến"] = output["Biến"].str.replace("Q('", "").str.replace("')", "").str.replace("C(", "").str.replace(")", "")
 
-    summary_info = "Mô hình hồi quy Logistic đa biến chạy thành công."
-    return output, summary_info
+    return output, "Mô hình hồi quy Logistic đa biến thành công."
 
 # ============================================================
 # 5. TỔNG HỢP BẢNG ĐẶC ĐIỂM CHUNG CHUẨN LUẬN VĂN (BASELINE)
