@@ -400,7 +400,7 @@ def main():
         "✍️ 3. Viết luận văn", 
         "📊 4. Phân tích số liệu", 
         "🔎 5. Kiểm tra luận văn", 
-        "🏷️ 6. Quản lý TLTK" # <-- Thêm Tab mới này
+        "🏷️ 6. Trích dẫn TLTK" # <-- Thêm Tab mới này
     ])
     # ------------------------------------------------------------
     # TAB 1 – TÀI LIỆU PDF
