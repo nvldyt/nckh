@@ -734,6 +734,14 @@ def main():
             else:
                 task = f"{custom_prompt}\n{citation_rules}"
                 run_quick_task("Kết quả lệnh tùy chỉnh", custom_prompt, task, k=k_custom)
+        st.write("---")
+        st.subheader("📄 Xuất Bản Nháp")
+        if st.button("📥 Tải bản nháp hiện tại ra file Word", use_container_width=True, type="primary"):
+            if not st.session_state.get("last_generated"): 
+                st.warning("Chưa có bản nháp. Vui lòng chạy một lệnh viết luận văn trước.")
+            else:
+                docx_data = create_word_document(title="Bản nháp hỗ trợ nghiên cứu", body=st.session_state["last_generated"], bibliography=citation_bibliography_wrapper())
+                st.download_button("Bấm vào đây để tải file", data=docx_data, file_name="Ban_nhap.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
 
     # ------------------------------------------------------------
     # TAB 4 – PHÂN TÍCH SỐ LIỆU & TUYỂN CHỌN BẢNG
