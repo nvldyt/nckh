@@ -636,25 +636,69 @@ def main():
                         st.success(f"✅ Đã nạp bảng mô tả vào Giỏ!")
 
                 st.write("---")
-                st.subheader("8. Diễn giải kết quả bằng AI")
-                saved_tables = st.session_state.get("saved_tables", {})
-                table_options = ["-- Chỉ dùng số liệu dán tay bên dưới --"] + list(saved_tables.keys())
-                selected_table_key = st.selectbox("Lựa chọn bảng từ Giỏ:", options=table_options, key=ui_key("select_ai_table"))
-                interpretation_request = st.text_area("Số liệu bổ sung:", height=120, key=ui_key("interpretation_request"))
-                if st.button("🤖 AI diễn giải", type="primary", key="ai_interpret"):
-                    final_data = ""
-                    if selected_table_key != "-- Chỉ dùng số liệu dán tay bên dưới --":
-                        final_data += f"TÊN BẢNG: {selected_table_key}\n" + saved_tables[selected_table_key].to_markdown(index=False) + "\n\n"
-                    if interpretation_request.strip(): final_data += f"SỐ LIỆU BỔ SUNG:\n{interpretation_request.strip()}"
-                    
-                    if not final_data.strip(): st.warning("⚠️ Chưa chọn bảng nào!")
-                    else:
-                        with st.spinner("AI đang đọc và diễn giải số liệu..."):
-                            prompt = f"{BASE_SYSTEM_RULES}\nBạn chỉ được DIỄN GIẢI kết quả thống kê dưới đây. KẾT QUẢ:\n{final_data}"
-                            output = call_gemini(prompt, model=DEFAULT_MODEL)
-                            if output: st.markdown(output)
+                st.subheader("8. Diễn giải kết quả bằng AI (Nhận xét bảng chuẩn khoa học)")
+                st.info("💡 Anh có thể chọn một bảng riêng lẻ hoặc chọn **'🌟 Chọn TẤT CẢ các bảng trong Giỏ'** để AI tổng hợp nhận xét toàn bộ số liệu.")
 
-            except Exception as exc: st.error(f"Lỗi khi xử lý file Excel: {exc}")
+                saved_tables = st.session_state.get("saved_tables", {})
+                
+                # Thêm option chọn tất cả vào đầu danh sách
+                table_options = ["-- Chỉ dùng số liệu dán tay bên dưới --", "🌟 Chọn TẤT CẢ các bảng trong Giỏ"] + list(saved_tables.keys())
+
+                selected_table_key = st.selectbox(
+                    "Lựa chọn bảng hoặc nguồn dữ liệu:",
+                    options=table_options,
+                    key=ui_key("select_ai_table")
+                )
+
+                interpretation_request = st.text_area(
+                    "Số liệu bổ sung hoặc yêu cầu cụ thể (nếu có):",
+                    height=100,
+                    key=ui_key("interpretation_request")
+                )
+
+                if st.button("🤖 AI Viết Nhận Xét Bảng", type="primary", key="ai_interpret"):
+                    final_data = ""
+
+                    if selected_table_key == "🌟 Chọn TẤT CẢ các bảng trong Giỏ":
+                        if not saved_tables:
+                            st.warning("⚠️ Giỏ kết quả đang trống, chưa có bảng nào được lưu!")
+                        else:
+                            for t_key, df_t in saved_tables.items():
+                                final_data += f"### BẢNG: {t_key}\n"
+                                final_data += df_t.to_markdown(index=False) + "\n\n"
+                    elif selected_table_key != "-- Chỉ dùng số liệu dán tay bên dưới --":
+                        df_target = saved_tables[selected_table_key]
+                        final_data += f"### BẢNG: {selected_table_key}\n"
+                        final_data += df_target.to_markdown(index=False) + "\n\n"
+
+                    if interpretation_request.strip():
+                        final_data += f"SỐ LIỆU / YÊU CẦU BỔ SUNG:\n{interpretation_request.strip()}"
+
+                    if not final_data.strip():
+                        st.warning("⚠️ Anh chưa chọn bảng nào hoặc chưa dán số liệu!")
+                    else:
+                        try:
+                            # PROMPT CHUẨN: Chỉ đưa ra số liệu, ngắn gọn, khoa học, không bàn luận
+                            strict_remark_prompt = f"""
+{BASE_SYSTEM_RULES}
+Nhiệm vụ của bạn là viết phần **'Nhận xét'** cho các bảng số liệu thống kê trong luận văn Dược lâm sàng.
+QUY TẮC VÀNG BẮT BUỘC:
+1. CHỈ ĐƯA RA SỐ LIỆU: Chỉ diễn giải các số liệu, tần số, tỷ lệ % nổi bật (giá trị cao nhất, thấp nhất, trung vị, v.v.) có trong bảng.
+2. VĂN PHONG KHOA HỌC: Câu văn logic, ngắn gọn, dễ hiểu, mạch lạc.
+3. TUYỆT ĐỐI KHÔNG BÀN LUẬN: Không giải thích nguyên nhân, không suy diễn cơ chế lâm sàng, không so sánh với các nghiên cứu khác ngoài y văn được cung cấp.
+4. Trình bày thành các đoạn văn xuôi y khoa liền mạch, chuẩn mực.
+
+DỮ LIỆU ĐẦU VÀO CẦN NHẬN XÉT:
+{final_data}
+"""
+
+                            with st.spinner("AI đang phân tích số liệu và soạn nhận xét chuyên sâu..."):
+                                output = call_gemini(strict_remark_prompt, model=DEFAULT_MODEL)
+                                if output:
+                                    st.markdown("### 📝 Kết quả Nhận xét Bảng:")
+                                    st.markdown(output)
+                        except Exception as exc:
+                            st.error(f"Lỗi gọi AI: {exc}")
 
     # ------------------------------------------------------------
     # TAB 5 – Audit
