@@ -1,4 +1,4 @@
-# File: chat_data_engine.py (Hệ thống Trợ lý Chat Độc lập - Đã tối ưu hóa)
+# File: chat_data_engine.py (Hệ thống Trợ lý Chat Độc lập - Chống bịa dữ liệu)
 import streamlit as st
 import os
 import io
@@ -50,7 +50,7 @@ def extract_text_from_file(uploaded_file):
 def render_chat_assistant():
     st.write("---")
     st.subheader("🤖 Phân tích Dữ liệu với Gemini")
-    st.caption("Trò chuyện trực tiếp với dữ liệu Excel của anh. AI đã tự động đọc tên cột và hiểu cấu trúc dữ liệu.")
+    st.caption("Trò chuyện trực tiếp với dữ liệu Excel của anh. AI đã bị ép buộc bám sát danh sách thuốc thực tế.")
     
     # 1. Khởi tạo bộ nhớ cho cuộc trò chuyện
     if "data_chat_history" not in st.session_state:
@@ -89,34 +89,51 @@ def render_chat_assistant():
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-    # 4. Khung nhập liệu Chat (Hoạt động như ChatGPT)
-    if prompt := st.chat_input("Hỏi AI cách xử lý dữ liệu, biểu đồ, hoặc code SPSS..."):
+    # 4. Khung nhập liệu Chat
+    if prompt := st.chat_input("Hỏi AI cách xử lý dữ liệu, biểu đồ, hoặc phân tích tương tác thuốc..."):
         st.session_state.data_chat_history.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
             
-        # KHÂU THẦN KỲ: Rút trích dữ liệu Excel bí mật gửi cho AI
+        # KHÂU THẦN KỲ MỚI: Rút trích danh sách thực tế để ép AI học thuộc
         context = ""
         if "excel_data" in st.session_state and st.session_state["excel_data"] is not None and not st.session_state["excel_data"].empty:
             df = st.session_state["excel_data"]
             cols = ", ".join(df.columns.astype(str).tolist())
             shape = df.shape
+            
+            # --- Thu thập dữ liệu thực tế chống bịa đặt ---
+            unique_info = ""
+            for col in df.columns:
+                if df[col].dtype == 'object' or df[col].dtype == 'string':
+                    unique_vals = df[col].dropna().astype(str).unique()
+                    # Lấy danh sách nếu cột có dưới 250 loại giá trị khác nhau (tránh tràn token)
+                    if 0 < len(unique_vals) <= 250: 
+                        val_str = ", ".join(unique_vals)
+                        unique_info += f"- Cột '{col}' chứa CHÍNH XÁC các giá trị này: {val_str}\n"
+
             sample_data = df.head(3).to_markdown() 
             
             context = f"""
-[BỐI CẢNH ẨN - KHÔNG IN RA MÀN HÌNH]
-Người dùng đang mở một file Excel chính với thông tin sau:
-- Tổng số: {shape[0]} dòng, {shape[1]} cột.
-- Tên các cột: {cols}
-- Dữ liệu mẫu (3 dòng đầu):
+[BỐI CẢNH ẨN - HƯỚNG DẪN NGHIÊM NGẶT]
+Người dùng đang phân tích file Excel y khoa với {shape[0]} dòng và {shape[1]} cột.
+Tên các cột: {cols}
+
+DANH SÁCH GIÁ TRỊ THỰC TẾ ĐANG CÓ TRONG FILE (Dùng để đối chiếu):
+{unique_info}
+
+LỆNH BẮT BUỘC DÀNH CHO AI:
+1. TUYỆT ĐỐI KHÔNG BỊA ĐẶT (hallucinate) tên thuốc, thảo dược hoặc số liệu không có trong "Danh sách giá trị thực tế" ở trên.
+2. Khi phân tích tương tác thuốc hoặc lập bảng, CHỈ ĐƯỢC PHÉP sử dụng các tên thuốc/hoạt chất có xuất hiện thực tế trong danh sách.
+3. Nếu người dùng hỏi về một thông tin/thuốc không có trong dữ liệu, phải trả lời rõ: "Dữ liệu thực tế trong file không chứa loại thuốc này".
+4. Dữ liệu mẫu (3 dòng đầu) để hiểu cấu trúc: 
 {sample_data}
-Hãy dựa vào cấu trúc dữ liệu này để đưa ra câu trả lời chính xác, sát thực tế nhất cho câu hỏi dưới đây.
 """
         
-        # 5. Giao tiếp với Gemini (Đã tối ưu xoay vòng Key và chống tràn token)
+        # 5. Giao tiếp với Gemini
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
-            with st.spinner("AI đang suy nghĩ và kiểm tra dữ liệu..."):
+            with st.spinner("AI đang quét dữ liệu thực tế và phân tích..."):
                 try:
                     safety_settings = {
                         "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
@@ -125,10 +142,10 @@ Hãy dựa vào cấu trúc dữ liệu này để đưa ra câu trả lời ch�
                         "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE"
                     }
                     
-                    # Dùng mô hình Gemini 3.5 Flash
-                    model = genai.GenerativeModel("gemini-3.5-flash")
+                    # Dùng mô hình Gemini 3.7 Flast
+                    model = genai.GenerativeModel("gemini-3.7-flast")
                     
-                    # Chỉ lấy tối đa 8 tin nhắn gần nhất để tiết kiệm token, tránh lỗi 429
+                    # Giới hạn lịch sử để chống lỗi 429
                     recent_history = st.session_state.data_chat_history[-8:]
                     chat_context = "Lịch sử trò chuyện gần đây:\n"
                     for msg in recent_history[:-1]:
@@ -137,7 +154,7 @@ Hãy dựa vào cấu trúc dữ liệu này để đưa ra câu trả lời ch�
                     
                     final_prompt = f"{chat_context}\n{context}\nCâu hỏi hiện tại của người dùng: {prompt}"
                     
-                    # Cơ chế tự động đổi Key và thử lại khi gặp lỗi giới hạn
+                    # Cơ chế xoay vòng Key
                     response = None
                     for attempt in range(2):
                         try:
@@ -150,7 +167,7 @@ Hãy dựa vào cấu trúc dữ liệu này để đưa ra câu trả lời ch�
                             break
                         except Exception as inner_e:
                             if ("429" in str(inner_e) or "Quota" in str(inner_e)) and attempt == 0:
-                                continue # Tự động chuyển sang key kế tiếp và thử lại
+                                continue 
                             else:
                                 raise inner_e
 
@@ -161,6 +178,6 @@ Hãy dựa vào cấu trúc dữ liệu này để đưa ra câu trả lời ch�
                     st.session_state.data_chat_history.append({"role": "assistant", "content": full_res})
                     
                 except Exception as e:
-                    error_msg = f"❌ Hệ thống quá tải hoặc hết hạn mức (429). Anh vui lòng bấm nút **Xóa hội thoại** phía trên hoặc đợi 15 giây rồi hỏi lại nhé. Chi tiết: {e}"
+                    error_msg = f"❌ Hệ thống quá tải hoặc gặp lỗi. Anh vui lòng bấm nút **Xóa hội thoại** phía trên hoặc thử lại sau 15 giây. Chi tiết: {e}"
                     message_placeholder.error(error_msg)
                     st.session_state.data_chat_history.append({"role": "assistant", "content": error_msg})
