@@ -757,10 +757,8 @@ def main():
                     st.dataframe(df_clean.head(50), use_container_width=True)
                     
                     # Cập nhật vào session_state (Anh kiểm tra lại tên biến này cho khớp với code cũ nhé)
-                    st.session_state["excel_data"] = df_clean
-                    
-        excel_file = st.file_uploader("Tải file Excel", type=["xlsx", "xls"], key="excel_uploader_tab4_unique")
-
+                    st.session_state["excel_data"] = df_clean                    
+        
         if excel_file is not None:
             try:
                 raw_df = pd.read_excel(excel_file)
