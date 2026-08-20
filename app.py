@@ -12,6 +12,7 @@ import time
 import json
 import gc
 from typing import Any, Dict, List, Optional, Tuple
+from chat_data_engine import render_chat_assistant
 
 import numpy as np
 import pandas as pd
@@ -758,6 +759,9 @@ def main():
                     
                     # Cập nhật vào session_state (Anh kiểm tra lại tên biến này cho khớp với code cũ nhé)
                     st.session_state["excel_data"] = df_clean                    
+
+        # Gọi hệ thống Chat Độc lập đã được tách module
+        render_chat_assistant()
         
         if excel_file is not None:
             try:
