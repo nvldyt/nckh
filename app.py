@@ -13,6 +13,7 @@ import json
 import gc
 from typing import Any, Dict, List, Optional, Tuple
 from chat_data_engine import render_chat_assistant
+from chat_writing_engine import render_writing_chat
 
 import numpy as np
 import pandas as pd
