@@ -20,11 +20,21 @@ DEFAULT_RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 # ============================================================
 
 def get_serpapi_key() -> Optional[str]:
-    """Lấy API Key từ file serpapi.txt trong thư mục hiện tại."""
+    """Lấy API Key cho việc tìm kiếm bài báo (SerpAPI)."""
+    # 1. Ưu tiên đọc từ file serpapi.txt
     if os.path.exists("serpapi.txt"):
-        with open("serpapi.txt", "r", encoding="utf-8") as f:
-            return f.read().strip()
-    return os.getenv("SERPAPI_KEY", "")
+        try:
+            with open("serpapi.txt", "r", encoding="utf-8") as f:
+                key = f.read().strip()
+                if key: return key
+        except Exception: pass
+    
+    # 2. Key mặc định cho SerpAPI (để không bị lỗi)
+    return "f99c73f0a83c6e0ec159f8583534aa2d9deabdd339c44511323b83c15c4c6704"
+
+def get_default_gemini_key() -> str:
+    """Hàm lấy Key dự phòng cho Gemini nếu key_manager bị lỗi."""
+    return "AQ.Ab8RN6JhBJ5w9bnl4pcVuf_NBh8gb2pwRq756ybmvXnar9Q18A"
 
 # ============================================================
 # 1. QUẢN LÝ MÔ HÌNH (EMBEDDING & RERANKER)
