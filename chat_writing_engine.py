@@ -103,7 +103,7 @@ def render_writing_chat():
                         "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE"
                     }
                     
-                    model = genai.GenerativeModel("gemini-3.5-flash-lite")
+                    model = genai.GenerativeModel("gemini-3.7-flash")
                     
                     system_prompt = "Bạn là một Giáo sư y khoa hướng dẫn sinh viên viết luận văn. Hãy trả lời học thuật, chính xác và chuyên nghiệp.\n\n"
                     
