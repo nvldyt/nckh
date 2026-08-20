@@ -82,8 +82,9 @@ Hãy dựa vào cấu trúc dữ liệu này để đưa ra câu trả lời ch�
                     # ---------------------------------
                         
                     genai.configure(api_key=api_key)
-                    # Dùng mô hình mạnh nhất hiện tại để phân tích số liệu
-                    model = genai.GenerativeModel("gemini-3.5-flast-lite")
+                    
+                    # SỬA LỖI TẠI ĐÂY: Dùng mô hình Gemini 1.5 Pro chuẩn của Google API
+                    model = genai.GenerativeModel("gemini-1.5-pro")
                     
                     # Gộp lịch sử chat để AI nhớ ngữ cảnh
                     chat_context = "Lịch sử trò chuyện trước đó:\n"
