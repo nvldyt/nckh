@@ -1,11 +1,34 @@
 # File: chat_writing_engine.py
 import os
 import io
+import itertools
 import fitz  # PyMuPDF
 import docx  # python-docx
 import pandas as pd
 import streamlit as st
 import google.generativeai as genai
+
+# --- CƠ CHẾ XOAY VÒNG 8 KEY TRỰC TIẾP TỪ SECRETS ---
+@st.cache_resource
+def get_key_cycler():
+    try:
+        raw_keys = st.secrets.get("GEMINI_API_KEY", "")
+        if raw_keys:
+            keys_list = [k.strip() for k in raw_keys.split(",") if k.strip()]
+            if keys_list:
+                return itertools.cycle(keys_list)
+    except Exception:
+        pass
+    return None
+
+key_cycle = get_key_cycler()
+
+def get_next_api_key():
+    if key_cycle:
+        return next(key_cycle)
+    # Fallback nếu chạy local lấy từ biến môi trường
+    return os.environ.get("GEMINI_API_KEY", "")
+# ----------------------------------------------------
 
 # Hàm đọc chữ từ PDF, Word, Excel
 def extract_text_from_file(uploaded_file):
@@ -63,7 +86,7 @@ def render_writing_chat():
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-    # Khung nhập liệu (Đã tối ưu hóa chống tràn token và xoay vòng 8 key)
+    # Khung nhập liệu
     if prompt := st.chat_input("Nhắn với Gemini để viết, sửa bài, hoặc hỏi về file vừa nạp..."):
         st.session_state.writing_chat_history.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
@@ -73,8 +96,6 @@ def render_writing_chat():
             message_placeholder = st.empty()
             with st.spinner("Gemini đang suy nghĩ và tổng hợp..."):
                 try:
-                    import key_manager  # Nạp module quản lý 8 key
-                    
                     safety_settings = {
                         "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
                         "HARM_CATEGORY_HATE_SPEECH": "BLOCK_NONE",
@@ -82,42 +103,42 @@ def render_writing_chat():
                         "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE"
                     }
                     
-                    # Dùng mô hình flash tốc độ cao để tránh nghẽn
                     model = genai.GenerativeModel("gemini-1.5-flash")
                     
                     system_prompt = "Bạn là một Giáo sư y khoa hướng dẫn sinh viên viết luận văn. Hãy trả lời học thuật, chính xác và chuyên nghiệp.\n\n"
                     
-                    # Chỉ lấy tối đa 8 tin nhắn gần nhất để tiết kiệm token tối đa, không bị lỗi 429
+                    # Lấy 8 tin nhắn gần nhất để chống tràn token
                     recent_history = st.session_state.writing_chat_history[-8:]
                     chat_context = system_prompt + "Lịch sử trò chuyện gần đây:\n"
                     for msg in recent_history[:-1]:
-                        # Cắt gọn các đoạn nội dung quá dài trong lịch sử
                         content_snippet = msg['content'][:800] if len(msg['content']) > 800 else msg['content']
                         chat_context += f"{msg['role'].upper()}: {content_snippet}\n"
                     
                     final_prompt = f"{chat_context}\nCâu hỏi của người dùng: {prompt}"
                     
-                    # Cơ chế tự động đổi Key nếu gặp lỗi quá tải
+                    # Cơ chế gọi API xoay vòng 8 key từ Secrets và tự động đổi nếu dính quá tải (429)
                     response = None
-                    for attempt in range(2): # Thử tối đa 2 lần với các key khác nhau nếu lỗi
+                    for attempt in range(2):
                         try:
-                            api_key = key_manager.get_next_key()
+                            api_key = get_next_api_key()
+                            if not api_key:
+                                raise ValueError("Không tìm thấy API Key trong Secrets!")
                             genai.configure(api_key=api_key)
+                            
                             response = model.generate_content(final_prompt, safety_settings=safety_settings)
                             break
                         except Exception as inner_e:
-                            if "429" in str(inner_e) and attempt == 0:
-                                continue # Lập tức đổi sang key kế tiếp và thử lại
+                            if ("429" in str(inner_e) or "Quota" in str(inner_e)) and attempt == 0:
+                                continue # Đổi sang key tiếp theo trong chuỗi và thử lại ngay
                             else:
                                 raise inner_e
 
                     full_res = response.text
                     
-                    # Hiển thị và lưu lại
                     message_placeholder.markdown(full_res)
                     st.session_state.writing_chat_history.append({"role": "assistant", "content": full_res})
                     
                 except Exception as e:
-                    error_msg = f"❌ Hệ thống đang quá tải (429). Anh vui lòng bấm nút **Xóa hội thoại** phía trên hoặc đợi 15 giây rồi hỏi lại nhé. Chi tiết: {e}"
+                    error_msg = f"❌ Hệ thống gặp sự cố: {e}"
                     message_placeholder.error(error_msg)
                     st.session_state.writing_chat_history.append({"role": "assistant", "content": error_msg})
