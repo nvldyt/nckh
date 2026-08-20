@@ -546,6 +546,7 @@ def main():
     # TAB 3 – VIẾT LUẬN VĂN
     # ------------------------------------------------------------
     with tabs[2]:
+        st.header("📝 Viết tự động bằng AI (RAG)")
         st.header("✍️ Viết luận văn dựa trên bằng chứng")
         st.warning("Đây là công cụ tạo bản nháp. Mọi citation và số liệu phải được Audit lại (đối chiếu bản gốc) trước khi đưa vào luận văn chính thức.")
         render_evidence_database_status("dùng cho các nút viết nhanh bên dưới")
@@ -721,7 +722,7 @@ def main():
             else:
                 docx_data = create_word_document(title="Bản nháp hỗ trợ nghiên cứu", body=st.session_state["last_generated"], bibliography=citation_bibliography_wrapper())
                 st.download_button("Bấm vào đây để tải file", data=docx_data, file_name="Ban_nhap.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
-
+       render_writing_chat()
     # ------------------------------------------------------------
     # TAB 4 – PHÂN TÍCH SỐ LIỆU & TUYỂN CHỌN BẢNG
     # ------------------------------------------------------------
