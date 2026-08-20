@@ -54,8 +54,14 @@ Hãy dựa vào cấu trúc dữ liệu này để đưa ra câu trả lời ch�
             message_placeholder = st.empty()
             with st.spinner("AI đang suy nghĩ và kiểm tra dữ liệu..."):
                 try:
-                    # Lấy API Key đang có sẵn trong hệ thống của anh
-                    api_key = st.session_state.get("GEMINI_API_KEY", "")
+                    # Tự động quét tìm API Key ở mọi ngóc ngách trong session_state của ứng dụng chính
+                    api_key = (
+                        st.session_state.get("GEMINI_API_KEY") or 
+                        st.session_state.get("gemini_api_key") or 
+                        st.session_state.get("API_KEY") or 
+                        ""
+                    )
+
                     if not api_key:
                         st.error("⚠️ Không tìm thấy Gemini API Key. Vui lòng nhập ở Tab Cài đặt.")
                         return
