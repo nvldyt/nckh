@@ -126,7 +126,7 @@ Hãy dựa vào cấu trúc dữ liệu này để đưa ra câu trả lời ch�
                     }
                     
                     # Dùng mô hình Gemini 3.5 Flash
-                    model = genai.GenerativeModel("gemini-3.5-flash-lite")
+                    model = genai.GenerativeModel("gemini-3.5-flash")
                     
                     # Chỉ lấy tối đa 8 tin nhắn gần nhất để tiết kiệm token, tránh lỗi 429
                     recent_history = st.session_state.data_chat_history[-8:]
