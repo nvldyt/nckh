@@ -1,87 +1,108 @@
-# File: chat_writing_engine.py (Trợ lý Gemini tự do cho Tab 3)
+# File: chat_writing_engine.py
 import os
+import io
+import fitz  # PyMuPDF
+import docx  # python-docx
+import pandas as pd
 import streamlit as st
 import google.generativeai as genai
+
+# Hàm đọc chữ từ PDF, Word, Excel
+def extract_text_from_file(uploaded_file):
+    file_name = uploaded_file.name.lower()
+    try:
+        if file_name.endswith('.pdf'):
+            doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
+            return "\n".join([page.get_text() for page in doc])
+        elif file_name.endswith('.docx'):
+            doc = docx.Document(io.BytesIO(uploaded_file.read()))
+            return "\n".join([p.text for p in doc.paragraphs])
+        elif file_name.endswith(('.xlsx', '.xls', '.csv')):
+            if file_name.endswith('.csv'):
+                df = pd.read_csv(uploaded_file)
+            else:
+                df = pd.read_excel(uploaded_file)
+            return df.to_markdown()
+        else:
+            return uploaded_file.read().decode('utf-8', errors='ignore')
+    except Exception as e:
+        return f"Lỗi trích xuất dữ liệu: {e}"
 
 def render_writing_chat():
     st.write("---")
     st.subheader("💬 Viết luận văn cùng Gemini")
-    st.caption("Dùng để lên ý tưởng, viết lại câu chữ, hoặc nhờ AI giải thích các khái niệm y khoa.")
+    st.caption("Chat tự do hoặc đính kèm tài liệu (PDF, Word, Excel...) để AI phân tích.")
     
-    # 1. Khởi tạo bộ nhớ cho cuộc trò chuyện (Dùng tên biến khác để không đụng hàng với Tab 4)
     if "writing_chat_history" not in st.session_state:
         st.session_state.writing_chat_history = []
         
-    # Nút xóa lịch sử chat
     col1, col2 = st.columns([8, 2])
     with col2:
         if st.button("🧹 Xóa hội thoại", key="clear_writing_chat", use_container_width=True):
             st.session_state.writing_chat_history = []
             st.rerun()
 
-    # 2. Hiển thị lịch sử chat trên giao diện
-    for message in st.session_state.writing_chat_history:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    # KHAY ĐÍNH KÈM TÀI LIỆU (Sẽ hiện ra ở đây)
+    with st.expander("📎 Bấm vào đây để đính kèm tài liệu cho AI đọc", expanded=False):
+        uploaded_doc = st.file_uploader("Hỗ trợ PDF, Word, Excel, CSV, TXT", type=['pdf', 'docx', 'xlsx', 'xls', 'csv', 'txt'], key="chat_uploader_tab3")
+        if uploaded_doc:
+            if st.button("📥 Nạp file này vào bộ nhớ AI", use_container_width=True, type="primary"):
+                with st.spinner(f"Đang đọc và giải mã {uploaded_doc.name}..."):
+                    file_content = extract_text_from_file(uploaded_doc)
+                    
+                    st.session_state.writing_chat_history.append({
+                        "role": "user", 
+                        "content": f"[HỆ THỐNG] Người dùng vừa tải lên tài liệu '{uploaded_doc.name}'. Nội dung:\n\n{file_content}"
+                    })
+                    st.session_state.writing_chat_history.append({
+                        "role": "assistant",
+                        "content": f"✅ Tôi đã đọc xong file **{uploaded_doc.name}**. Anh cần tôi làm gì với tài liệu này?"
+                    })
+                    st.rerun()
 
-    # 3. Khung nhập liệu Chat
-    if prompt := st.chat_input("Nhắn với Gemini để viết hoặc sửa bài... (VD: Hãy viết lại đoạn văn trên cho trôi chảy hơn)"):
-        # Hiển thị câu hỏi
+    # Hiển thị lịch sử chat
+    for message in st.session_state.writing_chat_history:
+        if "[HỆ THỐNG]" not in message["content"]:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+    # Khung nhập liệu
+    if prompt := st.chat_input("Nhắn với Gemini để viết, sửa bài, hoặc hỏi về file vừa nạp..."):
         st.session_state.writing_chat_history.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
             
-        # 4. Giao tiếp với Gemini
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
-            with st.spinner("Gemini đang đọc và suy nghĩ..."):
+            with st.spinner("Gemini đang đọc..."):
                 try:
-                    # --- BỘ DÒ TÌM API KEY ĐA TẦNG ---
-                    api_key = ""
-                    
-                    # 1. Tìm trong bộ nhớ tạm (Session State) nếu người dùng vừa nhập
-                    if st.session_state.get("GEMINI_API_KEY"):
-                        api_key = st.session_state.get("GEMINI_API_KEY")
-                    elif st.session_state.get("gemini_api_key"):
-                        api_key = st.session_state.get("gemini_api_key")
-                        
-                    # 2. Tìm trong cấu hình bảo mật của Streamlit Cloud (Secrets)
+                    # Bộ dò tìm API Key
+                    api_key = (st.session_state.get("GEMINI_API_KEY") or 
+                               st.session_state.get("gemini_api_key") or 
+                               os.environ.get("GEMINI_API_KEY", ""))
                     if not api_key:
                         try:
-                            if "GEMINI_API_KEY" in st.secrets:
-                                api_key = st.secrets["GEMINI_API_KEY"]
-                        except:
-                            pass
-                            
-                    # 3. Tìm trong biến môi trường của máy chủ (Environment Variables)
-                    if not api_key:
-                        api_key = os.environ.get("GEMINI_API_KEY", "")
+                            api_key = st.secrets.get("GEMINI_API_KEY", "")
+                        except: pass
                         
-                    # Nếu vẫn không tìm thấy thì báo lỗi và dừng lại
                     if not api_key:
-                        st.error("⚠️ Không tìm thấy Gemini API Key. Vui lòng chuyển sang Tab Cài đặt để nhập Key.")
+                        st.error("⚠️ Không tìm thấy Gemini API Key.")
                         return
-                    # ---------------------------------
                         
                     genai.configure(api_key=api_key)
-                    # Dùng mô hình Gemini 3.7 Flast
-                    model = genai.GenerativeModel("gemini-3.7-flast")
+                    model = genai.GenerativeModel("gemini-1.5-pro")
                     
-                    # Bơm một câu lệnh mồi (System Prompt) ẩn để Gemini nhập vai xuất sắc hơn
-                    system_prompt = "Bạn là một Giáo sư chuyên ngành DƯỢC LÂM SÀNG hướng dẫn sinh viên viết luận văn. Hãy trả lời học thuật, chính xác và chuyên nghiệp, căn cứ theo các tài liệu đã gửi, viết đầy đủ, logic, khoa học, câu từ không hoa mỹ, tuyệt đối không bịa đặt.\n\n"
+                    system_prompt = "Bạn là một Giáo sư y khoa hướng dẫn sinh viên viết luận văn. Hãy trả lời học thuật, chính xác và chuyên nghiệp.\n\n"
                     
-                    # Gộp lịch sử chat để AI nhớ ngữ cảnh
                     chat_context = system_prompt + "Lịch sử trò chuyện:\n"
                     for msg in st.session_state.writing_chat_history[:-1]:
                         chat_context += f"{msg['role'].upper()}: {msg['content']}\n"
                     
                     final_prompt = f"{chat_context}\nCâu hỏi của người dùng: {prompt}"
                     
-                    # Gọi AI sinh văn bản
                     response = model.generate_content(final_prompt)
                     full_res = response.text
                     
-                    # In ra giao diện và lưu vào bộ nhớ
                     message_placeholder.markdown(full_res)
                     st.session_state.writing_chat_history.append({"role": "assistant", "content": full_res})
                     
