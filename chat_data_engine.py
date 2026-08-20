@@ -5,7 +5,7 @@ import google.generativeai as genai
 
 def render_chat_assistant():
     st.write("---")
-    st.subheader("🤖 Phân tích Dữ liệu")
+    st.subheader("🤖 Phân tích Dữ liệu với Gemini")
     st.caption("Trò chuyện trực tiếp với dữ liệu Excel của anh. AI đã tự động đọc tên cột và hiểu cấu trúc dữ liệu.")
     
     # 1. Khởi tạo bộ nhớ cho cuộc trò chuyện
