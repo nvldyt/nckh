@@ -10,6 +10,7 @@ import os
 import re
 import time
 import json
+import gc
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -205,6 +206,8 @@ def internal_overlap_Audit_wrapper(text: str, top_k: int = 5) -> List[Dict[str, 
 # ============================================================
 # 3. HELPER FUNCTIONS
 # ============================================================
+import gc # Đảm bảo anh đã khai báo import gc ở đầu file app.py nhé
+
 def add_pdf_documents(uploaded_files) -> Tuple[int, int, List[str]]:
     new_sources, new_chunks_count, errors = 0, 0, []
     new_chunks_list = []
@@ -244,6 +247,12 @@ def add_pdf_documents(uploaded_files) -> Tuple[int, int, List[str]]:
                             if source_id in current_docs:
                                 current_docs[source_id].update({k: v for k, v in meta_ai.items() if v})
                                 
+            # ==========================================
+            # DỌN RÁC GIẢI PHÓNG RAM CHO TỪNG FILE
+            # ==========================================
+            del source
+            gc.collect() 
+            
         except Exception as exc:
             errors.append(f"{uploaded_file.name}: {exc}")
             
@@ -718,6 +727,38 @@ def main():
     with tabs[3]:
         st.header("📊 Phân tích số liệu bệnh án (SPSS Mini)")
 
+        # --- CHÈN HÀM ĐỌC EXCEL AN TOÀN VÀO ĐÂY ---
+        def safe_read_excel(uploaded_file):
+            import pandas as pd
+            import gc
+            try:
+                df = pd.read_excel(uploaded_file)
+                df.columns = df.columns.astype(str) # Ép Header thành chữ
+                for col in df.columns:
+                    if df[col].dtype == 'object':
+                        df[col] = df[col].astype(str) # Khử dữ liệu lẩu thập cẩm
+                gc.collect() # Dọn rác RAM
+                return df
+            except Exception as e:
+                st.error(f"❌ Lỗi khi đọc Excel: {e}")
+                return pd.DataFrame()
+
+        # --- KHU VỰC TẢI VÀ HIỂN THỊ FILE ---
+        # Vẫn giữ nguyên key=ui_key("excel_data") của anh để không lỗi các hàm khác
+        excel_file = st.file_uploader("Tải file Excel", type=["xlsx", "xls"], key=ui_key("excel_data"))
+        
+        if excel_file is not None:
+            with st.spinner("Đang dọn dẹp và nạp dữ liệu..."):
+                df_clean = safe_read_excel(excel_file)
+                
+                if not df_clean.empty:
+                    st.success(f"✅ Nạp thành công: {df_clean.shape[0]} dòng và {df_clean.shape[1]} cột.")
+                    # Chỉ hiển thị 50 dòng đầu tiên để không treo RAM trình duyệt
+                    st.dataframe(df_clean.head(50), use_container_width=True)
+                    
+                    # Cập nhật vào session_state (Anh kiểm tra lại tên biến này cho khớp với code cũ nhé)
+                    st.session_state["excel_data"] = df_clean
+                    
         excel_file = st.file_uploader("Tải file Excel", type=["xlsx", "xls"], key=ui_key("excel_data"))
 
         if excel_file is not None:
@@ -1319,17 +1360,17 @@ DỮ LIỆU ĐẦU VÀO CẦN NHẬN XÉT:
         if not docs:
             st.warning("⚠️ Chưa có tài liệu nào trong Evidence Database.")
         else:
-            # 1. Hiển thị Data Editor cho phép sửa thủ công
+            # 1. Hiển thị Data Editor cho phép sửa thủ công (Đã ép kiểu an toàn chống sập)
             doc_list = []
             for sid, meta in docs.items():
                 doc_list.append({
-                    "source_id": sid,
-                    "origin": meta.get("origin", "Khác"),
-                    "authors": meta.get("authors", ""),
-                    "title": meta.get("title", meta.get("file_name", "")),
-                    "journal": meta.get("journal", ""),
-                    "year": meta.get("year", ""),
-                    "doi": meta.get("doi", "")
+                    "source_id": str(sid),
+                    "origin": str(meta.get("origin") or "Khác"),
+                    "authors": str(meta.get("authors") or ""),
+                    "title": str(meta.get("title") or meta.get("file_name") or ""),
+                    "journal": str(meta.get("journal") or ""),
+                    "year": str(meta.get("year") or ""),
+                    "doi": str(meta.get("doi") or "")
                 })
             
             df_meta = pd.DataFrame(doc_list)
