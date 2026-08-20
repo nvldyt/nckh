@@ -723,7 +723,7 @@ def main():
             else:
                 docx_data = create_word_document(title="Bản nháp hỗ trợ nghiên cứu", body=st.session_state["last_generated"], bibliography=citation_bibliography_wrapper())
                 st.download_button("Bấm vào đây để tải file", data=docx_data, file_name="Ban_nhap.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
-       render_writing_chat()
+        render_writing_chat()
     # ------------------------------------------------------------
     # TAB 4 – PHÂN TÍCH SỐ LIỆU & TUYỂN CHỌN BẢNG
     # ------------------------------------------------------------
