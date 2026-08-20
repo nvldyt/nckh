@@ -5,8 +5,8 @@ import google.generativeai as genai
 
 def render_writing_chat():
     st.write("---")
-    st.subheader("💬 Trợ lý Gemini (Chat tự do)")
-    st.caption("Giao diện chat y hệt web Gemini. Dùng để lên ý tưởng, viết lại câu chữ, hoặc nhờ AI giải thích các khái niệm y khoa.")
+    st.subheader("💬 Viết luận văn cùng Gemini")
+    st.caption("Dùng để lên ý tưởng, viết lại câu chữ, hoặc nhờ AI giải thích các khái niệm y khoa.")
     
     # 1. Khởi tạo bộ nhớ cho cuộc trò chuyện (Dùng tên biến khác để không đụng hàng với Tab 4)
     if "writing_chat_history" not in st.session_state:
@@ -68,7 +68,7 @@ def render_writing_chat():
                     model = genai.GenerativeModel("gemini-3.7-flast")
                     
                     # Bơm một câu lệnh mồi (System Prompt) ẩn để Gemini nhập vai xuất sắc hơn
-                    system_prompt = "Bạn là một Giáo sư y khoa hướng dẫn sinh viên viết luận văn. Hãy trả lời học thuật, chính xác và chuyên nghiệp.\n\n"
+                    system_prompt = "Bạn là một Giáo sư chuyên ngành DƯỢC LÂM SÀNG hướng dẫn sinh viên viết luận văn. Hãy trả lời học thuật, chính xác và chuyên nghiệp, căn cứ theo các tài liệu đã gửi, viết đầy đủ, logic, khoa học, câu từ không hoa mỹ, tuyệt đối không bịa đặt.\n\n"
                     
                     # Gộp lịch sử chat để AI nhớ ngữ cảnh
                     chat_context = system_prompt + "Lịch sử trò chuyện:\n"
