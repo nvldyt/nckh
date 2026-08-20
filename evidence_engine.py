@@ -1,10 +1,11 @@
-# evidence_engine.py
+# File: evidence_engine.py (Bản OFFLINE - Tối ưu RAM & Đồng bộ Key)
 
 import io
 import re
 import os
 import hashlib
 import concurrent.futures
+import gc  # Thêm thư viện dọn rác RAM
 from serpapi import GoogleSearch
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, List, Tuple, Optional
@@ -14,6 +15,9 @@ import requests
 import xml.etree.ElementTree as ET
 import streamlit as st
 import fitz
+
+import key_manager # Bắt buộc gọi trái tim chứa 8 Key ở đây
+import google.generativeai as genai # Gọi thư viện Gemini
 
 # ============================================================
 # 1. CẤU TRÚC DỮ LIỆU BẰNG CHỨNG
@@ -69,9 +73,7 @@ def clean_text(text: str) -> str:
 # ============================================================
 # 3. THUẬT TOÁN CHIA NHỎ TÀI LIỆU (CHUNKING)
 # ============================================================
-def split_text_into_chunks(
-    text: str, chunk_size: int = 1800, overlap: int = 300
-) -> List[Tuple[str, int, int]]:
+def split_text_into_chunks(text: str, chunk_size: int = 1800, overlap: int = 300) -> List[Tuple[str, int, int]]:
     text = clean_text(text)
     if not text:
         return []
@@ -123,40 +125,43 @@ def extract_pdf(uploaded_file) -> Tuple[SourceDocument, List[EvidenceChunk]]:
 
     chunks: List[EvidenceChunk] = []
     
-    # Khởi tạo Chunker Thông Minh
-    chunker = SemanticChunker(max_chunk_size=1200, min_chunk_size=100, chunk_overlap=250)
-    
     try:
-        # Dùng thư viện fitz (PyMuPDF) để mở file từ RAM
-        doc = fitz.open(stream=data, filetype="pdf")
+        # Bơm Key từ module Offline cho Semantic Chunker (Dùng cho Embedding)
+        api_key = key_manager.get_next_key()
+        if api_key and api_key != "CHUA_CO_KEY":
+            genai.configure(api_key=api_key)
+            
+        chunker = SemanticChunker(max_chunk_size=1200, min_chunk_size=100, chunk_overlap=250)
         
-        for page_no in range(len(doc)):
-            page = doc[page_no]
-            
-            # Tham số sort=True là "phép thuật" giúp đọc chuẩn bố cục 2 cột và bảng biểu
-            raw = page.get_text("text", sort=True) or ""
-            
-            if not raw.strip():
-                continue
+        # Dùng 'with' để tự động đóng file PDF, chống kẹt RAM
+        with fitz.open(stream=data, filetype="pdf") as doc:
+            for page_no in range(len(doc)):
+                page = doc[page_no]
+                raw = page.get_text("text", sort=True) or ""
+                
+                if not raw.strip():
+                    continue
 
-            # Giao việc cắt đoạn cho Semantic Chunker
-            semantic_pieces = chunker.split_by_semantics(raw)
-            
-            for idx, (piece, start, end) in enumerate(semantic_pieces, start=1):
-                chunks.append(
-                    EvidenceChunk(
-                        chunk_id=make_chunk_id(source_id, page_no + 1, idx), # Đếm số trang từ 1
-                        source_id=source_id,
-                        file_name=uploaded_file.name,
-                        page=page_no + 1,
-                        text=piece,
-                        char_start=start,
-                        char_end=end,
+                semantic_pieces = chunker.split_by_semantics(raw)
+                
+                for idx, (piece, start, end) in enumerate(semantic_pieces, start=1):
+                    chunks.append(
+                        EvidenceChunk(
+                            chunk_id=make_chunk_id(source_id, page_no + 1, idx),
+                            source_id=source_id,
+                            file_name=uploaded_file.name,
+                            page=page_no + 1,
+                            text=piece,
+                            char_start=start,
+                            char_end=end,
+                        )
                     )
-                )
-        doc.close()
     except Exception as e:
         st.error(f"Lỗi khi đọc file {uploaded_file.name}: {str(e)}")
+    finally:
+        # Ép dọn rác, thu hồi RAM ngay sau khi đọc PDF xong
+        del data
+        gc.collect()
 
     return source, chunks
     
@@ -164,10 +169,13 @@ def extract_pdf(uploaded_file) -> Tuple[SourceDocument, List[EvidenceChunk]]:
 # 6. TRA CỨU API (PUBMED & VN JOURNALS)
 # ============================================================
 def get_serpapi_key() -> Optional[str]:
+    # Tìm ngầm không báo lỗi nếu không có .streamlit (Chuẩn Offline)
     try:
-        return st.secrets.get("SERPAPI_KEY", "")
+        if "SERPAPI_KEY" in st.secrets:
+            return st.secrets["SERPAPI_KEY"]
     except Exception:
-        return os.getenv("SERPAPI_KEY", "")
+        pass
+    return os.getenv("SERPAPI_KEY", "")
 
 def search_pubmed(query_en: str, max_res: int = 5) -> List[Dict[str, Any]]:
     search_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
@@ -237,8 +245,6 @@ def generate_pubmed_queries(main_query: str) -> List[str]:
         f"{clean_q} AND (outpatient OR inpatient OR prevalence OR risk factors)"
     ]
 
-import concurrent.futures
-
 def search_pubmed_multi(main_query: str, max_res_per_query: int = 3) -> List[Dict[str, Any]]:
     """Thực hiện tìm kiếm đa biến thể SONG SONG, gom kết quả và lọc trùng bằng PMID tự động."""
     queries = generate_pubmed_queries(main_query)
@@ -303,7 +309,7 @@ def _run_google_search(params: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Op
 def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     api_key = get_serpapi_key()
     if not api_key:
-        return [], "⚠️ Chưa cấu hình SerpAPI Key."
+        return [], "⚠️ Chưa cấu hình SerpAPI Key (Tra cứu Tạp chí VN đang bị tắt)."
 
     query = _sanitize_query(query)
     if not query:
