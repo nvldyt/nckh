@@ -5,8 +5,8 @@ import google.generativeai as genai
 
 def render_chat_assistant():
     st.write("---")
-    st.subheader("🤖 Trợ lý AI Phân tích Dữ liệu (Lõi Gemini)")
-    st.caption("Trò chuyện trực tiếp với dữ liệu Excel của anh. Trợ lý đã tự động đọc tên cột và hiểu cấu trúc dữ liệu.")
+    st.subheader("🤖 Phân tích Dữ liệu")
+    st.caption("Trò chuyện trực tiếp với dữ liệu Excel của anh. AI đã tự động đọc tên cột và hiểu cấu trúc dữ liệu.")
     
     # 1. Khởi tạo bộ nhớ cho cuộc trò chuyện
     if "data_chat_history" not in st.session_state:
