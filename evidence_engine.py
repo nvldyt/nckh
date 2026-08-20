@@ -169,13 +169,22 @@ def extract_pdf(uploaded_file) -> Tuple[SourceDocument, List[EvidenceChunk]]:
 # 6. TRA CỨU API (PUBMED & VN JOURNALS)
 # ============================================================
 def get_serpapi_key() -> Optional[str]:
-    # Tìm ngầm không báo lỗi nếu không có .streamlit (Chuẩn Offline)
+    """
+    Lấy API Key cho việc tìm kiếm bài báo. 
+    Ưu tiên lấy từ key_manager, nếu không có thì dùng key mặc định.
+    Gỡ bỏ hoàn toàn st.secrets để không bị lỗi màn hình.
+    """
+    # 1. Thử lấy từ module key_manager (cách làm chuẩn)
     try:
-        if "SERPAPI_KEY" in st.secrets:
-            return st.secrets["SERPAPI_KEY"]
+        # Gọi hàm lấy key trong file key_manager.py
+        key = key_manager.get_serpapi_key()
+        if key and key != "CHUA_CO_KEY":
+            return key
     except Exception:
-        pass
-    return os.getenv("SERPAPI_KEY", "")
+        pass # Nếu file key_manager bị lỗi thì bỏ qua, xuống bước 2
+
+    # 2. Key cứng dự phòng (Để app luôn chạy được kể cả khi không tìm thấy file text)
+    return "f99c73f0a83c6e0ec159f8583534aa2d9deabdd339c44511323b83c15c4c6704"
 
 def search_pubmed(query_en: str, max_res: int = 5) -> List[Dict[str, Any]]:
     search_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
