@@ -1,8 +1,12 @@
 import numpy as np
 import streamlit as st
+import os
 from typing import List, Dict, Any
 from sentence_transformers import SentenceTransformer, CrossEncoder
 from rank_bm25 import BM25Okapi
+import google.generativeai as genai
+
+import key_manager # Bắt buộc gọi trái tim chứa 8 Key ở đây
 
 # ============================================================
 # CẤU HÌNH MÔ HÌNH (Đã chuyển sang các bản Siêu Nhẹ)
@@ -133,3 +137,37 @@ def retrieve_evidence(
     candidate_chunks.sort(key=lambda x: x["score"], reverse=True)
 
     return candidate_chunks[:top_k]
+
+# ============================================================
+# 4. GỌI GEMINI CHO TÍNH NĂNG TẠO TỪ KHÓA MESH (MỚI)
+# ============================================================
+def generate_mesh_keywords(query: str) -> str:
+    """Sử dụng Gemini để tự động dịch và trích xuất từ khóa y khoa (MeSH)."""
+    try:
+        model = genai.GenerativeModel("gemini-1.5-pro")
+        prompt = f"""
+Bạn là một chuyên gia thư viện y khoa.
+Người dùng đang muốn tìm kiếm tài liệu nghiên cứu về chủ đề sau: "{query}"
+Hãy chuyển đổi chủ đề này thành 1 câu truy vấn tiếng Anh duy nhất, sử dụng các thuật ngữ y khoa MeSH chuẩn nhất.
+KHÔNG giải thích, CHỈ trả về đúng 1 dòng chứa câu truy vấn tiếng Anh.
+"""
+        response = None
+        for attempt in range(2):
+            try:
+                # Gọi Key từ trái tim của hệ thống
+                api_key = key_manager.get_next_key()
+                if not api_key:
+                    return query # Fallback
+                genai.configure(api_key=api_key)
+                
+                response = model.generate_content(prompt)
+                break
+            except Exception as inner_e:
+                if ("429" in str(inner_e) or "Quota" in str(inner_e)) and attempt == 0:
+                    continue 
+                else:
+                    return query
+                    
+        return response.text.strip() if response else query
+    except Exception:
+        return query
