@@ -1,11 +1,33 @@
-# File: chat_data_engine.py (Hệ thống Trợ lý Chat Độc lập)
+# File: chat_data_engine.py (Hệ thống Trợ lý Chat Độc lập - Đã tối ưu hóa)
 import streamlit as st
 import os
 import io
+import itertools
 import fitz  # PyMuPDF
 import docx  # python-docx
 import pandas as pd
 import google.generativeai as genai
+
+# --- CƠ CHẾ XOAY VÒNG 8 KEY TRỰC TIẾP TỪ SECRETS ---
+@st.cache_resource
+def get_key_cycler():
+    try:
+        raw_keys = st.secrets.get("GEMINI_API_KEY", "")
+        if raw_keys:
+            keys_list = [k.strip() for k in raw_keys.split(",") if k.strip()]
+            if keys_list:
+                return itertools.cycle(keys_list)
+    except Exception:
+        pass
+    return None
+
+key_cycle = get_key_cycler()
+
+def get_next_api_key():
+    if key_cycle:
+        return next(key_cycle)
+    return os.environ.get("GEMINI_API_KEY", "")
+# ----------------------------------------------------
 
 # Hàm phụ trợ: Đọc và trích xuất chữ từ nhiều loại file
 def extract_text_from_file(uploaded_file):
@@ -18,10 +40,7 @@ def extract_text_from_file(uploaded_file):
             doc = docx.Document(io.BytesIO(uploaded_file.read()))
             return "\n".join([p.text for p in doc.paragraphs])
         elif file_name.endswith(('.xlsx', '.xls', '.csv')):
-            if file_name.endswith('.csv'):
-                df = pd.read_csv(uploaded_file)
-            else:
-                df = pd.read_excel(uploaded_file)
+            df = pd.read_csv(uploaded_file) if file_name.endswith('.csv') else pd.read_excel(uploaded_file)
             return df.to_markdown()
         else:
             return uploaded_file.read().decode('utf-8', errors='ignore')
@@ -40,7 +59,7 @@ def render_chat_assistant():
     # Nút xóa lịch sử chat
     col1, col2 = st.columns([8, 2])
     with col2:
-        if st.button("🧹 Xóa hội thoại", use_container_width=True):
+        if st.button("🧹 Xóa hội thoại", key="clear_data_chat", use_container_width=True):
             st.session_state.data_chat_history = []
             st.rerun()
 
@@ -66,14 +85,12 @@ def render_chat_assistant():
 
     # 3. Hiển thị lịch sử chat trên giao diện
     for message in st.session_state.data_chat_history:
-        # Ẩn bớt các tin nhắn hệ thống dài dòng để giao diện gọn gàng
         if "[HỆ THỐNG]" not in message["content"]:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
     # 4. Khung nhập liệu Chat (Hoạt động như ChatGPT)
     if prompt := st.chat_input("Hỏi AI cách xử lý dữ liệu, biểu đồ, hoặc code SPSS..."):
-        # Hiển thị câu hỏi của người dùng
         st.session_state.data_chat_history.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -84,7 +101,6 @@ def render_chat_assistant():
             df = st.session_state["excel_data"]
             cols = ", ".join(df.columns.astype(str).tolist())
             shape = df.shape
-            # Lấy 3 dòng đầu tiên làm mẫu cho AI xem (dùng Markdown để AI dễ đọc)
             sample_data = df.head(3).to_markdown() 
             
             context = f"""
@@ -97,51 +113,47 @@ Người dùng đang mở một file Excel chính với thông tin sau:
 Hãy dựa vào cấu trúc dữ liệu này để đưa ra câu trả lời chính xác, sát thực tế nhất cho câu hỏi dưới đây.
 """
         
-        # 5. Giao tiếp với Gemini
+        # 5. Giao tiếp với Gemini (Đã tối ưu xoay vòng Key và chống tràn token)
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             with st.spinner("AI đang suy nghĩ và kiểm tra dữ liệu..."):
                 try:
-                    # --- BỘ DÒ TÌM API KEY ĐA TẦNG ---
-                    api_key = ""
+                    safety_settings = {
+                        "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
+                        "HARM_CATEGORY_HATE_SPEECH": "BLOCK_NONE",
+                        "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE",
+                        "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE"
+                    }
                     
-                    # 1. Tìm trong bộ nhớ tạm (Session State) nếu người dùng vừa nhập
-                    if st.session_state.get("GEMINI_API_KEY"):
-                        api_key = st.session_state.get("GEMINI_API_KEY")
-                    elif st.session_state.get("gemini_api_key"):
-                        api_key = st.session_state.get("gemini_api_key")
-                        
-                    # 2. Tìm trong cấu hình bảo mật của Streamlit Cloud (Secrets)
-                    if not api_key:
-                        try:
-                            if "GEMINI_API_KEY" in st.secrets:
-                                api_key = st.secrets["GEMINI_API_KEY"]
-                        except:
-                            pass
-                            
-                    # 3. Tìm trong biến môi trường của máy chủ (Environment Variables)
-                    if not api_key:
-                        api_key = os.environ.get("GEMINI_API_KEY", "")
-                        
-                    if not api_key:
-                        st.error("⚠️ Không tìm thấy Gemini API Key. Vui lòng nhập ở Tab Cài đặt (Tab cuối cùng).")
-                        return
-                    # ---------------------------------
-                        
-                    genai.configure(api_key=api_key)
+                    # Dùng mô hình Gemini 1.5 Flash tốc độ cao
+                    model = genai.GenerativeModel("gemini-1.5-flash")
                     
-                    # Dùng mô hình Gemini 1.5 Pro chuẩn của Google API
-                    model = genai.GenerativeModel("gemini-1.5-pro")
+                    # Chỉ lấy tối đa 8 tin nhắn gần nhất để tiết kiệm token, tránh lỗi 429
+                    recent_history = st.session_state.data_chat_history[-8:]
+                    chat_context = "Lịch sử trò chuyện gần đây:\n"
+                    for msg in recent_history[:-1]:
+                        content_snippet = msg['content'][:800] if len(msg['content']) > 800 else msg['content']
+                        chat_context += f"{msg['role'].upper()}: {content_snippet}\n"
                     
-                    # Gộp lịch sử chat để AI nhớ ngữ cảnh
-                    chat_context = "Lịch sử trò chuyện trước đó:\n"
-                    for msg in st.session_state.data_chat_history[:-1]:
-                        chat_context += f"{msg['role'].upper()}: {msg['content']}\n"
-                    
-                    # Ghép lệnh cuối cùng: Lịch sử + Dữ liệu Excel (nếu có) + Câu hỏi mới
                     final_prompt = f"{chat_context}\n{context}\nCâu hỏi hiện tại của người dùng: {prompt}"
                     
-                    response = model.generate_content(final_prompt)
+                    # Cơ chế tự động đổi Key và thử lại khi gặp lỗi giới hạn
+                    response = None
+                    for attempt in range(2):
+                        try:
+                            api_key = get_next_api_key()
+                            if not api_key:
+                                raise ValueError("Không tìm thấy API Key trong Secrets!")
+                            genai.configure(api_key=api_key)
+                            
+                            response = model.generate_content(final_prompt, safety_settings=safety_settings)
+                            break
+                        except Exception as inner_e:
+                            if ("429" in str(inner_e) or "Quota" in str(inner_e)) and attempt == 0:
+                                continue # Tự động chuyển sang key kế tiếp và thử lại
+                            else:
+                                raise inner_e
+
                     full_res = response.text
                     
                     # Hiển thị và lưu lại
@@ -149,4 +161,6 @@ Hãy dựa vào cấu trúc dữ liệu này để đưa ra câu trả lời ch�
                     st.session_state.data_chat_history.append({"role": "assistant", "content": full_res})
                     
                 except Exception as e:
-                    st.error(f"❌ Lỗi kết nối AI: {e}")
+                    error_msg = f"❌ Hệ thống quá tải hoặc hết hạn mức (429). Anh vui lòng bấm nút **Xóa hội thoại** phía trên hoặc đợi 15 giây rồi hỏi lại nhé. Chi tiết: {e}"
+                    message_placeholder.error(error_msg)
+                    st.session_state.data_chat_history.append({"role": "assistant", "content": error_msg})
