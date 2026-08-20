@@ -1,8 +1,9 @@
 # File: key_manager.py
 import itertools
+import os
 import streamlit as st
 
-# Danh sách 8 Key được "đóng gói" trực tiếp vào mã nguồn
+# 1. Danh sách 8 Key Gemini
 MY_KEYS = [
     "AQ.Ab8RN6JazLovPr7vvTFVBiUS8NKwAVzTxM3theZkK4Bj41MjYA",
     "AQ.Ab8RN6IojyD8oxt2G_QdadzK0cs7MMKOvCfQMEx9K6i-m7hUkg",
@@ -14,12 +15,17 @@ MY_KEYS = [
     "AQ.Ab8RN6JhBJ5w9bnl4pcVuf_NBh8gb2pwRq756ybmvXnar9Q18A"
 ]
 
+# 2. Key SerpAPI
+SERP_KEY = "f99c73f0a83c6e0ec159f8583534aa2d9deabdd339c44511323b83c15c4c6704"
+
 @st.cache_resource
 def get_key_cycler():
-    """Tạo một vòng lặp vô tận qua 8 key, lưu vào RAM để không bị reset"""
     return itertools.cycle(MY_KEYS)
 
 def get_next_key():
-    """Hàm để các file khác gọi và lấy 1 key mới"""
-    cycler = get_key_cycler()
-    return next(cycler)
+    """Hàm gọi Key Gemini"""
+    return next(get_key_cycler())
+
+def get_serpapi_key():
+    """Hàm gọi Key SerpAPI"""
+    return SERP_KEY
