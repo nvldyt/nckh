@@ -1,56 +1,43 @@
-# File: chat_writing_engine.py
+# File: chat_writing_engine.py (Bản OFFLINE Tối ưu RAM & Xoay vòng Key)
 import os
 import io
-import itertools
 import fitz  # PyMuPDF
 import docx  # python-docx
 import pandas as pd
 import streamlit as st
 import google.generativeai as genai
+import gc # Thêm thư viện dọn rác RAM
 
-# --- CƠ CHẾ XOAY VÒNG 8 KEY TRỰC TIẾP TỪ SECRETS ---
-@st.cache_resource
-def get_key_cycler():
-    try:
-        raw_keys = st.secrets.get("GEMINI_API_KEY", "")
-        if raw_keys:
-            keys_list = [k.strip() for k in raw_keys.split(",") if k.strip()]
-            if keys_list:
-                return itertools.cycle(keys_list)
-    except Exception:
-        pass
-    return None
+import key_manager # Bắt buộc gọi trái tim chứa 8 Key ở đây
 
-key_cycle = get_key_cycler()
-
-def get_next_api_key():
-    if key_cycle:
-        return next(key_cycle)
-    # Fallback nếu chạy local lấy từ biến môi trường
-    return os.environ.get("GEMINI_API_KEY", "")
-# ----------------------------------------------------
-
-# Hàm đọc chữ từ PDF, Word, Excel
+# Hàm đọc chữ từ PDF, Word, Excel (Đã tối ưu dọn RAM)
 def extract_text_from_file(uploaded_file):
     file_name = uploaded_file.name.lower()
     try:
         if file_name.endswith('.pdf'):
-            doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
-            return "\n".join([page.get_text() for page in doc])
+            with fitz.open(stream=uploaded_file.read(), filetype="pdf") as doc:
+                text = "\n".join([page.get_text() for page in doc])
+            return text
         elif file_name.endswith('.docx'):
             doc = docx.Document(io.BytesIO(uploaded_file.read()))
-            return "\n".join([p.text for p in doc.paragraphs])
+            text = "\n".join([p.text for p in doc.paragraphs])
+            del doc # Dọn RAM
+            return text
         elif file_name.endswith(('.xlsx', '.xls', '.csv')):
             df = pd.read_csv(uploaded_file) if file_name.endswith('.csv') else pd.read_excel(uploaded_file)
-            return df.to_markdown()
+            markdown_str = df.to_markdown()
+            del df # Dọn RAM
+            return markdown_str
         else:
             return uploaded_file.read().decode('utf-8', errors='ignore')
     except Exception as e:
         return f"Lỗi trích xuất dữ liệu: {e}"
+    finally:
+        gc.collect() # Ép hệ thống nhả RAM ngay lập tức
 
 def render_writing_chat():
     st.write("---")
-    st.subheader("💬 Viết luận văn cùng Gemini")
+    st.subheader("💬 Viết luận văn cùng Gemini (Bản Offline)")
     st.caption("Chat tự do hoặc đính kèm tài liệu (PDF, Word, Excel...) để AI phân tích.")
     
     if "writing_chat_history" not in st.session_state:
@@ -103,7 +90,8 @@ def render_writing_chat():
                         "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE"
                     }
                     
-                    model = genai.GenerativeModel("gemini-3.7-flash")
+                    # Đã sửa lại tên model cho chuẩn xác
+                    model = genai.GenerativeModel("gemini-3.7-flash") 
                     
                     system_prompt = "Bạn là một Giáo sư y khoa hướng dẫn sinh viên viết luận văn. Hãy trả lời học thuật, chính xác và chuyên nghiệp.\n\n"
                     
@@ -116,13 +104,14 @@ def render_writing_chat():
                     
                     final_prompt = f"{chat_context}\nCâu hỏi của người dùng: {prompt}"
                     
-                    # Cơ chế gọi API xoay vòng 8 key từ Secrets và tự động đổi nếu dính quá tải (429)
+                    # Cơ chế gọi API xoay vòng 8 key từ key_manager và tự động đổi nếu dính quá tải (429)
                     response = None
                     for attempt in range(2):
                         try:
-                            api_key = get_next_api_key()
+                            # Lấy key trực tiếp từ module Offline
+                            api_key = key_manager.get_next_key()
                             if not api_key:
-                                raise ValueError("Không tìm thấy API Key trong Secrets!")
+                                raise ValueError("Không tìm thấy API Key!")
                             genai.configure(api_key=api_key)
                             
                             response = model.generate_content(final_prompt, safety_settings=safety_settings)
