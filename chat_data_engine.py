@@ -1,5 +1,6 @@
 # File: chat_data_engine.py (Hệ thống Trợ lý Chat Độc lập)
 import streamlit as st
+import os
 import google.generativeai as genai
 
 def render_chat_assistant():
@@ -54,17 +55,31 @@ Hãy dựa vào cấu trúc dữ liệu này để đưa ra câu trả lời ch�
             message_placeholder = st.empty()
             with st.spinner("AI đang suy nghĩ và kiểm tra dữ liệu..."):
                 try:
-                    # Tự động quét tìm API Key ở mọi ngóc ngách trong session_state của ứng dụng chính
-                    api_key = (
-                        st.session_state.get("GEMINI_API_KEY") or 
-                        st.session_state.get("gemini_api_key") or 
-                        st.session_state.get("API_KEY") or 
-                        ""
-                    )
-
+                    # --- BỘ DÒ TÌM API KEY ĐA TẦNG ---
+                    api_key = ""
+                    
+                    # 1. Tìm trong bộ nhớ tạm (Session State) nếu người dùng vừa nhập
+                    if st.session_state.get("GEMINI_API_KEY"):
+                        api_key = st.session_state.get("GEMINI_API_KEY")
+                    elif st.session_state.get("gemini_api_key"):
+                        api_key = st.session_state.get("gemini_api_key")
+                        
+                    # 2. Tìm trong cấu hình bảo mật của Streamlit Cloud (Secrets)
                     if not api_key:
-                        st.error("⚠️ Không tìm thấy Gemini API Key. Vui lòng nhập ở Tab Cài đặt.")
+                        try:
+                            if "GEMINI_API_KEY" in st.secrets:
+                                api_key = st.secrets["GEMINI_API_KEY"]
+                        except:
+                            pass
+                            
+                    # 3. Tìm trong biến môi trường của máy chủ (Environment Variables)
+                    if not api_key:
+                        api_key = os.environ.get("GEMINI_API_KEY", "")
+                        
+                    if not api_key:
+                        st.error("⚠️ Không tìm thấy Gemini API Key. Vui lòng nhập ở Tab Cài đặt (Tab cuối cùng).")
                         return
+                    # ---------------------------------
                         
                     genai.configure(api_key=api_key)
                     # Dùng mô hình mạnh nhất hiện tại để phân tích số liệu
