@@ -1,7 +1,32 @@
 # File: chat_data_engine.py (Hệ thống Trợ lý Chat Độc lập)
 import streamlit as st
 import os
+import io
+import fitz  # PyMuPDF
+import docx  # python-docx
+import pandas as pd
 import google.generativeai as genai
+
+# Hàm phụ trợ: Đọc và trích xuất chữ từ nhiều loại file
+def extract_text_from_file(uploaded_file):
+    file_name = uploaded_file.name.lower()
+    try:
+        if file_name.endswith('.pdf'):
+            doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
+            return "\n".join([page.get_text() for page in doc])
+        elif file_name.endswith('.docx'):
+            doc = docx.Document(io.BytesIO(uploaded_file.read()))
+            return "\n".join([p.text for p in doc.paragraphs])
+        elif file_name.endswith(('.xlsx', '.xls', '.csv')):
+            if file_name.endswith('.csv'):
+                df = pd.read_csv(uploaded_file)
+            else:
+                df = pd.read_excel(uploaded_file)
+            return df.to_markdown()
+        else:
+            return uploaded_file.read().decode('utf-8', errors='ignore')
+    except Exception as e:
+        return f"Lỗi trích xuất dữ liệu: {e}"
 
 def render_chat_assistant():
     st.write("---")
@@ -19,12 +44,34 @@ def render_chat_assistant():
             st.session_state.data_chat_history = []
             st.rerun()
 
-    # 2. Hiển thị lịch sử chat trên giao diện
-    for message in st.session_state.data_chat_history:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    # ==========================================
+    # 2. KHAY ĐÍNH KÈM TÀI LIỆU CHO TAB 4
+    # ==========================================
+    with st.expander("📎 Bấm vào đây để đính kèm thêm tài liệu cho AI đọc (nếu cần)", expanded=False):
+        uploaded_doc = st.file_uploader("Hỗ trợ PDF, Word, Excel, CSV, TXT", type=['pdf', 'docx', 'xlsx', 'xls', 'csv', 'txt'], key="chat_uploader_tab4")
+        if uploaded_doc:
+            if st.button("📥 Nạp file này vào bộ nhớ AI", use_container_width=True, type="primary", key="btn_load_tab4"):
+                with st.spinner(f"Đang đọc và giải mã {uploaded_doc.name}..."):
+                    file_content = extract_text_from_file(uploaded_doc)
+                    
+                    st.session_state.data_chat_history.append({
+                        "role": "user", 
+                        "content": f"[HỆ THỐNG] Người dùng vừa tải lên tài liệu phụ '{uploaded_doc.name}'. Dưới đây là nội dung:\n\n{file_content}"
+                    })
+                    st.session_state.data_chat_history.append({
+                        "role": "assistant",
+                        "content": f"✅ Tôi đã đọc và ghi nhớ toàn bộ nội dung file **{uploaded_doc.name}**. Anh cần tôi phân tích gì với tài liệu này?"
+                    })
+                    st.rerun()
 
-    # 3. Khung nhập liệu Chat (Hoạt động như ChatGPT)
+    # 3. Hiển thị lịch sử chat trên giao diện
+    for message in st.session_state.data_chat_history:
+        # Ẩn bớt các tin nhắn hệ thống dài dòng để giao diện gọn gàng
+        if "[HỆ THỐNG]" not in message["content"]:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+    # 4. Khung nhập liệu Chat (Hoạt động như ChatGPT)
     if prompt := st.chat_input("Hỏi AI cách xử lý dữ liệu, biểu đồ, hoặc code SPSS..."):
         # Hiển thị câu hỏi của người dùng
         st.session_state.data_chat_history.append({"role": "user", "content": prompt})
@@ -42,7 +89,7 @@ def render_chat_assistant():
             
             context = f"""
 [BỐI CẢNH ẨN - KHÔNG IN RA MÀN HÌNH]
-Người dùng đang mở một file Excel với thông tin sau:
+Người dùng đang mở một file Excel chính với thông tin sau:
 - Tổng số: {shape[0]} dòng, {shape[1]} cột.
 - Tên các cột: {cols}
 - Dữ liệu mẫu (3 dòng đầu):
@@ -50,7 +97,7 @@ Người dùng đang mở một file Excel với thông tin sau:
 Hãy dựa vào cấu trúc dữ liệu này để đưa ra câu trả lời chính xác, sát thực tế nhất cho câu hỏi dưới đây.
 """
         
-        # 4. Giao tiếp với Gemini
+        # 5. Giao tiếp với Gemini
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             with st.spinner("AI đang suy nghĩ và kiểm tra dữ liệu..."):
@@ -83,7 +130,7 @@ Hãy dựa vào cấu trúc dữ liệu này để đưa ra câu trả lời ch�
                         
                     genai.configure(api_key=api_key)
                     
-                    # SỬA LỖI TẠI ĐÂY: Dùng mô hình Gemini 1.5 Pro chuẩn của Google API
+                    # Dùng mô hình Gemini 1.5 Pro chuẩn của Google API
                     model = genai.GenerativeModel("gemini-1.5-pro")
                     
                     # Gộp lịch sử chat để AI nhớ ngữ cảnh
@@ -91,7 +138,7 @@ Hãy dựa vào cấu trúc dữ liệu này để đưa ra câu trả lời ch�
                     for msg in st.session_state.data_chat_history[:-1]:
                         chat_context += f"{msg['role'].upper()}: {msg['content']}\n"
                     
-                    # Ghép lệnh cuối cùng: Lịch sử + Dữ liệu Excel + Câu hỏi mới
+                    # Ghép lệnh cuối cùng: Lịch sử + Dữ liệu Excel (nếu có) + Câu hỏi mới
                     final_prompt = f"{chat_context}\n{context}\nCâu hỏi hiện tại của người dùng: {prompt}"
                     
                     response = model.generate_content(final_prompt)
