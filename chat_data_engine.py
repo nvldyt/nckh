@@ -130,8 +130,8 @@ LỆNH BẮT BUỘC DÀNH CHO AI:
                         "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE"
                     }
                     
-                    # Đã sửa lại thành mô hình chuẩn gemini-3.7-flast
-                    model = genai.GenerativeModel("gemini-3.7-flast")
+                    # Đã sửa lại thành mô hình chuẩn gemini-3.7-flash
+                    model = genai.GenerativeModel("gemini-3.7-flash")
                     
                     # Giới hạn lịch sử để chống lỗi 429
                     recent_history = st.session_state.data_chat_history[-8:]
