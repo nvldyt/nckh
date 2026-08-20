@@ -83,7 +83,7 @@ Hãy dựa vào cấu trúc dữ liệu này để đưa ra câu trả lời ch�
                         
                     genai.configure(api_key=api_key)
                     # Dùng mô hình mạnh nhất hiện tại để phân tích số liệu
-                    model = genai.GenerativeModel("gemini-3.7-flast")
+                    model = genai.GenerativeModel("gemini-3.5-flast-lite")
                     
                     # Gộp lịch sử chat để AI nhớ ngữ cảnh
                     chat_context = "Lịch sử trò chuyện trước đó:\n"
