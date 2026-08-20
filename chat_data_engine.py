@@ -1,55 +1,43 @@
-# File: chat_data_engine.py (Hệ thống Trợ lý Chat Độc lập - Chống bịa dữ liệu)
+# File: chat_data_engine.py (Hệ thống Trợ lý Chat Độc lập - Bản OFFLINE Tối Ưu)
 import streamlit as st
 import os
 import io
-import itertools
 import fitz  # PyMuPDF
 import docx  # python-docx
 import pandas as pd
 import google.generativeai as genai
+import gc # Thêm thư viện dọn rác RAM
 
-# --- CƠ CHẾ XOAY VÒNG 8 KEY TRỰC TIẾP TỪ SECRETS ---
-@st.cache_resource
-def get_key_cycler():
-    try:
-        raw_keys = st.secrets.get("GEMINI_API_KEY", "")
-        if raw_keys:
-            keys_list = [k.strip() for k in raw_keys.split(",") if k.strip()]
-            if keys_list:
-                return itertools.cycle(keys_list)
-    except Exception:
-        pass
-    return None
+import key_manager # Bắt buộc gọi trái tim chứa 8 Key ở đây
 
-key_cycle = get_key_cycler()
-
-def get_next_api_key():
-    if key_cycle:
-        return next(key_cycle)
-    return os.environ.get("GEMINI_API_KEY", "")
-# ----------------------------------------------------
-
-# Hàm phụ trợ: Đọc và trích xuất chữ từ nhiều loại file
+# Hàm phụ trợ: Đọc và trích xuất chữ từ nhiều loại file (Đã tối ưu RAM)
 def extract_text_from_file(uploaded_file):
     file_name = uploaded_file.name.lower()
     try:
         if file_name.endswith('.pdf'):
-            doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
-            return "\n".join([page.get_text() for page in doc])
+            with fitz.open(stream=uploaded_file.read(), filetype="pdf") as doc:
+                text = "\n".join([page.get_text() for page in doc])
+            return text
         elif file_name.endswith('.docx'):
             doc = docx.Document(io.BytesIO(uploaded_file.read()))
-            return "\n".join([p.text for p in doc.paragraphs])
+            text = "\n".join([p.text for p in doc.paragraphs])
+            del doc # Dọn RAM
+            return text
         elif file_name.endswith(('.xlsx', '.xls', '.csv')):
             df = pd.read_csv(uploaded_file) if file_name.endswith('.csv') else pd.read_excel(uploaded_file)
-            return df.to_markdown()
+            markdown_str = df.to_markdown()
+            del df # Dọn RAM
+            return markdown_str
         else:
             return uploaded_file.read().decode('utf-8', errors='ignore')
     except Exception as e:
         return f"Lỗi trích xuất dữ liệu: {e}"
+    finally:
+        gc.collect() # Ép hệ thống nhả RAM ngay lập tức
 
 def render_chat_assistant():
     st.write("---")
-    st.subheader("🤖 Phân tích Dữ liệu với Gemini")
+    st.subheader("🤖 Phân tích Dữ liệu với Gemini (Bản Offline)")
     st.caption("Trò chuyện trực tiếp với dữ liệu Excel của anh. AI đã bị ép buộc bám sát danh sách thuốc thực tế.")
     
     # 1. Khởi tạo bộ nhớ cho cuộc trò chuyện
@@ -142,7 +130,7 @@ LỆNH BẮT BUỘC DÀNH CHO AI:
                         "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE"
                     }
                     
-                    # Dùng mô hình Gemini 3.7 Flast
+                    # Đã sửa lại thành mô hình chuẩn gemini-3.7-flast
                     model = genai.GenerativeModel("gemini-3.7-flast")
                     
                     # Giới hạn lịch sử để chống lỗi 429
@@ -158,9 +146,10 @@ LỆNH BẮT BUỘC DÀNH CHO AI:
                     response = None
                     for attempt in range(2):
                         try:
-                            api_key = get_next_api_key()
+                            # Lấy key trực tiếp từ module key_manager
+                            api_key = key_manager.get_next_key()
                             if not api_key:
-                                raise ValueError("Không tìm thấy API Key trong Secrets!")
+                                raise ValueError("Không tìm thấy API Key trong file keys.txt!")
                             genai.configure(api_key=api_key)
                             
                             response = model.generate_content(final_prompt, safety_settings=safety_settings)
