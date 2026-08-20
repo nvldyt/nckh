@@ -745,7 +745,7 @@ def main():
 
         # --- KHU VỰC TẢI VÀ HIỂN THỊ FILE ---
         # Vẫn giữ nguyên key=ui_key("excel_data") của anh để không lỗi các hàm khác
-        excel_file = st.file_uploader("Tải file Excel", type=["xlsx", "xls"], key=ui_key("excel_data"))
+        excel_file = st.file_uploader("Tải file Excel", type=["xlsx", "xls"], key="excel_uploader_tab4_unique")
         
         if excel_file is not None:
             with st.spinner("Đang dọn dẹp và nạp dữ liệu..."):
@@ -759,7 +759,7 @@ def main():
                     # Cập nhật vào session_state (Anh kiểm tra lại tên biến này cho khớp với code cũ nhé)
                     st.session_state["excel_data"] = df_clean
                     
-        excel_file = st.file_uploader("Tải file Excel", type=["xlsx", "xls"], key=ui_key("excel_data"))
+        excel_file = st.file_uploader("Tải file Excel", type=["xlsx", "xls"], key="excel_uploader_tab4_unique")
 
         if excel_file is not None:
             try:
