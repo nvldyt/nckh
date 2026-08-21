@@ -90,9 +90,6 @@ def render_writing_chat():
                         "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE"
                     }
                     
-                    # Đã sửa lại tên model cho chuẩn xác
-                    model = genai.GenerativeModel("gemini-3.5-flash") 
-                    
                     system_prompt = "Bạn là một Giáo sư y khoa hướng dẫn sinh viên viết luận văn. Hãy trả lời học thuật, chính xác và chuyên nghiệp.\n\n"
                     
                     # Lấy 8 tin nhắn gần nhất để chống tràn token
@@ -104,21 +101,25 @@ def render_writing_chat():
                     
                     final_prompt = f"{chat_context}\nCâu hỏi của người dùng: {prompt}"
                     
-                    # Cơ chế gọi API xoay vòng 8 key từ key_manager và tự động đổi nếu dính quá tải (429)
+                    # Cơ chế gọi API xoay vòng 8 key
                     response = None
                     for attempt in range(2):
                         try:
-                            # Lấy key trực tiếp từ module Offline
-                            api_key = key_manager.get_next_key()
+                            # BƯỚC 1: Lấy key, gọt sạch khoảng trắng và cấu hình TRƯỚC
+                            api_key = key_manager.get_next_key().strip()
                             if not api_key:
                                 raise ValueError("Không tìm thấy API Key!")
                             genai.configure(api_key=api_key)
                             
+                            # BƯỚC 2: Khai báo model SAU KHI đã cấu hình key (Chuẩn tên 1.5-flash)
+                            model = genai.GenerativeModel("gemini-1.5-flash") 
+                            
+                            # BƯỚC 3: Kích hoạt AI
                             response = model.generate_content(final_prompt, safety_settings=safety_settings)
                             break
                         except Exception as inner_e:
                             if ("429" in str(inner_e) or "Quota" in str(inner_e)) and attempt == 0:
-                                continue # Đổi sang key tiếp theo trong chuỗi và thử lại ngay
+                                continue # Đổi sang key tiếp theo và thử lại
                             else:
                                 raise inner_e
 
@@ -126,6 +127,11 @@ def render_writing_chat():
                     
                     message_placeholder.markdown(full_res)
                     st.session_state.writing_chat_history.append({"role": "assistant", "content": full_res})
+                    
+                except Exception as e:
+                    error_msg = f"❌ Hệ thống gặp sự cố: {e}"
+                    message_placeholder.error(error_msg)
+                    st.session_state.writing_chat_history.append({"role": "assistant", "content": error_msg})
                     
                 except Exception as e:
                     error_msg = f"❌ Hệ thống gặp sự cố: {e}"
