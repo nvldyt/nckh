@@ -5,10 +5,10 @@ import fitz  # PyMuPDF
 import docx  # python-docx
 import pandas as pd
 import streamlit as st
-import google.generativeai as genai
 import gc # Thêm thư viện dọn rác RAM
 
-import key_manager # Bắt buộc gọi trái tim chứa 8 Key ở đây
+# GỌI HÀM AI CHUẨN TỪ MODULE CHÍNH (Tuyệt đối không import thư viện cũ)
+from writing_engine import call_gemini
 
 # Hàm đọc chữ từ PDF, Word, Excel (Đã tối ưu dọn RAM)
 def extract_text_from_file(uploaded_file):
@@ -83,13 +83,6 @@ def render_writing_chat():
             message_placeholder = st.empty()
             with st.spinner("Gemini đang suy nghĩ và tổng hợp..."):
                 try:
-                    safety_settings = {
-                        "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
-                        "HARM_CATEGORY_HATE_SPEECH": "BLOCK_NONE",
-                        "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE",
-                        "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE"
-                    }
-                    
                     system_prompt = "Bạn là một Giáo sư y khoa hướng dẫn sinh viên viết luận văn. Hãy trả lời học thuật, chính xác và chuyên nghiệp.\n\n"
                     
                     # Lấy 8 tin nhắn gần nhất để chống tràn token
@@ -101,38 +94,15 @@ def render_writing_chat():
                     
                     final_prompt = f"{chat_context}\nCâu hỏi của người dùng: {prompt}"
                     
-                    # Cơ chế gọi API xoay vòng 8 key
-                    response = None
-                    for attempt in range(2):
-                        try:
-                            # BƯỚC 1: Lấy key, gọt sạch khoảng trắng và cấu hình TRƯỚC
-                            api_key = key_manager.get_next_key().strip()
-                            if not api_key:
-                                raise ValueError("Không tìm thấy API Key!")
-                            genai.configure(api_key=api_key)
-                            
-                            # BƯỚC 2: Khai báo model SAU KHI đã cấu hình key (Chuẩn tên 1.5-flash)
-                            model = genai.GenerativeModel("gemini-1.5-flash") 
-                            
-                            # BƯỚC 3: Kích hoạt AI
-                            response = model.generate_content(final_prompt, safety_settings=safety_settings)
-                            break
-                        except Exception as inner_e:
-                            if ("429" in str(inner_e) or "Quota" in str(inner_e)) and attempt == 0:
-                                continue # Đổi sang key tiếp theo và thử lại
-                            else:
-                                raise inner_e
-
-                    full_res = response.text
+                    # CƠ CHẾ GỌI API AN TOÀN TỪ MODULE CHÍNH
+                    full_res = call_gemini(final_prompt, temperature=0.7)
                     
-                    message_placeholder.markdown(full_res)
-                    st.session_state.writing_chat_history.append({"role": "assistant", "content": full_res})
-                    
-                except Exception as e:
-                    error_msg = f"❌ Hệ thống gặp sự cố: {e}"
-                    message_placeholder.error(error_msg)
-                    st.session_state.writing_chat_history.append({"role": "assistant", "content": error_msg})
-                    
+                    if full_res:
+                        message_placeholder.markdown(full_res)
+                        st.session_state.writing_chat_history.append({"role": "assistant", "content": full_res})
+                    else:
+                        raise Exception("Hệ thống AI đang quá tải hoặc gặp lỗi xác thực. Vui lòng thử lại sau vài giây.")
+                        
                 except Exception as e:
                     error_msg = f"❌ Hệ thống gặp sự cố: {e}"
                     message_placeholder.error(error_msg)
