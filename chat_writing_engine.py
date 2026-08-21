@@ -91,7 +91,7 @@ def render_writing_chat():
                     }
                     
                     # Đã sửa lại tên model cho chuẩn xác
-                    model = genai.GenerativeModel("gemini-3.7-flash") 
+                    model = genai.GenerativeModel("gemini-3.5-flash") 
                     
                     system_prompt = "Bạn là một Giáo sư y khoa hướng dẫn sinh viên viết luận văn. Hãy trả lời học thuật, chính xác và chuyên nghiệp.\n\n"
                     
