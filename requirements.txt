@@ -3,14 +3,13 @@
 torch>=2.0.0
 torchvision>=0.15.0
 
-# 2. Các Engine cốt lõi AI và RAG
+# 2. CỐT LÕI AI: CHỈ GIỮ LẠI BẢN GENERATIVEAI (Bản cũ nhưng ổn định)
 streamlit>=1.30.0
-google-genai>=1.0.0
-google-generativeai>=0.4.0
+google-generativeai>=0.8.0
 sentence-transformers>=3.0.0
 rank-bm25>=0.2.2
 
-# 3. Xử lý Dữ liệu và Thống kê (SPSS mini)
+# 3. Xử lý Dữ liệu và Thống kê
 pandas>=2.2.0
 numpy>=1.26.0
 scipy>=1.13.0
