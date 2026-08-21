@@ -5,10 +5,10 @@ import io
 import fitz  # PyMuPDF
 import docx  # python-docx
 import pandas as pd
-import google.generativeai as genai
 import gc # Thêm thư viện dọn rác RAM
 
-import key_manager # Bắt buộc gọi trái tim chứa 8 Key ở đây
+# GỌI HÀM AI CHUẨN TỪ MODULE CHÍNH (Tuyệt đối không import thư viện cũ)
+from writing_engine import call_gemini
 
 # Hàm phụ trợ: Đọc và trích xuất chữ từ nhiều loại file (Đã tối ưu RAM)
 def extract_text_from_file(uploaded_file):
@@ -118,22 +118,12 @@ LỆNH BẮT BUỘC DÀNH CHO AI:
 {sample_data}
 """
         
-        # 5. Giao tiếp với Gemini
+        # 5. Giao tiếp với Gemini (Sử dụng hàm call_gemini siêu xoay vòng)
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             with st.spinner("AI đang quét dữ liệu thực tế và phân tích..."):
                 try:
-                    safety_settings = {
-                        "HARM_CATEGORY_HARASSMENT": "BLOCK_NONE",
-                        "HARM_CATEGORY_HATE_SPEECH": "BLOCK_NONE",
-                        "HARM_CATEGORY_SEXUALLY_EXPLICIT": "BLOCK_NONE",
-                        "HARM_CATEGORY_DANGEROUS_CONTENT": "BLOCK_NONE"
-                    }
-                    
-                    # Đã sửa lại thành mô hình chuẩn gemini-3.7-flash
-                    model = genai.GenerativeModel("gemini-3.7-flash")
-                    
-                    # Giới hạn lịch sử để chống lỗi 429
+                    # Giới hạn lịch sử để chống quá tải bộ nhớ
                     recent_history = st.session_state.data_chat_history[-8:]
                     chat_context = "Lịch sử trò chuyện gần đây:\n"
                     for msg in recent_history[:-1]:
@@ -142,29 +132,15 @@ LỆNH BẮT BUỘC DÀNH CHO AI:
                     
                     final_prompt = f"{chat_context}\n{context}\nCâu hỏi hiện tại của người dùng: {prompt}"
                     
-                    # Cơ chế xoay vòng Key
-                    response = None
-                    for attempt in range(2):
-                        try:
-                            # Lấy key trực tiếp từ module key_manager
-                            api_key = key_manager.get_next_key()
-                            if not api_key:
-                                raise ValueError("Không tìm thấy API Key trong file keys.txt!")
-                            genai.configure(api_key=api_key)
-                            
-                            response = model.generate_content(final_prompt, safety_settings=safety_settings)
-                            break
-                        except Exception as inner_e:
-                            if ("429" in str(inner_e) or "Quota" in str(inner_e)) and attempt == 0:
-                                continue 
-                            else:
-                                raise inner_e
-
-                    full_res = response.text
+                    # Gọi API thông qua cỗ máy xoay vòng ở writing_engine.py
+                    full_res = call_gemini(final_prompt, temperature=0.1)
                     
-                    # Hiển thị và lưu lại
-                    message_placeholder.markdown(full_res)
-                    st.session_state.data_chat_history.append({"role": "assistant", "content": full_res})
+                    if full_res:
+                        # Hiển thị và lưu lại
+                        message_placeholder.markdown(full_res)
+                        st.session_state.data_chat_history.append({"role": "assistant", "content": full_res})
+                    else:
+                        raise Exception("Không nhận được phản hồi từ AI.")
                     
                 except Exception as e:
                     error_msg = f"❌ Hệ thống quá tải hoặc gặp lỗi. Anh vui lòng bấm nút **Xóa hội thoại** phía trên hoặc thử lại sau 15 giây. Chi tiết: {e}"
