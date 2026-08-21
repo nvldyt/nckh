@@ -2,6 +2,7 @@ import os
 import time
 import gc
 import io
+import requests
 import streamlit as st
 from typing import List, Dict, Any, Tuple, Optional
 
