@@ -1,14 +1,133 @@
+import os
+import time
+import gc
+import io
+import uuid
 import itertools
 import threading
-import time
-import uuid
-from typing import Any, Dict, List, Optional, Tuple
-
-import google.generativeai as genai
 import streamlit as st
+from typing import List, Dict, Any, Tuple, Optional
 
-from citation_engine import CitationEngine
-from retrieval_engine import retrieve_evidence
+# CHỈ DÙNG THƯ VIỆN MỚI GOOGLE-GENAI
+from google import genai
+from google.genai import types
+
+# ============================================================
+# CẤU HÌNH MODEL MẶC ĐỊNH
+# ============================================================
+DEFAULT_MODEL = "gemini-3.7-flash"
+MODEL_LITE = "gemini-3.5-flash-lite" 
+
+# ============================================================
+# 1. QUẢN LÝ API & CƠ CHẾ XOAY VÒNG KEY (ROUND-ROBIN)
+# ============================================================
+
+# Khai báo các Key trực tiếp (Thêm các key khác vào danh sách này)
+_GEMINI_KEYS = [
+    "AQ.Ab8RN6LSSmOHMOa3EtvwwCVqAA13e9z_3LN2309uXev0pLsHyg,
+    AQ.Ab8RN6JazLovPr7vvTFVBiUS8NKwAVzTxM3theZkK4Bj41MjYA,
+    AQ.Ab8RN6IojyD8oxt2G_QdadzK0cs7MMKOvCfQMEx9K6i-m7hUkg,
+    AQ.Ab8RN6J13twVBkGQlETIl68pTiUC-zs4Yv_zLvbOqjY4FOAU9g,
+    AQ.Ab8RN6If-EN_ZpABL7_YZu8H8Ziwfz5sK94kSaNSJxgRFSeBLg,
+    AQ.Ab8RN6LPAIgE8dbypq2pj9cea2dJDKE2B0hd0ivzCnInLfU3-A,
+    AQ.Ab8RN6KSY6NOw7_M6jBUJEpxTTCueWT4TaBPhQg0VT1w2sW9hA"
+]
+
+# Thiết lập cơ chế xoay vòng chống sập bằng itertools & threading lock
+_key_cycle = itertools.cycle(_GEMINI_KEYS)
+_lock = threading.Lock()
+
+def get_next_key() -> str:
+    """Lấy Key Gemini tiếp theo theo hình thức xoay vòng tròn an toàn."""
+    with _lock:
+        return next(_key_cycle)
+
+@st.cache_resource
+def get_gemini_client(api_key: str):
+    """Khởi tạo Client mới nhất của Google theo chuẩn AQ."""
+    return genai.Client(api_key=api_key)
+
+def call_gemini(
+    prompt: str,
+    model: Optional[str] = None,
+    temperature: float = 0.1,
+    max_retries: int = 5,
+) -> Optional[str]:
+    """Hàm gọi API Gemini với cơ chế Tự động Xoay Vòng Key khi bị quá tải."""
+    model_name = model if model else DEFAULT_MODEL
+    
+    for attempt in range(max_retries):
+        # Lấy Key trực tiếp từ hàm xoay vòng toàn cục
+        current_key = get_next_key().strip()
+        
+        if not current_key:
+            st.error("❌ Không tìm thấy API Key nào trong hệ thống!")
+            return None
+
+        try:
+            client = get_gemini_client(current_key)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=temperature,
+                    safety_settings=[
+                        types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
+                        types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
+                        types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
+                        types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
+                    ]
+                )
+            )
+            
+            return getattr(response, "text", "").strip()
+            
+        except Exception as exc:
+            err_msg = str(exc).lower()
+            
+            # Bắt lỗi 429 (Too many requests) hoặc Quota Limit của Google
+            if any(code in err_msg for code in ["429", "resource_exhausted", "503", "unavailable", "quota"]):
+                st.toast("🔄 Key hiện tại bị quá tải. Đang tự động đổi sang Key khác...")
+                time.sleep(1.5) # Nghỉ 1 nhịp ngắn để chuyển key
+                continue # Nhảy ngay sang lần thử tiếp theo với Key mới
+            
+            # Nếu là lỗi khác (như đứt mạng hoặc lỗi logic)
+            if attempt == max_retries - 1:
+                st.error(f"❌ Đã thử xoay vòng key nhưng vẫn lỗi kết nối Gemini: {exc}")
+                return None
+            
+            time.sleep(2 ** attempt)
+            
+    return None
+
+# ============================================================
+# 2. XỬ LÝ TÀI LIỆU
+# ============================================================
+
+def extract_text_from_file(uploaded_file):
+    import fitz, docx, pandas as pd
+    file_name = uploaded_file.name.lower()
+    try:
+        if file_name.endswith('.pdf'):
+            with fitz.open(stream=uploaded_file.read(), filetype="pdf") as doc:
+                text = "\n".join([page.get_text() for page in doc])
+            return text
+        elif file_name.endswith('.docx'):
+            doc = docx.Document(io.BytesIO(uploaded_file.read()))
+            text = "\n".join([p.text for p in doc.paragraphs])
+            return text
+        elif file_name.endswith(('.xlsx', '.xls', '.csv')):
+            df = pd.read_csv(uploaded_file) if file_name.endswith('.csv') else pd.read_excel(uploaded_file)
+            return df.to_markdown()
+        return uploaded_file.read().decode('utf-8', errors='ignore')
+    except Exception as e:
+        return f"Lỗi trích xuất: {e}"
+    finally:
+        gc.collect()
+
+# ============================================================
+# 3. HỆ THỐNG PROMPT VÀ WRITING PIPELINE 
+# ============================================================
 
 BASE_SYSTEM_RULES = """
 Bạn là trợ lý nghiên cứu khoa học, hỗ trợ viết luận văn Chuyên khoa cấp I ngành Dược lâm sàng.
@@ -21,147 +140,62 @@ NGUYÊN TẮC BẮT BUỘC:
 6. Nếu context không đủ bằng chứng, phải nói rõ: "Tài liệu được cung cấp chưa đủ bằng chứng để kết luận phần này."
 """
 
-# 1. Khai báo 8 Key cứng trực tiếp
-_GEMINI_KEYS = [
-    "AQ.Ab8RN6LSSmOHMOa3EtvwwCVqAA13e9z_3LN2309uXev0pLsHyg"
-]
-
-# 2. Thiết lập cơ chế xoay vòng (Round-Robin) chống sập
-_key_cycle = itertools.cycle(_GEMINI_KEYS)
-_lock = threading.Lock()
-
-def get_all_api_keys() -> List[str]:
-    """Trả về danh sách toàn bộ API Keys (dùng khi cần lấy tổng số lượng Key)."""
-    return _GEMINI_KEYS
-
-def get_next_key() -> str:
+def generate_evidence_based(
+    task_prompt: str, 
+    evidence: List[Dict[str, Any]], 
+    citation_engine: Any,
+    study_context: Optional[Dict[str, Any]] = None
+) -> Tuple[Optional[str], List[Dict[str, Any]], List[str]]:
     """
-    Lấy Key Gemini tiếp theo theo hình thức xoay vòng tròn. 
-    Tránh lỗi 429 (Too Many Requests) khi gọi AI liên tục.
+    Quy trình: Xây dựng Context -> Lập Dàn Ý -> Gọi LLM -> Chuyển đổi mã Citation.
     """
-    with _lock:
-        return next(_key_cycle)
-
-def call_gemini(prompt: str, model: str = "gemini-3.5-flash", max_retries: int = 5) -> Optional[str]:
-    """Hàm gọi API Gemini với cơ chế Tự động Xoay Vòng Key (Round-Robin) khi bị quá tải."""
-    
-    for attempt in range(max_retries):
-        # Lấy Key trực tiếp từ hàm xoay vòng toàn cục (Gọn gàng, không cần session_state)
-        current_key = get_next_key()
-        
-        try:
-            client = genai.Client(api_key=current_key)
-            response = client.models.generate_content(
-                model=model,
-                contents=prompt,
-                config=types.GenerateContentConfig(temperature=0.1)
-            )
-            return getattr(response, "text", "").strip()
-            
-        except Exception as exc:
-            err_msg = str(exc).lower()
-            
-            # Bắt lỗi 429 (Too many requests) hoặc Quota Limit của Google
-            if "429" in err_msg or "quota" in err_msg or "exhausted" in err_msg:
-                st.toast(f"🔄 Key hiện tại bị quá tải. Đang tự động đổi sang Key khác...")
-                time.sleep(1.5) # Nghỉ 1 nhịp ngắn để chuyển key
-                continue # Nhảy ngay sang lần thử tiếp theo với Key mới
-            
-            # Nếu là lỗi khác (như đứt mạng)
-            if attempt == max_retries - 1:
-                st.error(f"❌ Đã thử xoay vòng key nhưng vẫn lỗi kết nối Gemini: {exc}")
-                return None
-                
-            time.sleep(2 ** attempt)
-            
-    return None
-
-    # Biến nhớ vị trí Key đang dùng trong session
-    if "current_key_idx" not in st.session_state:
-        st.session_state.current_key_idx = 0
-
-    for attempt in range(max_retries):
-        # Lấy Key theo vòng lặp (hết danh sách tự động quay lại key đầu tiên)
-        current_idx = st.session_state.current_key_idx % len(keys)
-        current_key = keys[current_idx]
-        
-        try:
-            client = genai.Client(api_key=current_key)
-            response = client.models.generate_content(
-                model=model,
-                contents=prompt,
-                config=types.GenerateContentConfig(temperature=0.1)
-            )
-            return getattr(response, "text", "").strip()
-            
-        except Exception as exc:
-            err_msg = str(exc).lower()
-            
-            # Bắt lỗi 429 (Too many requests) hoặc Quota Limit của Google
-            if "429" in err_msg or "quota" in err_msg or "exhausted" in err_msg:
-                st.toast(f"🔄 Key thứ {current_idx + 1} bị quá tải. Đang tự động đổi sang Key khác...")
-                st.session_state.current_key_idx += 1
-                time.sleep(1.5) # Nghỉ 1 nhịp ngắn để chuyển key
-                continue # Nhảy ngay sang lần thử tiếp theo với Key mới
-            
-            # Nếu là lỗi khác (như đứt mạng)
-            if attempt == max_retries - 1:
-                st.error(f"❌ Đã thử xoay vòng key nhưng vẫn lỗi kết nối Gemini: {exc}")
-                return None
-                
-            time.sleep(2 ** attempt)
-            
-    return None
-
-def generate_evidence_based(task: str, query: str, k: int = 8) -> Tuple[Optional[str], List[Dict[str, Any]], List[str], List[Dict]]:
-    """
-    Quy trình: Rút trích bằng chứng -> Đăng ký Citation -> Xây dựng Prompt -> Gọi LLM -> Chuyển đổi mã Citation.
-    """
-    # 1. Truy xuất bằng chứng
-    evidence = retrieve_evidence(query, k=k)
     if not evidence:
-        return "Tài liệu được cung cấp chưa đủ bằng chứng để kết luận.", [], [], []
+        return "Tài liệu được cung cấp chưa đủ bằng chứng để kết luận phần này.", evidence, []
 
-    # 2. Xây dựng Context và đăng ký Citation an toàn
-    engine = CitationEngine()
     evidence_context = ""
-    
     for ev in evidence:
-        meta = st.session_state.get("documents", {}).get(ev["source_id"], {})
-        # Đăng ký với CitationEngine, trả về mã REF-... (để ép LLM không bịa số)
-        ref_tag = engine.register_evidence(ev["source_id"], meta)
-        
+        tag = citation_engine.register_evidence(ev["source_id"], ev.get("metadata", {}))
         table_note = f"\n(Ghi chú bảng: {ev['table_hint']})" if ev.get("table_hint") else ""
-        evidence_context += f"\n--- TÀI LIỆU {ref_tag} ---\nNguồn: {ev['file_name']} | Trang: {ev['page']}\nNội dung: {ev['text']}{table_note}\n"
+        evidence_context += f"\n--- TÀI LIỆU {tag} ---\nNguồn: {ev.get('file_name', 'N/A')} | Trang: {ev.get('page', 'N/A')}\nNội dung: {ev.get('text', '')}{table_note}\n"
 
-    # 3. Gửi Prompt cho Gemini
-    prompt = f"""{BASE_SYSTEM_RULES}
-    
-NHIỆM VỤ CỦA BẠN:
-{task}
+    context_str = ""
+    if study_context and any(study_context.values()):
+        context_str = "\nBỐI CẢNH ĐỀ TÀI:\n" + "\n".join([f"- {k}: {v}" for k, v in study_context.items()])
+
+    # Bước 1: Dàn ý (Sử dụng Model LITE cho tốc độ)
+    outline_prompt = f"{BASE_SYSTEM_RULES}\n{context_str}\nNHIỆM VỤ: Lập dàn ý 3-4 luận điểm chính cho: {task_prompt}\nBẰNG CHỨNG: {evidence_context}"
+    structured_outline = call_gemini(outline_prompt, model=MODEL_LITE, temperature=0.1)
+    if not structured_outline:
+        structured_outline = "1. Đặt vấn đề\n2. Phân tích\n3. Kết luận"
+
+    # Bước 2: Viết nháp (Sử dụng Model chính để đảm bảo chất lượng, nhiệt độ 0.0 để loại bỏ ảo giác)
+    draft_prompt = f"""
+{BASE_SYSTEM_RULES}
+{context_str}
+
+DÀN Ý ĐÃ ĐƯỢC PHÊ DUYỆT:
+{structured_outline}
+
+NHIỆM VỤ GỐC CỦA BẠN:
+{task_prompt}
 
 BẰNG CHỨNG ĐƯỢC PHÉP SỬ DỤNG:
 {evidence_context}
 
-LƯU Ý CUỐI: PHẢI dùng nguyên vẹn mã [REF-...] từ tài liệu trên để trích dẫn.
+LƯU Ý CUỐI: Bám sát dàn ý trên. PHẢI dùng nguyên vẹn mã [REF-...] từ tài liệu trên để trích dẫn.
 """
+    raw_output = call_gemini(draft_prompt, temperature=0.0) 
     
-    selected_model = st.session_state.get("selected_model", "gemini-3.6-flash")
-    raw_output = call_gemini(prompt, model=selected_model)
-    
-    if raw_output is None: 
-        return None, evidence, [], []
+    if not raw_output: 
+        return None, evidence, []
 
-    # 4. Xử lý hậu kỳ (Chuyển [REF-...] thành [1][2], bắt lỗi Hallucination)
-    final_text, references, invalid_tags = engine.process_vancouver_citations(raw_output)
-    
-    if invalid_tags:
-        final_text += f"\n\n> ⚠️ CẢNH BÁO KIỂM SOÁT TỰ ĐỘNG: Phát hiện AI tự tạo mã trích dẫn không có trong bằng chứng: {', '.join(invalid_tags)}."
+    # Bước 3: Xử lý hậu kỳ Citation (Chuyển [REF-...] thành [1][2], bắt lỗi Hallucination)
+    final_text, references, invalid_tags = citation_engine.process_vancouver_citations(raw_output)
 
-    # 5. Lưu lại lịch sử bản nháp để phục vụ tab Audit sau này
+    # Lưu lại lịch sử bản nháp
     draft_record = {
         "id": f"draft_{uuid.uuid4().hex[:12]}",
-        "task": task.splitlines()[0][:50],
+        "task": task_prompt.splitlines()[0][:50],
         "text": final_text,
         "references": references,
         "evidence": evidence,
@@ -173,4 +207,7 @@ LƯU Ý CUỐI: PHẢI dùng nguyên vẹn mã [REF-...] từ tài liệu trên 
     
     st.session_state["draft_history"].append(draft_record)
 
-    return final_text, evidence, invalid_tags, references
+    return final_text, references, invalid_tags
+
+def render_writing_chat():
+    pass
