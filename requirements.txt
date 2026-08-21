@@ -5,7 +5,7 @@ torchvision>=0.15.0
 
 # 2. CỐT LÕI AI: CHỈ GIỮ LẠI BẢN GENERATIVEAI (Bản cũ nhưng ổn định)
 streamlit>=1.30.0
-google-generativeai>=0.8.0
+google-genai>=1.0.0
 sentence-transformers>=3.0.0
 rank-bm25>=0.2.2
 
