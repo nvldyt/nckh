@@ -58,12 +58,39 @@ def call_gemini(
     max_retries: int = 5,
 ) -> Optional[str]:
     """
-    Hàm gọi AI với cơ chế Fallback (Tự động nhảy Key khi bị lỗi 429/Quota).
+    Hàm gọi AI với cơ chế Fallback sử dụng khoá từ key_manager.
     """
-    api_keys = get_api_keys()
-    if not api_keys:
-        st.error("❌ Chưa có API Key nào được cấu hình trong Secrets!")
-        return None
+    # Gọi trực tiếp qua key_manager thay vì check st.secrets
+    import key_manager
+    
+    for attempt in range(max_retries):
+        try:
+            api_key = key_manager.get_next_key().strip()
+            if not api_key:
+                st.error("❌ Không tìm thấy API Key nào trong hệ thống!")
+                return None
+                
+            genai.configure(api_key=api_key)
+            # Dùng model chuẩn 3.7-flash hoặc nhận từ tham số truyền vào
+            active_model = model if model else "gemini-3.7-flash"
+            ai_model = genai.GenerativeModel(active_model)
+            
+            response = ai_model.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(temperature=temperature)
+            )
+            return response.text.strip()
+            
+        except Exception as exc:
+            err_msg = str(exc).lower()
+            if "429" in err_msg or "quota" in err_msg or "exhausted" in err_msg:
+                st.toast("🔄 Key bị quá tải, đang tự động xoay vòng sang Key khác...")
+                continue
+            if attempt == max_retries - 1:
+                st.error(f"❌ Lỗi kết nối Gemini: {exc}")
+                return None
+                
+    return None
         
     # Tự động điều chỉnh model nếu có lỗi phiên bản ngầm từ Google
     model_name = model or DEFAULT_MODEL
