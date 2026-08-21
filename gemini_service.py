@@ -1,15 +1,14 @@
-import time
-import uuid
-import streamlit as st
-from typing import Optional, Tuple, List, Dict, Any
-
-from google import genai
-from google.genai import types
-from retrieval_engine import retrieve_evidence
-from citation_engine import CitationEngine
 import itertools
 import threading
-from typing import List
+import time
+import uuid
+from typing import Any, Dict, List, Optional, Tuple
+
+import google.generativeai as genai
+import streamlit as st
+
+from citation_engine import CitationEngine
+from retrieval_engine import retrieve_evidence
 
 BASE_SYSTEM_RULES = """
 Bạn là trợ lý nghiên cứu khoa học, hỗ trợ viết luận văn Chuyên khoa cấp I ngành Dược lâm sàng.
