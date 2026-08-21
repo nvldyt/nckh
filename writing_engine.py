@@ -18,13 +18,8 @@ DEFAULT_MODEL = "gemini-3.7-flash"
 MODEL_LITE = "gemini-3.5-flash-lite" 
 
 # ============================================================
-# 1. QUẢN LÝ API (SỬ DỤNG SDK GOOGLE-GENAI)
+# 1. QUẢN LÝ API (BYPASS BẰNG REST API TRỰC TIẾP)
 # ============================================================
-
-@st.cache_resource
-def get_gemini_client(api_key: str):
-    """Khởi tạo Client mới nhất của Google theo chuẩn AQ."""
-    return genai.Client(api_key=api_key)
 
 def call_gemini(
     prompt: str,
@@ -33,7 +28,7 @@ def call_gemini(
     max_retries: int = 5,
 ) -> Optional[str]:
     """
-    Hàm gọi AI chuẩn SDK mới nhất với cơ chế xoay vòng Key.
+    Hàm gọi AI không dùng SDK, dùng trực tiếp Requests để ép Google nhận Key AQ.
     """
     model_name = model if model else DEFAULT_MODEL
     
@@ -45,38 +40,54 @@ def call_gemini(
                 st.error("❌ Không tìm thấy API Key nào trong hệ thống!")
                 return None
             
-            # Khởi tạo client
-            client = get_gemini_client(api_key)
+            # ÉP BUỘC GỬI KEY QUA URL ĐỂ VƯỢT LỖI CỦA SDK
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
             
-            # Gọi model chuẩn SDK mới
-            response = client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    temperature=temperature,
-                    safety_settings=[
-                        types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
-                        types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
-                        types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
-                        types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
-                    ]
-                )
-            )
+            headers = {"Content-Type": "application/json"}
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "temperature": temperature
+                },
+                "safetySettings": [
+                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+                ]
+            }
             
-            return getattr(response, "text", "").strip()
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
+            res_data = response.json()
             
-        except Exception as exc:
-            err_msg = str(exc).lower()
-            # Bắt lỗi quá tải hoặc Quota (429, 503, v.v)
+            # Nếu thành công, trích xuất text và trả về
+            if response.status_code == 200:
+                try:
+                    return res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                except (KeyError, IndexError):
+                    return None
+            
+            # Nếu có lỗi, xử lý theo mã lỗi
+            err_msg = str(res_data).lower()
             if any(code in err_msg for code in ["429", "resource_exhausted", "503", "unavailable", "quota"]):
                 st.toast("🔄 Key bị quá tải, đang đổi Key mới...")
                 time.sleep(1.5)
                 continue
             
+            if "401" in err_msg or "unauthenticated" in err_msg:
+                st.error(f"❌ Key {api_key[:10]}... bị từ chối xác thực. Lỗi: {res_data}")
+                return None # Đừng retry nếu key bị từ chối thẳng thừng
+                
             if attempt == max_retries - 1:
-                st.error(f"❌ Lỗi kết nối Gemini: {exc}")
+                st.error(f"❌ Lỗi API Gemini: {res_data}")
                 return None
             
+            time.sleep(2 ** attempt)
+            
+        except Exception as exc:
+            if attempt == max_retries - 1:
+                st.error(f"❌ Lỗi kết nối mạng: {exc}")
+                return None
             time.sleep(2 ** attempt)
             
     return None
