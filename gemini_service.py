@@ -7,6 +7,9 @@ from google import genai
 from google.genai import types
 from retrieval_engine import retrieve_evidence
 from citation_engine import CitationEngine
+import itertools
+import threading
+from typing import List
 
 BASE_SYSTEM_RULES = """
 Bạn là trợ lý nghiên cứu khoa học, hỗ trợ viết luận văn Chuyên khoa cấp I ngành Dược lâm sàng.
@@ -19,28 +22,67 @@ NGUYÊN TẮC BẮT BUỘC:
 6. Nếu context không đủ bằng chứng, phải nói rõ: "Tài liệu được cung cấp chưa đủ bằng chứng để kết luận phần này."
 """
 
-def get_all_api_keys() -> List[str]:
-    """Lấy danh sách toàn bộ API Keys đã cấu hình (ngăn cách bằng dấu phẩy)."""
-    keys = []
-    try:
-        raw_keys = st.secrets.get("GEMINI_API_KEYS") or st.secrets.get("GEMINI_API_KEY")
-        if isinstance(raw_keys, list):
-            keys = raw_keys
-        elif isinstance(raw_keys, str):
-            keys = [k.strip() for k in raw_keys.split(",") if k.strip()]
-    except Exception:
-        import os
-        raw_env = os.getenv("GEMINI_API_KEYS") or os.getenv("GEMINI_API_KEY", "")
-        keys = [k.strip() for k in raw_env.split(",") if k.strip()]
-        
-    return keys
+# 1. Khai báo 8 Key cứng trực tiếp
+_GEMINI_KEYS = [
+    "AQ.Ab8RN6JazLovPr7vvTFVBiUS8NKwAVzTxM3theZkK4Bj41MjYA",
+    "AQ.Ab8RN6IojyD8oxt2G_QdadzK0cs7MMKOvCfQMEx9K6i-m7hUkg",
+    "AQ.Ab8RN6J13twVBkGQlETIl68pTiUC-zs4Yv_zLvbOqjY4FOAU9g",
+    "AQ.Ab8RN6If-EN_ZpABL7_YZu8H8Ziwfz5sK94kSaNSJxgRFSeBLg",
+    "AQ.Ab8RN6LPAIgE8dbypq2pj9cea2dJDKE2B0hd0ivzCnInLfU3-A",
+    "AQ.Ab8RN6KSY6NOw7_M6jBUJEpxTTCueWT4TaBPhQg0VT1w2sW9hA",
+    "AQ.Ab8RN6I5cxAGLSXJgy76-zwSulkj1-rjOpKKny_ylvrkOmRWkA",
+    "AQ.Ab8RN6JhBJ5w9bnl4pcVuf_NBh8gb2pwRq756ybmvXnar9Q18A"
+]
 
-def call_gemini(prompt: str, model: str = "gemini-3.6-flash", max_retries: int = 5) -> Optional[str]:
+# 2. Thiết lập cơ chế xoay vòng (Round-Robin) chống sập
+_key_cycle = itertools.cycle(_GEMINI_KEYS)
+_lock = threading.Lock()
+
+def get_all_api_keys() -> List[str]:
+    """Trả về danh sách toàn bộ API Keys (dùng khi cần lấy tổng số lượng Key)."""
+    return _GEMINI_KEYS
+
+def get_next_key() -> str:
+    """
+    Lấy Key Gemini tiếp theo theo hình thức xoay vòng tròn. 
+    Tránh lỗi 429 (Too Many Requests) khi gọi AI liên tục.
+    """
+    with _lock:
+        return next(_key_cycle)
+
+def call_gemini(prompt: str, model: str = "gemini-3.5-flash", max_retries: int = 5) -> Optional[str]:
     """Hàm gọi API Gemini với cơ chế Tự động Xoay Vòng Key (Round-Robin) khi bị quá tải."""
-    keys = get_all_api_keys()
-    if not keys:
-        st.error("⚠️ Lỗi: Không tìm thấy API Key nào trong cấu hình.")
-        return None
+    
+    for attempt in range(max_retries):
+        # Lấy Key trực tiếp từ hàm xoay vòng toàn cục (Gọn gàng, không cần session_state)
+        current_key = get_next_key()
+        
+        try:
+            client = genai.Client(api_key=current_key)
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=types.GenerateContentConfig(temperature=0.1)
+            )
+            return getattr(response, "text", "").strip()
+            
+        except Exception as exc:
+            err_msg = str(exc).lower()
+            
+            # Bắt lỗi 429 (Too many requests) hoặc Quota Limit của Google
+            if "429" in err_msg or "quota" in err_msg or "exhausted" in err_msg:
+                st.toast(f"🔄 Key hiện tại bị quá tải. Đang tự động đổi sang Key khác...")
+                time.sleep(1.5) # Nghỉ 1 nhịp ngắn để chuyển key
+                continue # Nhảy ngay sang lần thử tiếp theo với Key mới
+            
+            # Nếu là lỗi khác (như đứt mạng)
+            if attempt == max_retries - 1:
+                st.error(f"❌ Đã thử xoay vòng key nhưng vẫn lỗi kết nối Gemini: {exc}")
+                return None
+                
+            time.sleep(2 ** attempt)
+            
+    return None
 
     # Biến nhớ vị trí Key đang dùng trong session
     if "current_key_idx" not in st.session_state:
