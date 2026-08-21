@@ -1,4 +1,4 @@
-# File: evidence_engine.py (Bản OFFLINE - Tối ưu RAM & Đồng bộ Key)
+# File: evidence_engine.py (Bản OFFLINE - Tối ưu RAM & Đồng bộ Key AQ)
 
 import io
 import re
@@ -17,7 +17,6 @@ import streamlit as st
 import fitz
 
 import key_manager # Bắt buộc gọi trái tim chứa 8 Key ở đây
-import google.generativeai as genai # Gọi thư viện Gemini
 
 # ============================================================
 # 1. CẤU TRÚC DỮ LIỆU BẰNG CHỨNG
@@ -126,11 +125,8 @@ def extract_pdf(uploaded_file) -> Tuple[SourceDocument, List[EvidenceChunk]]:
     chunks: List[EvidenceChunk] = []
     
     try:
-        # Bơm Key từ module Offline cho Semantic Chunker (Dùng cho Embedding)
-        api_key = key_manager.get_next_key()
-        if api_key and api_key != "CHUA_CO_KEY":
-            genai.configure(api_key=api_key)
-            
+        # Thay vì truyền cứng thư viện cũ vào semantic_chunker, ta khởi tạo instance chuẩn
+        # Lưu ý: Nếu semantic_chunker của anh ở local vẫn dùng thư viện cũ, anh cũng cần cập nhật nó.
         chunker = SemanticChunker(max_chunk_size=1200, min_chunk_size=100, chunk_overlap=250)
         
         # Dùng 'with' để tự động đóng file PDF, chống kẹt RAM
@@ -142,6 +138,7 @@ def extract_pdf(uploaded_file) -> Tuple[SourceDocument, List[EvidenceChunk]]:
                 if not raw.strip():
                     continue
 
+                # LƯU Ý: Đảm bảo class SemanticChunker không gọi ngầm google.generativeai
                 semantic_pieces = chunker.split_by_semantics(raw)
                 
                 for idx, (piece, start, end) in enumerate(semantic_pieces, start=1):
@@ -176,14 +173,13 @@ def get_serpapi_key() -> Optional[str]:
     """
     # 1. Thử lấy từ module key_manager (cách làm chuẩn)
     try:
-        # Gọi hàm lấy key trong file key_manager.py
         key = key_manager.get_serpapi_key()
         if key and key != "CHUA_CO_KEY":
             return key
     except Exception:
         pass # Nếu file key_manager bị lỗi thì bỏ qua, xuống bước 2
 
-    # 2. Key cứng dự phòng (Để app luôn chạy được kể cả khi không tìm thấy file text)
+    # 2. Key cứng dự phòng
     return "f99c73f0a83c6e0ec159f8583534aa2d9deabdd339c44511323b83c15c4c6704"
 
 def search_pubmed(query_en: str, max_res: int = 5) -> List[Dict[str, Any]]:
@@ -245,7 +241,6 @@ def search_pubmed(query_en: str, max_res: int = 5) -> List[Dict[str, Any]]:
     return articles
 
 def generate_pubmed_queries(main_query: str) -> List[str]:
-    """Tự động sinh ra 4 biến thể truy vấn song song để mở rộng phạm vi tìm kiếm PubMed."""
     clean_q = main_query.replace('"', '').strip()
     return [
         f"{clean_q}",
@@ -255,12 +250,10 @@ def generate_pubmed_queries(main_query: str) -> List[str]:
     ]
 
 def search_pubmed_multi(main_query: str, max_res_per_query: int = 3) -> List[Dict[str, Any]]:
-    """Thực hiện tìm kiếm đa biến thể SONG SONG, gom kết quả và lọc trùng bằng PMID tự động."""
     queries = generate_pubmed_queries(main_query)
     seen_pmids = set()
     all_articles = []
     
-    # Bắn 4 request cùng lúc thay vì đợi tuần tự
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
         future_to_query = {executor.submit(search_pubmed, q, max_res_per_query): q for q in queries}
         
@@ -289,18 +282,12 @@ def _sanitize_query(raw_query: str) -> str:
 
 def _classify_vn_source(link: str) -> str:
     lower_link = (link or "").lower()
-    if "vjol.info" in lower_link:
-        return "Vietnam Journals Online (VJOL)"
-    if "tapchiyhocvietnam.vn" in lower_link:
-        return "Tạp chí Y học Việt Nam"
-    if "jmpm.vn" in lower_link:
-        return "Tạp chí Y Dược học Quân sự"
-    if "huejmp.vn" in lower_link:
-        return "Tạp chí Y Dược Huế"
-    if "benhvien108" in lower_link:
-        return "Tạp chí Y Dược lâm sàng 108"
-    if "hup.edu.vn" in lower_link:
-        return "Đại học Dược Hà Nội"
+    if "vjol.info" in lower_link: return "Vietnam Journals Online (VJOL)"
+    if "tapchiyhocvietnam.vn" in lower_link: return "Tạp chí Y học Việt Nam"
+    if "jmpm.vn" in lower_link: return "Tạp chí Y Dược học Quân sự"
+    if "huejmp.vn" in lower_link: return "Tạp chí Y Dược Huế"
+    if "benhvien108" in lower_link: return "Tạp chí Y Dược lâm sàng 108"
+    if "hup.edu.vn" in lower_link: return "Đại học Dược Hà Nội"
     return "Nghiên cứu Y học Việt Nam"
 
 def _run_google_search(params: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Optional[str]]:
