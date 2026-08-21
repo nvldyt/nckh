@@ -29,22 +29,25 @@ def call_gemini(
     max_retries: int = 5,
 ) -> Optional[str]:
     """
-    Hàm gọi AI không dùng SDK, dùng trực tiếp Requests để ép Google nhận Key AQ.
+    Hàm gọi AI gửi Key AQ. dưới dạng Bearer Token (OAuth 2.0) theo đúng yêu cầu của Google.
     """
     model_name = model if model else DEFAULT_MODEL
     
     for attempt in range(max_retries):
         try:
-            # Lấy key từ key_manager
             api_key = key_manager.get_next_key().strip()
             if not api_key:
                 st.error("❌ Không tìm thấy API Key nào trong hệ thống!")
                 return None
             
-            # ÉP BUỘC GỬI KEY QUA URL ĐỂ VƯỢT LỖI CỦA SDK
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+            # ĐỐI VỚI KEY AQ.: Bắt buộc dùng chuẩn Bearer Token trong Header thay vì truyền trên URL
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
             
-            headers = {"Content-Type": "application/json"}
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {
@@ -61,24 +64,18 @@ def call_gemini(
             response = requests.post(url, headers=headers, json=payload, timeout=30)
             res_data = response.json()
             
-            # Nếu thành công, trích xuất text và trả về
             if response.status_code == 200:
                 try:
                     return res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
                 except (KeyError, IndexError):
                     return None
             
-            # Nếu có lỗi, xử lý theo mã lỗi
             err_msg = str(res_data).lower()
             if any(code in err_msg for code in ["429", "resource_exhausted", "503", "unavailable", "quota"]):
                 st.toast("🔄 Key bị quá tải, đang đổi Key mới...")
                 time.sleep(1.5)
                 continue
             
-            if "401" in err_msg or "unauthenticated" in err_msg:
-                st.error(f"❌ Key {api_key[:10]}... bị từ chối xác thực. Lỗi: {res_data}")
-                return None # Đừng retry nếu key bị từ chối thẳng thừng
-                
             if attempt == max_retries - 1:
                 st.error(f"❌ Lỗi API Gemini: {res_data}")
                 return None
