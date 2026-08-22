@@ -20,16 +20,19 @@ def render_offline_tab():
         with st.spinner("Đang quét Ngân hàng tài liệu và lắp ráp bản thảo..."):
             time.sleep(1) # Tạo hiệu ứng loading cho mượt
             
-            # GIẢ LẬP TÌM KIẾM (Tích hợp hàm tìm kiếm thực tế của anh vào đây)
-            # Ví dụ: evidence = retrieve_evidence(search_query, k=5)
-            # Ở đây tôi dùng code gọi trực tiếp từ session_state nếu anh đang lưu chunks ở đó
-            
+            # TÌM KIẾM (Đã sửa lỗi TypeError truyền thiếu tham số)
             try:
                 from retrieval_engine import retrieve_evidence
-                evidence = retrieve_evidence(search_query, k=5)
-            except ImportError:
-                st.error("Không tìm thấy hàm retrieve_evidence. Đang chạy chế độ an toàn (Safe Mode).")
-                evidence = [] # Tránh sập app nếu chưa có hàm tìm kiếm
+                evidence = retrieve_evidence(
+                    query=search_query,
+                    chunks=st.session_state.get("chunks", []),
+                    matrix=st.session_state.get("embeddings"),
+                    bm25=st.session_state.get("bm25"),
+                    top_k=5
+                )
+            except Exception as exc:
+                st.error(f"Lỗi khi tìm kiếm: {exc}")
+                evidence = [] # Tránh sập app nếu có lỗi
 
             if not evidence:
                 st.warning(f"Không tìm thấy bằng chứng nào trong Ngân hàng tài liệu cho từ khóa: '{search_query}'. Anh hãy nạp thêm PDF ở Tab 1 nhé!")
