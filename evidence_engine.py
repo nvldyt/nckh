@@ -1,4 +1,4 @@
-# File: evidence_engine.py (Bản OFFLINE - Tối ưu RAM & Tìm kiếm Miễn Phí)
+# File: evidence_engine.py (Bản TỐI GIẢN - Chuyên xử lý PubMed & PDF, Tối đa 20 bài)
 
 import io
 import re
@@ -14,8 +14,6 @@ import requests
 import xml.etree.ElementTree as ET
 import streamlit as st
 import fitz
-
-import key_manager # Bắt buộc gọi trái tim chứa Key ở đây
 
 # ============================================================
 # 1. CẤU TRÚC DỮ LIỆU BẰNG CHỨNG
@@ -157,9 +155,10 @@ def extract_pdf(uploaded_file) -> Tuple[SourceDocument, List[EvidenceChunk]]:
     return source, chunks
     
 # ============================================================
-# 6. TRA CỨU API (PUBMED QUỐC TẾ - GIỮ NGUYÊN)
+# 6. TRA CỨU API (PUBMED QUỐC TẾ - MỞ RỘNG 20 BÀI)
 # ============================================================
-def search_pubmed(query_en: str, max_res: int = 5) -> List[Dict[str, Any]]:
+def search_pubmed(query_en: str, max_res: int = 20) -> List[Dict[str, Any]]:
+    """Đã chỉnh sửa max_res mặc định lên 20"""
     search_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
     params = {"db": "pubmed", "term": query_en, "retmode": "json", "retmax": max_res}
     try:
@@ -226,10 +225,14 @@ def generate_pubmed_queries(main_query: str) -> List[str]:
         f"{clean_q} AND (outpatient OR inpatient OR prevalence OR risk factors)"
     ]
 
-def search_pubmed_multi(main_query: str, max_res_per_query: int = 3) -> List[Dict[str, Any]]:
+def search_pubmed_multi(main_query: str, max_results: int = 20) -> List[Dict[str, Any]]:
+    """Hàm xử lý đa luồng, tham số truyền vào max_results mặc định là 20"""
     queries = generate_pubmed_queries(main_query)
     seen_pmids = set()
     all_articles = []
+    
+    # Tính số bài cần tìm cho mỗi luồng (query) để gom đủ tổng số bài
+    max_res_per_query = max(5, (max_results // len(queries)) + 3)
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
         future_to_query = {executor.submit(search_pubmed, q, max_res_per_query): q for q in queries}
@@ -247,112 +250,11 @@ def search_pubmed_multi(main_query: str, max_res_per_query: int = 3) -> List[Dic
             except Exception as exc:
                 st.error(f"Lỗi truy vấn luồng PubMed: {exc}")
                 
-    return all_articles[:12]
+    # Trả về đúng số lượng bài theo yêu cầu trên giao diện
+    return all_articles[:max_results]
 
 # ============================================================
-# 6.5 TRA CỨU API (BÁO VIỆT NAM - DÙNG DUCKDUCKGO MIỄN PHÍ)
-# ============================================================
-def _sanitize_query(raw_query: str) -> str:
-    if not raw_query:
-        return raw_query
-    cleaned = raw_query.replace("**", " ").replace("*", " ")
-    cleaned = cleaned.replace("_", " ")
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    return cleaned
-
-def _classify_vn_source(link: str) -> str:
-    lower_link = (link or "").lower()
-    if "vjol.info" in lower_link: return "Vietnam Journals Online (VJOL)"
-    if "tapchiyhocvietnam.vn" in lower_link: return "Tạp chí Y học Việt Nam"
-    if "jmpm.vn" in lower_link: return "Tạp chí Y Dược học Quân sự"
-    if "huejmp.vn" in lower_link: return "Tạp chí Y Dược Huế"
-    if "benhvien108" in lower_link: return "Tạp chí Y Dược lâm sàng 108"
-    if "hup.edu.vn" in lower_link: return "Đại học Dược Hà Nội"
-    return "Nghiên cứu Y học Việt Nam"
-
-def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-    """Tra cứu bài báo Việt Nam MIỄN PHÍ bằng DuckDuckGo (Đã gỡ bỏ ngoặc kép ép buộc)"""
-    try:
-        from duckduckgo_search import DDGS
-    except ImportError:
-        return [], "⚠️ Thiếu thư viện. Hãy thêm 'duckduckgo-search' vào file requirements.txt trên GitHub rồi khởi động lại app."
-
-    query = _sanitize_query(query)
-    if not query:
-        return [], "Từ khóa rỗng sau khi làm sạch, vui lòng nhập lại."
-
-    seen_links: set = set()
-    collected_results: List[Dict[str, Any]] = []
-    error_msg = None
-    
-    # ĐÃ SỬA LỖI: Bỏ dấu ngoặc kép quanh {query} để hệ thống tìm kiếm linh hoạt hơn
-    search_query = f'{query} (tạp chí y học OR nghiên cứu OR dược lâm sàng OR vjol)'
-    
-    try:
-        with DDGS() as ddgs:
-            ddgs_results = list(ddgs.text(search_query, region='vn-vi', max_results=max_results + 5))
-            
-            for item in ddgs_results:
-                link = item.get("href", "")
-                if not link or link in seen_links:
-                    continue
-                    
-                if ".vn" not in link and "vjol.info" not in link:
-                    continue
-
-                seen_links.add(link)
-                
-                try:
-                    source_name = _classify_vn_source(link)
-                except Exception:
-                    source_name = link.split("/")[2] if "//" in link else "N/A"
-
-                collected_results.append({
-                    "title": item.get("title", "Không có tiêu đề"),
-                    "link": link,
-                    "snippet": item.get("body", "Không có tóm tắt."),
-                    "source": source_name,
-                    "origin": "Tạp chí VN",
-                })
-                
-                if len(collected_results) >= max_results:
-                    break
-                    
-        if len(collected_results) < max_results:
-            fallback_query = f'{query} nghiên cứu y khoa site:vn'
-            with DDGS() as ddgs:
-                fb_results = list(ddgs.text(fallback_query, region='vn-vi', max_results=max_results + 5))
-                
-                for item in fb_results:
-                    link = item.get("href", "")
-                    if not link or link in seen_links:
-                        continue
-                        
-                    if ".vn" not in link and "vjol.info" not in link:
-                        continue
-                        
-                    seen_links.add(link)
-                    collected_results.append({
-                        "title": item.get("title", "Không có tiêu đề"),
-                        "link": link,
-                        "snippet": item.get("body", "Không có tóm tắt."),
-                        "source": "Google / VN Research",
-                        "origin": "Tạp chí VN",
-                    })
-                    
-                    if len(collected_results) >= max_results:
-                        break
-                        
-        if not collected_results:
-            error_msg = "Không tìm thấy bài báo tiếng Việt. Hãy thử gõ ngắn gọn lại (Ví dụ: Đặc điểm sử dụng Vancomycin)."
-            
-    except Exception as e:
-        error_msg = f"⚠️ Máy chủ tìm kiếm báo Việt Nam đang bận. Đã tìm được {len(collected_results)} bài. (Chi tiết lỗi: {e})"
-        
-    return collected_results[:max_results], error_msg
-
-# ============================================================
-# 7. INGESTION TỪ API VÀO DATABASE
+# 7. INGESTION TỪ API VÀO DATABASE (CHỈ CÒN PUBMED)
 # ============================================================
 def ingest_pubmed_article(article: Dict[str, Any]) -> bool:
     key = article.get("pmid") or article.get("url") or article["title"]
@@ -387,39 +289,6 @@ def ingest_pubmed_article(article: Dict[str, Any]) -> bool:
                 char_start=start,
                 char_end=end,
                 section="Abstract (PubMed)",
-            )
-        )
-    return add_source_and_chunks(source, chunks)
-
-def ingest_vn_article(article: Dict[str, Any]) -> bool:
-    key = article.get("link") or article["title"]
-    file_hash = sha256_text(key)
-    source_id = make_source_id(f"VN:{key}", file_hash)
-
-    source = SourceDocument(
-        source_id=source_id,
-        file_name=article["title"][:120],
-        file_hash=file_hash,
-        origin="Tạp chí VN",
-        title=article["title"],
-        journal=article.get("source", ""),
-        url=article.get("link", ""),
-    )
-
-    chunks = []
-    snippet = article.get("snippet", "")
-    for idx, (piece, start, end) in enumerate(split_text_into_chunks(snippet), start=1):
-        chunks.append(
-            EvidenceChunk(
-                chunk_id=make_chunk_id(source_id, 0, idx),
-                source_id=source_id,
-                file_name=source.file_name,
-                page=0,
-                text=piece,
-                char_start=start,
-                char_end=end,
-                section="Đoạn trích (Google Scholar)",
-                table_hint="CHỈ LÀ ĐOẠN TRÍCH NGẮN - CẦN KIỂM TRA BẢN GỐC TRƯỚC KHI DÙNG SỐ LIỆU",
             )
         )
     return add_source_and_chunks(source, chunks)
