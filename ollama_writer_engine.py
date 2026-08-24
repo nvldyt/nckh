@@ -84,15 +84,19 @@ def render_ollama_writer_tab():
         with st.spinner(f"Ollama đang vắt óc viết phần '{section_choice}' (Có thể mất 1-3 phút tùy cấu hình máy)..."):
             # Lắp ráp câu lệnh Prompt chuẩn y khoa
             prompt = f"""
-Bạn là một chuyên gia Dược lâm sàng đang viết luận văn Chuyên khoa cấp I.
-NHIỆM VỤ: Hãy viết phần '{section_choice}' dựa trên các tài liệu tóm tắt dưới đây.
-QUY TẮC: 
-1. Văn phong học thuật, khách quan, rõ ràng.
-2. Tuyệt đối không bịa đặt số liệu ngoài tài liệu được cung cấp.
-3. {extra_prompt}
+Bạn là một Dược sĩ lâm sàng đang trực tiếp chắp bút viết luận văn Chuyên khoa.
+NHIỆM VỤ BẮT BUỘC: HÃY VIẾT MỘT BÀI VĂN XUÔI HOÀN CHỈNH cho phần '{section_choice}'.
 
-NGUỒN TÀI LIỆU TÓM TẮT ĐỂ THAM KHẢO:
+TÀI LIỆU THAM KHẢO (Chỉ lấy ý tưởng, KHÔNG ĐƯỢC LIỆT KÊ RA):
 {summary_context}
+
+QUY TẮC SỐNG CÒN DÀNH CHO AI:
+1. TUYỆT ĐỐI KHÔNG liệt kê, không gạch đầu dòng tóm tắt lại từng tài liệu. Không dùng từ "Tài liệu 1", "Tài liệu 2".
+2. PHẢI viết thành các đoạn văn xuôi học thuật, liền mạch. 
+3. Nếu viết "Đặt vấn đề", phải tự tổng hợp để nêu bật được tính cấp thiết, thực trạng và lý do phải làm nghiên cứu này.
+4. {extra_prompt}
+
+BẮT ĐẦU VIẾT BÀI VĂN XUÔI TẠI ĐÂY:
 """
             # Gọi AI
             result = call_ollama(prompt, model=ollama_model)
