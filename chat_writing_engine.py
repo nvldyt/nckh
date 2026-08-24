@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 import gc # Thêm thư viện dọn rác RAM
 
-# GỌI HÀM AI CHUẨN TỪ MODULE CHÍNH (Tuyệt đối không import thư viện cũ)
+# GỌI HÀM AI CHUẨN TỪ MODULE CHÍNH (Lõi Groq API)
 from writing_engine import call_gemini
 
 # Hàm đọc chữ từ PDF, Word, Excel (Đã tối ưu dọn RAM)
@@ -37,7 +37,7 @@ def extract_text_from_file(uploaded_file):
 
 def render_writing_chat():
     st.write("---")
-    st.subheader("💬 Viết luận văn cùng Gemini (Bản Offline)")
+    st.subheader("💬 Viết luận văn cùng Groq AI (Bản Offline)")
     st.caption("Chat tự do hoặc đính kèm tài liệu (PDF, Word, Excel...) để AI phân tích.")
     
     if "writing_chat_history" not in st.session_state:
@@ -74,14 +74,14 @@ def render_writing_chat():
                 st.markdown(message["content"])
 
     # Khung nhập liệu
-    if prompt := st.chat_input("Nhắn với Gemini để viết, sửa bài, hoặc hỏi về file vừa nạp..."):
+    if prompt := st.chat_input("Nhắn với Groq AI để viết, sửa bài, hoặc hỏi về file vừa nạp..."):
         st.session_state.writing_chat_history.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
             
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
-            with st.spinner("Gemini đang suy nghĩ và tổng hợp..."):
+            with st.spinner("Groq đang suy nghĩ và tổng hợp..."):
                 try:
                     system_prompt = "Bạn là một Giáo sư y khoa hướng dẫn sinh viên viết luận văn. Hãy trả lời học thuật, chính xác và chuyên nghiệp.\n\n"
                     
