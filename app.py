@@ -532,7 +532,7 @@ def main():
             # ĐÃ MỞ KHÓA: cho phép lấy tối đa 50 bài, mặc định là 20
             max_res = st.number_input("Số bài/nguồn", min_value=2, max_value=50, value=20, key=ui_key("t3_max_res"))
             
-        if st.button("🚀 PubMed", type="primary", key=ui_key("t3_btn_search")):
+        if st.button("🚀 Tìm kiếm trên PubMed", type="primary", key=ui_key("t3_btn_search")):
             if not t3_query.strip(): 
                 st.warning("Vui lòng nhập tên đề tài nghiên cứu!")
             else:
