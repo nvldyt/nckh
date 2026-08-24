@@ -6,6 +6,7 @@
 import streamlit as st
 import requests
 import io
+import re
 from docx import Document
 
 def call_ollama_colab(prompt: str, url: str, model: str, temperature: float = 0.3) -> str:
@@ -13,6 +14,15 @@ def call_ollama_colab(prompt: str, url: str, model: str, temperature: float = 0.
     if not url:
         return "⚠️ Báo lỗi: Vui lòng dán đường dẫn Cloudflare (.trycloudflare.com) từ Google Colab vào thanh bên (Sidebar) bên trái trước khi bấm gọi AI!"
     
+    # --- TỰ ĐỘNG LÀM SẠCH URL (Phòng hờ dán nhính Markdown [link](link) hoặc khoảng trắng) ---
+    url = url.strip()
+    md_match = re.search(r'\((https?://[^\s)]+)\)', url)
+    if md_match:
+        url = md_match.group(1)
+    else:
+        url = url.strip("[]'\"<>")
+    # ----------------------------------------------------------------------------------
+
     api_endpoint = f"{url.rstrip('/')}/api/generate"
     
     payload = {
@@ -81,7 +91,6 @@ def render_ollama_writer_tab():
 
     col1, col2 = st.columns(2)
     with col1:
-        # Ưu tiên đặt qwen2.5:14b lên đầu vì chúng ta chạy trên GPU 16GB của Colab
         ollama_model = st.selectbox(
             "Lựa chọn Model trên Colab:", 
             ["qwen2.5:14b", "qwen2.5:7b", "llama3:8b", "qwen2.5:3b"], 
@@ -103,7 +112,6 @@ def render_ollama_writer_tab():
     if st.button("🚀 Yêu cầu Ollama (Colab) Viết Bài", type="primary", key="btn_run_ollama_writer"):
         with st.spinner(f"GPU T4 trên Colab đang xử lý phần '{section_choice}'..."):
             
-            # Xây dựng prompt động theo lựa chọn của anh
             prompt = f"""Hãy đóng vai một nhà nghiên cứu Dược lâm sàng chuyên nghiệp viết phần '{section_choice}' cho luận văn chuyên khoa.
 Dựa vào các thông tin tóm tắt y văn bên dưới, hãy viết một đoạn văn bản học thuật hoàn chỉnh, chuẩn mực y khoa.
 
@@ -115,10 +123,8 @@ GHI CHÚ THÊM TỪ NGƯỜI DÙNG:
 
 YÊU CẦU: Viết văn xuôi mạch lạc, học thuật, khách quan, không chào hỏi, không gạch đầu dòng rườm rà.
 """
-            # Gọi hàm qua Colab
             result = call_ollama_colab(prompt=prompt, url=ollama_url, model=ollama_model)
 
-            # Hiển thị kết quả
             st.markdown("---")
             st.markdown("### 📝 Bản thảo từ Ollama (Colab GPU):")
             st.markdown(
@@ -127,7 +133,6 @@ YÊU CẦU: Viết văn xuôi mạch lạc, học thuật, khách quan, không c
                 unsafe_allow_html=True
             )
             
-            # Tính năng tải file Word
             st.download_button(
                 label="📥 Tải Bản thảo ra file Word (.docx)",
                 data=create_word_document(f"Bản thảo - {section_choice}", result),
