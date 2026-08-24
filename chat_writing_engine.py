@@ -37,7 +37,7 @@ def extract_text_from_file(uploaded_file):
 
 def render_writing_chat():
     st.write("---")
-    st.subheader("💬 Viết luận văn cùng Groq AI (Bản Offline)")
+    st.subheader("💬 Viết luận văn cùng Groq AI")
     st.caption("Chat tự do hoặc đính kèm tài liệu (PDF, Word, Excel...) để AI phân tích.")
     
     if "writing_chat_history" not in st.session_state:
