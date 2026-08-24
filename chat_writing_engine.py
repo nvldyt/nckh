@@ -109,6 +109,27 @@ def render_writing_chat():
                     full_res = call_gemini(final_prompt, temperature=0.7)
                     
                     if full_res:
+                        # Kích hoạt bộ lọc đánh số
+                        import re
+                        pattern = r'\[(?:REF-)?(SRC-[A-Z0-9]+)\]'
+                        citation_mapping = {}
+                        current_idx = 1
+                        def replacer(match):
+                            nonlocal current_idx
+                            ref_id = match.group(1)
+                            if ref_id not in citation_mapping:
+                                citation_mapping[ref_id] = current_idx
+                                current_idx += 1
+                            return f"[{citation_mapping[ref_id]}]"
+                        
+                        clean_res = re.sub(pattern, replacer, full_res)
+                        
+                        message_placeholder.markdown(clean_res)
+                        st.session_state.writing_chat_history.append({"role": "assistant", "content": clean_res})
+                    else:
+                        raise Exception("Hệ thống AI đang quá tải hoặc gặp lỗi xác thực. Vui lòng thử lại sau vài giây.")
+                    
+                    if full_res:
                         message_placeholder.markdown(full_res)
                         st.session_state.writing_chat_history.append({"role": "assistant", "content": full_res})
                     else:
