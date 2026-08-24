@@ -1,6 +1,6 @@
 # ollama_writer_engine.py
 # ============================================================
-# MODULE VIẾT LUẬN VĂN BẰNG OLLAMA (KẾT NỐI GOOGLE COLAB / OFFLINE)
+# MODULE VIẾT LUẬN VĂN BẰNG OLLAMA (RAG TRỰC TIẾP TỪ KHO TÀI LIỆU GỐC)
 # ============================================================
 
 import streamlit as st
@@ -9,19 +9,23 @@ import io
 import re
 from docx import Document
 
+try:
+    from retrieval_engine import retrieve_evidence
+except ImportError:
+    retrieve_evidence = None
+
 def call_ollama_colab(prompt: str, url: str, model: str, temperature: float = 0.3) -> str:
-    """Gửi prompt đến máy chủ Ollama trên Google Colab qua Cloudflare Tunnel"""
+    """Gửi prompt đến máy chủ Ollama trên Google Colab qua Cầu nối FastAPI"""
     if not url:
         return "⚠️ Báo lỗi: Vui lòng dán đường dẫn Cloudflare (.trycloudflare.com) từ Google Colab vào thanh bên (Sidebar) bên trái trước khi bấm gọi AI!"
     
-    # --- TỰ ĐỘNG LÀM SẠCH URL (Phòng hờ dán nhính Markdown [link](link) hoặc khoảng trắng) ---
+    # Tự động làm sạch URL (phòng hờ dính Markdown hoặc khoảng trắng)
     url = url.strip()
     md_match = re.search(r'\((https?://[^\s)]+)\)', url)
     if md_match:
         url = md_match.group(1)
     else:
         url = url.strip("[]'\"<>")
-    # ----------------------------------------------------------------------------------
 
     api_endpoint = f"{url.rstrip('/')}/api/generate"
     
@@ -35,8 +39,8 @@ def call_ollama_colab(prompt: str, url: str, model: str, temperature: float = 0.
     }
     
     try:
-        # Timeout 180 giây để đảm bảo GPU T4 có đủ thời gian xử lý các đoạn văn dài
-        response = requests.post(api_endpoint, json=payload, timeout=180)
+        # Timeout 300 giây để mô hình 14B có đủ thời gian suy luận văn bản dài
+        response = requests.post(api_endpoint, json=payload, timeout=300)
         if response.status_code == 200:
             return response.json().get("response", "").strip()
         else:
@@ -68,9 +72,9 @@ def create_word_document(title: str, body: str) -> bytes:
     return out.getvalue()
 
 def render_ollama_writer_tab():
-    """Giao diện Tab: Viết luận văn bằng Ollama (Colab Backend)"""
-    st.subheader("🤖 Trợ lý Viết luận văn bằng Ollama (Google Colab GPU)")
-    st.info("Hệ thống sẽ lấy bản tóm tắt y văn ở Tab 4 làm ngữ cảnh kết hợp với sức mạnh GPU T4 để tự động viết các đoạn văn bản học thuật.")
+    """Giao diện Tab 6: Viết luận văn bằng Ollama tích hợp RAG trực tiếp"""
+    st.subheader("🤖 Trợ lý Viết luận văn bằng Ollama (RAG Trực tiếp từ Kho tài liệu)")
+    st.info("💡 Hệ thống sẽ tự động quét kho tài liệu gốc (PDF/PubMed), truy xuất các đoạn bằng chứng xác thực nhất và chuyển cho Ollama (Colab GPU) viết bài.")
 
     # --- THANH BÊN (SIDEBAR): Ô NHẬP LINK CLOUDFLARE ---
     st.sidebar.divider()
@@ -83,10 +87,10 @@ def render_ollama_writer_tab():
         key="ollama_colab_url_tab6"
     )
 
-    # Kiểm tra xem đã có bản tóm tắt từ Tab Tóm tắt chưa
-    summary_context = st.session_state.get("cached_summary", "")
-    if not summary_context:
-        st.warning("⚠️ Chưa có dữ liệu tóm tắt! Anh hãy quay lại Tab '4. Tóm tắt' bấm nút 'Tổng hợp' trước để chuẩn bị ngữ cảnh cho AI.")
+    # Kiểm tra xem Evidence Database đã có tài liệu chưa
+    chunks = st.session_state.get("chunks", [])
+    if not chunks:
+        st.warning("⚠️ Evidence Database đang trống! Hãy nạp tài liệu PDF (Tab 1) hoặc bài báo PubMed (Tab 2) trước để Ollama có dữ liệu viết bài.")
         return
 
     col1, col2 = st.columns(2)
@@ -97,46 +101,89 @@ def render_ollama_writer_tab():
             key="ollama_model_select"
         )
     with col2:
-        section_choice = st.selectbox(
-            "Chọn phần cần viết:",
-            ["Đặt vấn đề", "Tổng quan tài liệu", "Bàn luận chuyên sâu", "Kết luận"],
-            key="ollama_section_select"
-        )
+        top_k = st.slider("Số đoạn bằng chứng truy xuất:", 3, 15, 8, key="ollama_top_k")
 
-    extra_prompt = st.text_area(
-        "Ghi chú thêm cho AI (Tùy chọn):", 
-        placeholder="VD: Hãy viết khoảng 500 từ, nhấn mạnh vào cơ chế tác dụng của kháng sinh...", 
-        key="ollama_extra_prompt"
+    user_query = st.text_area(
+        "Nhập yêu cầu viết văn hoặc vấn đề cần phân tích học thuật:", 
+        placeholder="VD: Viết phần Đặt vấn đề và tính cấp thiết của việc theo dõi nồng độ Vancomycin trên bệnh nhân suy thận...", 
+        height=120,
+        key="ollama_user_query"
     )
 
-    if st.button("🚀 Yêu cầu Ollama (Colab) Viết Bài", type="primary", key="btn_run_ollama_writer"):
-        with st.spinner(f"GPU T4 trên Colab đang xử lý phần '{section_choice}'..."):
-            
-            prompt = f"""Hãy đóng vai một nhà nghiên cứu Dược lâm sàng chuyên nghiệp viết phần '{section_choice}' cho luận văn chuyên khoa.
-Dựa vào các thông tin tóm tắt y văn bên dưới, hãy viết một đoạn văn bản học thuật hoàn chỉnh, chuẩn mực y khoa.
+    if st.button("🚀 Truy xuất bằng chứng & Yêu cầu Ollama Viết Bài", type="primary", key="btn_run_ollama_writer"):
+        if not user_query.strip():
+            st.warning("⚠️ Vui lòng nhập nội dung yêu cầu trước khi gửi.")
+        else:
+            with st.spinner("Đang truy xuất bằng chứng từ kho tài liệu và gọi GPU Colab xử lý..."):
+                
+                # 1. Truy xuất bằng chứng trực tiếp từ kho tài liệu gốc
+                evidence = []
+                if retrieve_evidence:
+                    try:
+                        evidence = retrieve_evidence(
+                            query=user_query,
+                            chunks=chunks,
+                            matrix=st.session_state.get("embeddings"),
+                            bm25=st.session_state.get("bm25"),
+                            top_k=top_k
+                        )
+                    except Exception as e:
+                        st.error(f"❌ Lỗi truy xuất bằng chứng: {e}")
+                
+                if not evidence:
+                    st.warning("⚠️ Không tìm thấy đoạn bằng chứng phù hợp trong kho tài liệu.")
+                    return
 
-THÔNG TIN NỀN TẢNG THAM KHẢO:
-{summary_context}
+                # 2. Xây dựng ngữ cảnh từ các đoạn bằng chứng (có kèm mã nguồn SRC-...)
+                evidence_blocks = []
+                for ev in evidence:
+                    src_id = ev.get("source_id", "UNKNOWN")
+                    chunk_id = ev.get("chunk_id", "CHUCK")
+                    text = ev.get("text", "")
+                    evidence_blocks.append(f"[{src_id} - {chunk_id}]: {text}")
+                
+                evidence_text = "\n\n".join(evidence_blocks)
 
-GHI CHÚ THÊM TỪ NGƯỜI DÙNG:
-{extra_prompt if extra_prompt else "Không có"}
+                # 3. Lắp ráp Prompt chuẩn y khoa nâng cao
+                prompt = f"""Bạn là một chuyên gia nghiên cứu và giảng viên Dược lâm sàng hàng đầu. Nhiệm vụ của bạn là viết một phần nội dung luận văn chuyên khoa cấp I dựa trên các bằng chứng khoa học thực tế được cung cấp dưới đây.
 
-YÊU CẦU: Viết văn xuôi mạch lạc, học thuật, khách quan, không chào hỏi, không gạch đầu dòng rườm rà.
+YÊU CẦU / CHỦ ĐỀ CỦA NGƯỜI DÙNG:
+{user_query}
+
+DANH MỤC BẰNG CHỨNG KHOA HỌC THỰC TẾ (BẠN PHẢI DỰA VÀO ĐÂY ĐỂ VIẾT):
+{evidence_text}
+
+QUY TẮC VIẾT VĂN BẮC BUỘC (TUÂN THỦ 100%):
+1. Viết hoàn toàn bằng VĂN XUÔI LIỀN MẠCH, chia thành các đoạn văn học thuật rõ ràng (mỗi đoạn 5-7 câu). 
+2. TUYỆT ĐỐI KHÔNG dùng cấu trúc kiểu tóm tắt bài báo (không dùng các nhãn cứng nhắc như 'Mục tiêu', 'Phương pháp', 'Kết quả', 'Kết luận').
+3. Phải đính kèm mã nguồn dạng [SRC-XXXX] ngay sau các nhận định, dữ liệu lấy từ bằng chứng.
+4. Phân tích sâu sắc về mặt dược động học, dược lực học (PK/PD) hoặc ý nghĩa lâm sàng, văn phong trang trọng, chuẩn mực của luận văn y khoa.
 """
-            result = call_ollama_colab(prompt=prompt, url=ollama_url, model=ollama_model)
 
-            st.markdown("---")
-            st.markdown("### 📝 Bản thảo từ Ollama (Colab GPU):")
-            st.markdown(
-                f"<div style='background-color: white; padding: 20px; border-radius: 10px; color: black; border: 1px solid #ddd; font-size: 16px;'>"
-                f"{result}</div>", 
-                unsafe_allow_html=True
-            )
-            
-            st.download_button(
-                label="📥 Tải Bản thảo ra file Word (.docx)",
-                data=create_word_document(f"Bản thảo - {section_choice}", result),
-                file_name=f"Ban_thao_{section_choice}.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                key="dl_word_ollama"
-            )
+                # 4. Gọi Ollama qua Colab
+                result = call_ollama_colab(prompt=prompt, url=ollama_url, model=ollama_model)
+
+                # 5. Hiển thị kết quả
+                st.markdown("---")
+                st.markdown("### 📝 Bản thảo từ Ollama (RAG Trực tiếp):")
+                st.markdown(
+                    f"<div style='background-color: white; padding: 20px; border-radius: 10px; color: black; border: 1px solid #ddd; font-size: 16px;'>"
+                    f"{result}</div>", 
+                    unsafe_allow_html=True
+                )
+                
+                # 6. Hiển thị dấu vết bằng chứng (Evidence Trace) để đối chiếu
+                with st.expander("🔎 Xem dấu vết bằng chứng (Evidence Trace) đã sử dụng"):
+                    for ev in evidence:
+                        meta = st.session_state.get("documents", {}).get(ev.get("source_id"), {})
+                        st.markdown(f"- **Tài liệu:** `{meta.get('file_name', 'N/A')}` | **Độ khớp:** `{ev.get('score', 0):.4f}` | **Mã đoạn:** `{ev.get('chunk_id', '')}`")
+                        st.info(f"_{ev.get('text', '')}_")
+
+                # 7. Nút tải file Word
+                st.download_button(
+                    label="📥 Tải Bản thảo ra file Word (.docx)",
+                    data=create_word_document("Bản thảo nghiên cứu khoa học", result),
+                    file_name="Ban_thao_RAG_Ollama.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    key="dl_word_ollama_rag"
+                )
