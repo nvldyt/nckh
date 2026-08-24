@@ -23,7 +23,7 @@ MODEL_LITE = "gemini-3.5-flash-lite"
 # ============================================================
 
 # Đảm bảo anh đã có DEFAULT_MODEL và key_manager được khai báo ở trên trong file của anh
-# Ví dụ: DEFAULT_MODEL = "gemini-1.5-pro-latest"
+# Ví dụ: DEFAULT_MODEL = "gemini-3.5-flash"
 
 def call_gemini(prompt: str, model: str = None, temperature: float = 0.3, max_retries: int = 3) -> str:
     """
