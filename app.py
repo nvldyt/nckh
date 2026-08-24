@@ -58,6 +58,28 @@ from summarizer_engine import render_summarizer_tab
 from ollama_writer_engine import render_ollama_writer_tab
 from medical_stats_engine import generate_table_one
 
+import requests
+
+# === HÀM CỐT LÕI GỌI OLLAMA TỪ COLAB ===
+def call_ollama_colab(prompt: str, url: str, model_name: str = "qwen2.5:14b") -> str:
+    """Gửi prompt đến máy chủ Ollama trên Colab và nhận về câu trả lời."""
+    if not url:
+        return "⚠️ Báo lỗi: Vui lòng dán link Cloudflare từ Colab vào thanh bên trước!"
+    
+    api_endpoint = f"{url.rstrip('/')}/api/generate"
+    payload = {
+        "model": model_name,
+        "prompt": prompt,
+        "stream": False
+    }
+    
+    try:
+        response = requests.post(api_endpoint, json=payload, timeout=120)
+        response.raise_for_status() 
+        result = response.json()
+        return result.get("response", "")
+    except requests.exceptions.RequestException as e:
+        return f"❌ Mất kết nối với Colab. Chi tiết lỗi: {e}"
 
 # ============================================================
 # 1. CẤU HÌNH
@@ -885,8 +907,91 @@ def main():
     # ------------------------------------------------------------
     # TAB 6 – VIẾT BẰNG OLLAMA LOCAL 
     # ------------------------------------------------------------
-    with tabs[5]:
-        render_ollama_writer_tab()
+    import streamlit as st
+import requests
+
+# =====================================================================
+# 1. HÀM CỐT LÕI GỌI AI TỪ COLAB
+# =====================================================================
+def call_ollama_colab(prompt: str, url: str, model_name: str = "qwen2.5:14b") -> str:
+    """Gửi prompt đến máy chủ Ollama trên Colab và nhận về câu trả lời."""
+    if not url:
+        return "⚠️ Báo lỗi: Vui lòng dán link Cloudflare từ Colab vào thanh bên trước!"
+    
+    # Chuẩn hóa link để đảm bảo không bị dư dấu / ở cuối
+    api_endpoint = f"{url.rstrip('/')}/api/generate"
+    
+    payload = {
+        "model": model_name,
+        "prompt": prompt,
+        "stream": False # Đợi hoàn thiện toàn bộ văn bản rồi mới trả về
+    }
+    
+    try:
+        # Thời gian chờ 120s để đảm bảo GPU có đủ thời gian xử lý các đoạn văn dài
+        response = requests.post(api_endpoint, json=payload, timeout=120)
+        response.raise_for_status() 
+        result = response.json()
+        return result.get("response", "")
+    except requests.exceptions.RequestException as e:
+        return f"❌ Mất kết nối với Colab. Chi tiết lỗi: {e}"
+
+# =====================================================================
+# 2. MODULE GIAO DIỆN TAB 6 HOÀN CHỈNH
+# =====================================================================
+def render_ollama_writer_tab():
+    st.header("🤖 Trợ lý Viết luận văn bằng Ollama (Colab/Offline)")
+    
+    # --- THANH BÊN (SIDEBAR) ---
+    st.sidebar.divider()
+    st.sidebar.header("🔌 Kết nối Máy chủ AI (Colab)")
+    st.sidebar.info("💡 Copy link .trycloudflare.com từ Colab dán vào đây")
+    
+    # Ô nhập URL có gán key độc nhất để không bị lỗi StreamlitDuplicateElementKey
+    ollama_url = st.sidebar.text_input(
+        "API Base URL:", 
+        placeholder="https://...trycloudflare.com",
+        key="ollama_colab_url"
+    )
+
+    # --- KHU VỰC HIỂN THỊ CHÍNH ---
+    st.info("Ollama sẽ lấy bản tóm tắt y văn ở Tab 4 để làm ngữ cảnh và tự động viết thành các đoạn văn bản học thuật hoàn chỉnh.")
+    
+    st.subheader("💬 Khung tương tác với Qwen 2.5 (14B)")
+    
+    # Ô nhập liệu cho người dùng
+    user_question = st.text_area(
+        "Nhập yêu cầu viết văn hoặc đoạn y văn cần phân tích:", 
+        height=150, 
+        key="ollama_prompt_input"
+    )
+    
+    # Nút bấm thực thi
+    if st.button("🚀 Yêu cầu Ollama viết", type="primary", key="btn_ollama_write"):
+        if not user_question.strip():
+            st.warning("⚠️ Vui lòng nhập nội dung trước khi gửi.")
+        else:
+            with st.spinner("Bếp trưởng Colab đang xào nấu dữ liệu (GPU T4 đang chạy)..."):
+                # Gửi yêu cầu qua Cloudflare Tunnel
+                answer = call_ollama_colab(prompt=user_question, url=ollama_url)
+                
+                if "⚠️ Báo lỗi" in answer or "❌ Mất kết nối" in answer:
+                    st.error(answer)
+                else:
+                    st.success("✅ Hoàn thành!")
+                    # In kết quả với format đẹp, bo góc, nền sáng để dễ copy sang Word
+                    st.markdown(
+                        f"<div style='background-color: white; padding: 20px; border-radius: 10px; color: black; border: 1px solid #ddd; font-size: 16px;'>"
+                        f"{answer}</div>", 
+                        unsafe_allow_html=True
+                    )
+
+# =====================================================================
+# CÁCH GỌI TẠI KHỐI TẠO TAB (Giữ nguyên như code của anh)
+# =====================================================================
+# with tabs[5]:
+#     render_ollama_writer_tab()
+
 
     # ------------------------------------------------------------
     # TAB 7 – PHÂN TÍCH SỐ LIỆU 
