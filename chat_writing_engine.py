@@ -37,24 +37,31 @@ def extract_text_from_file(uploaded_file):
 
 def render_writing_chat():
     st.write("---")
-    st.subheader("💬 Viết luận văn cùng Groq AI")
+    st.subheader("💬 Viết luận văn cùng Groq AI (Bản Offline)")
     st.caption("Chat tự do hoặc đính kèm tài liệu (PDF, Word, Excel...) để AI phân tích.")
     
     if "writing_chat_history" not in st.session_state:
         st.session_state.writing_chat_history = []
+    
+    # Biến nhớ để không bị nạp lặp lại file
+    if "last_uploaded_writing_file" not in st.session_state:
+        st.session_state.last_uploaded_writing_file = None
         
     col1, col2 = st.columns([8, 2])
     with col2:
         if st.button("🧹 Xóa hội thoại", key="clear_writing_chat", use_container_width=True):
             st.session_state.writing_chat_history = []
+            st.session_state.last_uploaded_writing_file = None
             st.rerun()
 
     # KHAY ĐÍNH KÈM TÀI LIỆU
     with st.expander("📎 Bấm vào đây để đính kèm tài liệu cho AI đọc", expanded=False):
         uploaded_doc = st.file_uploader("Hỗ trợ PDF, Word, Excel, CSV, TXT", type=['pdf', 'docx', 'xlsx', 'xls', 'csv', 'txt'], key="chat_uploader_tab3")
+        
+        # TỰ ĐỘNG NẠP KHI CÓ FILE
         if uploaded_doc:
-            if st.button("📥 Nạp file này vào bộ nhớ AI", use_container_width=True, type="primary"):
-                with st.spinner(f"Đang đọc và giải mã {uploaded_doc.name}..."):
+            if st.session_state.last_uploaded_writing_file != uploaded_doc.name:
+                with st.spinner(f"Đang tự động đọc và giải mã {uploaded_doc.name}..."):
                     file_content = extract_text_from_file(uploaded_doc)
                     
                     st.session_state.writing_chat_history.append({
@@ -65,7 +72,13 @@ def render_writing_chat():
                         "role": "assistant",
                         "content": f"✅ Tôi đã đọc xong file **{uploaded_doc.name}**. Anh cần tôi làm gì với tài liệu này?"
                     })
+                    
+                    # Đánh dấu là đã nạp file này rồi
+                    st.session_state.last_uploaded_writing_file = uploaded_doc.name
                     st.rerun()
+        else:
+            # Xóa nhớ nếu người dùng bấm dấu X tắt file
+            st.session_state.last_uploaded_writing_file = None
 
     # Hiển thị lịch sử chat
     for message in st.session_state.writing_chat_history:
@@ -85,7 +98,6 @@ def render_writing_chat():
                 try:
                     system_prompt = "Bạn là một Giáo sư y khoa hướng dẫn sinh viên viết luận văn. Hãy trả lời học thuật, chính xác và chuyên nghiệp.\n\n"
                     
-                    # Lấy 8 tin nhắn gần nhất để chống tràn token
                     recent_history = st.session_state.writing_chat_history[-8:]
                     chat_context = system_prompt + "Lịch sử trò chuyện gần đây:\n"
                     for msg in recent_history[:-1]:
@@ -94,7 +106,6 @@ def render_writing_chat():
                     
                     final_prompt = f"{chat_context}\nCâu hỏi của người dùng: {prompt}"
                     
-                    # CƠ CHẾ GỌI API AN TOÀN TỪ MODULE CHÍNH
                     full_res = call_gemini(final_prompt, temperature=0.7)
                     
                     if full_res:
