@@ -11,7 +11,7 @@ MY_KEYS = [
 ]
 
 # 2. Key SerpAPI
-SERP_KEY = "f99c73f0a83c6e0ec159f8583534aa2d9deabdd339c44511323b83c15c4c6704"
+SERP_KEY = "2a58c98ff036322c9c40f0154599496b7af2d78a3dd0d1eab0383e479d255cd8"
 
 @st.cache_resource
 def get_key_cycler():
