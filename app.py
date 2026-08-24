@@ -32,7 +32,7 @@ from statistical_engine import (
     create_clinical_groups, generate_baseline_table,
 )
 from evidence_engine import (
-    SourceDocument, EvidenceChunk, get_serpapi_key, extract_pdf,
+    SourceDocument, EvidenceChunk, extract_pdf,
     search_pubmed, search_vn_journals, ingest_pubmed_article,
     ingest_vn_article, add_source_and_chunks,
 )
