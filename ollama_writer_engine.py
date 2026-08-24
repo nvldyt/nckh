@@ -83,21 +83,17 @@ def render_ollama_writer_tab():
     if st.button("🚀 Yêu cầu Ollama Viết Bài", type="primary", key="btn_run_ollama_writer"):
         with st.spinner(f"Ollama đang vắt óc viết phần '{section_choice}' (Có thể mất 1-3 phút tùy cấu hình máy)..."):
             # Lắp ráp câu lệnh Prompt chuẩn y khoa
-            prompt = f"""
-Bạn là một Dược sĩ lâm sàng đang trực tiếp chắp bút viết luận văn Chuyên khoa.
-NHIỆM VỤ BẮT BUỘC: HÃY VIẾT MỘT BÀI VĂN XUÔI HOÀN CHỈNH cho phần '{section_choice}'.
+            # Lắp ráp câu lệnh Prompt chuẩn y khoa - Ép khung cho Model nhỏ
+            prompt = f"""Hãy đóng vai một bác sĩ đang viết đoạn mở bài (Đặt vấn đề) cho luận văn.
+Dựa vào các thông tin sau, hãy viết một bài văn xuôi (gồm 3 đoạn văn liên tục) nêu lên tính cấp thiết của đề tài.
 
-TÀI LIỆU THAM KHẢO (Chỉ lấy ý tưởng, KHÔNG ĐƯỢC LIỆT KÊ RA):
+THÔNG TIN NỀN TẢNG ĐỂ THAM KHẢO:
 {summary_context}
 
-QUY TẮC SỐNG CÒN DÀNH CHO AI:
-1. TUYỆT ĐỐI KHÔNG liệt kê, không gạch đầu dòng tóm tắt lại từng tài liệu. Không dùng từ "Tài liệu 1", "Tài liệu 2".
-2. PHẢI viết thành các đoạn văn xuôi học thuật, liền mạch. 
-3. Nếu viết "Đặt vấn đề", phải tự tổng hợp để nêu bật được tính cấp thiết, thực trạng và lý do phải làm nghiên cứu này.
-4. {extra_prompt}
+Bắt đầu viết ngay bài văn xuôi của bạn dưới đây. Yêu cầu: Viết thành đoạn văn liền mạch, không chào hỏi, không giải thích, không gạch đầu dòng, không đánh số.
 
-BẮT ĐẦU VIẾT BÀI VĂN XUÔI TẠI ĐÂY:
-"""
+BÀI LÀM CỦA TÔI:
+Trong những năm gần đây, """
             # Gọi AI
             result = call_ollama(prompt, model=ollama_model)
 
