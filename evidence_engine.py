@@ -271,7 +271,7 @@ def _classify_vn_source(link: str) -> str:
     return "Nghiên cứu Y học Việt Nam"
 
 def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-    """Tra cứu bài báo Việt Nam MIỄN PHÍ bằng DuckDuckGo (Đã bọc lỗi và lọc link rác)"""
+    """Tra cứu bài báo Việt Nam MIỄN PHÍ bằng DuckDuckGo (Đã gỡ bỏ ngoặc kép ép buộc)"""
     try:
         from duckduckgo_search import DDGS
     except ImportError:
@@ -285,12 +285,11 @@ def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str,
     collected_results: List[Dict[str, Any]] = []
     error_msg = None
     
-    # 1. Câu lệnh thân thiện với DuckDuckGo
-    search_query = f'"{query}" (tạp chí y học OR nghiên cứu OR dược lâm sàng OR vjol)'
+    # ĐÃ SỬA LỖI: Bỏ dấu ngoặc kép quanh {query} để hệ thống tìm kiếm linh hoạt hơn
+    search_query = f'{query} (tạp chí y học OR nghiên cứu OR dược lâm sàng OR vjol)'
     
     try:
         with DDGS() as ddgs:
-            # Lấy dư ra một chút để bù trừ cho các link rác bị loại bỏ
             ddgs_results = list(ddgs.text(search_query, region='vn-vi', max_results=max_results + 5))
             
             for item in ddgs_results:
@@ -298,7 +297,6 @@ def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str,
                 if not link or link in seen_links:
                     continue
                     
-                # BỘ LỌC THÉP: Chỉ chấp nhận tên miền Việt Nam (.vn) hoặc VJOL
                 if ".vn" not in link and "vjol.info" not in link:
                     continue
 
@@ -317,11 +315,9 @@ def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str,
                     "origin": "Tạp chí VN",
                 })
                 
-                # Dừng lại nếu đã gom đủ số lượng yêu cầu
                 if len(collected_results) >= max_results:
                     break
                     
-        # 2. Nếu tìm vẫn không ra, chạy Fallback với site:vn
         if len(collected_results) < max_results:
             fallback_query = f'{query} nghiên cứu y khoa site:vn'
             with DDGS() as ddgs:
@@ -332,7 +328,6 @@ def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str,
                     if not link or link in seen_links:
                         continue
                         
-                    # Tiếp tục chặn link rác
                     if ".vn" not in link and "vjol.info" not in link:
                         continue
                         
@@ -349,10 +344,9 @@ def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str,
                         break
                         
         if not collected_results:
-            error_msg = "Không tìm thấy bài báo tiếng Việt phù hợp. Hãy thử thêm từ khoá tiếng Việt (VD: Vancomycin đặc điểm lâm sàng)."
+            error_msg = "Không tìm thấy bài báo tiếng Việt. Hãy thử gõ ngắn gọn lại (Ví dụ: Đặc điểm sử dụng Vancomycin)."
             
     except Exception as e:
-        # Bắt mọi lỗi để app không bao giờ bị sập
         error_msg = f"⚠️ Máy chủ tìm kiếm báo Việt Nam đang bận. Đã tìm được {len(collected_results)} bài. (Chi tiết lỗi: {e})"
         
     return collected_results[:max_results], error_msg
