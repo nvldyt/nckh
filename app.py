@@ -905,7 +905,9 @@ def main():
                 db=create_word_document("Bản nháp hỗ trợ nghiên cứu",st.session_state["last_generated"],citation_bibliography_wrapper())
                 st.download_button("Bấm vào đây để tải file",data=db,file_name="Ban_nhap.docx",mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",use_container_width=True,key=ui_key("download_current_draft"))
         render_writing_chat()
-
+# ------------------------------------------------------------
+# TAB 6 – VIẾT BẰNG OLLAMA LOCAL 
+# ------------------------------------------------------------
 # =====================================================================
 # 1. HÀM CỐT LÕI GỌI AI TỪ COLAB
 # =====================================================================
@@ -985,9 +987,7 @@ def render_ollama_writer_tab():
 # =====================================================================
 # 3. GỌI HÀM VÀO TAB 6 (Đặt phần này vào đúng vị trí thiết kế Tab của anh)
 # =====================================================================
-# ------------------------------------------------------------
-# TAB 6 – VIẾT BẰNG OLLAMA LOCAL 
-# ------------------------------------------------------------
+
 # with tabs[5]:
 #     render_ollama_writer_tab()
     # ------------------------------------------------------------
