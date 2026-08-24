@@ -133,22 +133,17 @@ def render_ollama_writer_tab():
                 is_intro = "đặt vấn đề" in query_lower or "cấp thiết" in query_lower or "mở đầu" in query_lower
 
                 if is_intro:
-                    # PROMPT RIÊNG CHO PHẦN ĐẶT VẤN ĐỀ (Cấm tuyệt đối đưa kết quả vào)
-                    prompt = f"""Bạn là một chuyên gia biên soạn luận văn y khoa chuyên ngành Dược lâm sàng. 
-Nhiệm vụ của bạn là viết phần **'ĐẶT VẤN ĐỀ VÀ TÍNH CẤP THIẾT CỦA ĐỀ TÀI'** khoảng 450-500 từ.
+                    # PROMPT ĐÃ ĐƯỢC SIẾT CHẶT CỰC KỲ NGHIÊM NGẶT ĐỂ CHỐNG TÓM TẮT VÀ CHỐNG TIẾNG ANH
+                    prompt = f"""[LỆNH TỐI CAO: BẮT BUỘC DÙNG TIẾNG VIỆT 100%. CẤM TUYỆT ĐỐI DÙNG TIẾNG ANH. CẤM TÓM TẮT DƯỚI DẠNG GẠCH ĐẦU DÒNG.]
 
-YÊU CẦU CỦA NGƯỜI DÙNG:
-{user_query}
+Bạn là một chuyên gia và giảng viên Dược lâm sàng hàng đầu. Nhiệm vụ duy nhất của bạn là VIẾT MỘT BÀI LUẬN HOÀN CHỈNH bằng văn xuôi tiếng Việt cho phần 'ĐẶT VẤN ĐỀ VÀ TÍNH CẤP THIẾT CỦA ĐỀ TÀI' (độ dài khoảng 450-500 từ).
 
-QUY TẮC BẮT BUỘC KHI VIẾT ĐẶT VẤN ĐỀ:
-1. NỘI DUNG CHỈ TẬP TRUNG VÀO: 
-   - Tình hình dịch tễ, gánh nặng bệnh tật của các bệnh lý liên quan đến kháng sinh đang xét.
-   - Vai trò lâm sàng của thuốc, các thách thức trong điều trị (ví dụ: nguy cơ độc tính trên thận, tầm quan trọng của việc tối ưu hóa liều và theo dõi nồng độ thuốc trị liệu - TDM).
-   - Khoảng trống nghiên cứu và lý do tại sao cần thực hiện đề tài này.
-2. CẤM TUYỆT ĐỐI ĐƯA SỐ LIỆU KẾT QUẢ VÀO: Không được viết kiểu "Trong nghiên cứu này chúng tôi thu thập... tỷ lệ đạt là...", vì đây là phần mở đầu, hoàn toàn chưa bàn đến kết quả thực nghiệm.
-3. VĂN PHONG: Viết hoàn toàn bằng văn xuôi liền mạch, trang trọng, hàn lâm, chia thành 3-4 đoạn văn rõ ràng, không gạch đầu dòng, không chào hỏi, không dùng nhãn phân chia.
+YÊU CẦU BẮT BUỘC:
+1. VIẾT THÀNH VĂN XUÔI LIÊN TỤC, chia thành 3 đến 4 đoạn văn học thuật rõ ràng. KHÔNG ĐƯỢC dùng gạch đầu dòng, KHÔNG ĐƯỢC liệt kê dạng key-points.
+2. TUYỆT ĐỐI KHÔNG tóm tắt hay sao chép lại cấu trúc của tài liệu tham khảo. Không nhắc đến thời gian nghiên cứu cụ thể hay tiêu chuẩn chọn mẫu thô vào phần này.
+3. Nội dung phải tập trung vào: Gánh nặng dịch tễ của nhiễm khuẩn Gram dương/MRSA, thách thức khi sử dụng kháng sinh có khoảng điều trị hẹp như Vancomycin, tầm quan trọng của việc theo dõi nồng độ thuốc (TDM), từ đó nêu bật tính cấp thiết của đề tài.
 
-TÀI LIỆU LÝ THUYẾT THAM KHẢO:
+DỮ LIỆU ĐỂ THAM KHẢO Ý TƯỞNG (KHÔNG ĐƯỢC CHÉP NGUYÊN VĂN):
 {evidence_text}
 """
                 else:
