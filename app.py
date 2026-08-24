@@ -3,6 +3,7 @@
 # HỖ TRỢ NGHIÊN CỨU KHOA HỌC – EVIDENCE-BASED RAG
 # Bản tối ưu cho luận văn Chuyên khoa cấp I – Dược lâm sàng
 # Kiến trúc Modular 4 Engines (Tích hợp Reranker & Study Context)
+# Bổ sung tính năng Offline: Summarizer (Python) & Ollama Writer
 # ============================================================
 
 import io
@@ -51,6 +52,10 @@ from writing_engine import (
 from synthesis_engine import build_literature_matrix
 from chapter_assembler_engine import assemble_results_and_discussion_chapter
 from offline_writing import render_offline_tab
+
+# --- IMPORT 2 MODULE MỚI ---
+from summarizer_engine import render_summarizer_tab
+from ollama_writer_engine import render_ollama_writer_tab
 
 
 # ============================================================
@@ -104,6 +109,7 @@ def init_state():
         "assembled_ch3": "", "assembled_ch4": "",
         "excel_data": None, "excel_df": None, "clean_logs": [],
         "ai_pending_remark": "",
+        "cached_summary": "", # Đã bổ sung biến lưu tóm tắt Offline
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -447,6 +453,7 @@ def project_payload() -> dict:
         "assembled_ch3": st.session_state.get("assembled_ch3", ""),
         "assembled_ch4": st.session_state.get("assembled_ch4", ""),
         "vn_journal_domains": st.session_state.get("vn_journal_domains", list(DEFAULT_VN_JOURNAL_DOMAINS)),
+        "cached_summary": st.session_state.get("cached_summary", ""), # Đã bổ sung biến
     }
 
 
@@ -460,6 +467,7 @@ def restore_project(data: dict):
     st.session_state["assembled_ch3"] = data.get("assembled_ch3", "")
     st.session_state["assembled_ch4"] = data.get("assembled_ch4", "")
     st.session_state["vn_journal_domains"] = data.get("vn_journal_domains", list(DEFAULT_VN_JOURNAL_DOMAINS))
+    st.session_state["cached_summary"] = data.get("cached_summary", "") # Khôi phục biến
     st.session_state["result_cart"] = []
     for item in data.get("result_cart", []):
         if isinstance(item, dict):
@@ -476,7 +484,7 @@ def restore_project(data: dict):
 
 
 # ============================================================
-# 4. MAIN UI
+# 4. MAIN UI - 9 TABS TÍCH HỢP ĐẦY ĐỦ
 # ============================================================
 def main():
     init_state()
@@ -497,14 +505,17 @@ def main():
             except Exception as exc:
                 st.error(f"❌ Lỗi: {exc}")
     
+    # Đã cấu hình lên 9 Tabs (Chèn thêm Tab Tóm tắt Python và Tab Ollama Local)
     tabs = st.tabs([
         "🔍 1. Tra cứu TLTK", 
         "📑 2. Tài liệu (PDF)",
         "🛠️ 3. Tổng hợp (Offline)", 
-        "✍️ 4. Viết luận văn (AI)", 
-        "📊 5. Phân tích số liệu", 
-        "🔎 6. Kiểm tra luận văn", 
-        "🏷️ 7. Trích dẫn TLTK",
+        "⚡ 4. Tóm tắt (Python)",       # TAB MỚI 1
+        "✍️ 5. Viết văn (Gemini API)", 
+        "🤖 6. Viết văn (Ollama Local)", # TAB MỚI 2
+        "📊 7. Phân tích số liệu", 
+        "🔎 8. Kiểm tra luận văn", 
+        "🏷️ 9. Trích dẫn TLTK",
     ])
 
     # ------------------------------------------------------------
@@ -615,9 +626,15 @@ def main():
         render_offline_tab()
 
     # ------------------------------------------------------------
-    # TAB 4 – VIẾT LUẬN VĂN
+    # TAB 4 – TÓM TẮT BẰNG PYTHON (MODULE MỚI THÊM)
     # ------------------------------------------------------------
     with tabs[3]:
+        render_summarizer_tab()
+
+    # ------------------------------------------------------------
+    # TAB 5 – VIẾT LUẬN VĂN (GEMINI AI API)
+    # ------------------------------------------------------------
+    with tabs[4]:
         st.header("📝 Viết tự động bằng AI (RAG)")
         st.header("✍️ Viết luận văn dựa trên bằng chứng")
         st.warning("Đây là công cụ tạo bản nháp. Mọi citation và số liệu phải được Audit lại (đối chiếu bản gốc) trước khi đưa vào luận văn chính thức.")
@@ -719,9 +736,15 @@ def main():
         render_writing_chat()
 
     # ------------------------------------------------------------
-    # TAB 5 – DATA
+    # TAB 6 – VIẾT BẰNG OLLAMA LOCAL (MODULE MỚI THÊM)
     # ------------------------------------------------------------
-    with tabs[4]:
+    with tabs[5]:
+        render_ollama_writer_tab()
+
+    # ------------------------------------------------------------
+    # TAB 7 – PHÂN TÍCH SỐ LIỆU 
+    # ------------------------------------------------------------
+    with tabs[6]:
         st.header("📊 Phân tích số liệu bệnh án (SPSS Mini)")
         excel_file=st.file_uploader("Tải file Excel",type=["xlsx","xls"],key=ui_key("excel_uploader_tab4"))
         if excel_file is not None:
@@ -910,9 +933,9 @@ DỮ LIỆU ĐẦU VÀO:\n{final}"""
                     except Exception as exc: st.error(f"Lỗi gọi AI: {exc}")
 
     # ------------------------------------------------------------
-    # TAB 6 – AUDIT
+    # TAB 8 – AUDIT
     # ------------------------------------------------------------
-    with tabs[5]:
+    with tabs[7]:
         st.header("🔎 Audit luận văn toàn diện")
         st.markdown('<div class="warning-box">⚠️ <b>Giới hạn cần biết:</b> Công cụ chỉ báo nguy cơ.</div>',unsafe_allow_html=True)
         text=st.text_area("Dán đoạn văn cần Audit vào đây:",height=250,key=ui_key("Audit_text")); c1,c2,c3,c4,c5,c6=st.columns(6); st.write("---"); box=st.container()
@@ -974,9 +997,9 @@ DỮ LIỆU ĐẦU VÀO:\n{final}"""
                     with box: st.markdown("### ⚖️ Kết quả Phản biện\n"+str(res))
 
     # ------------------------------------------------------------
-    # TAB 7 – TLTK / METADATA
+    # TAB 9 – TLTK / METADATA
     # ------------------------------------------------------------
-    with tabs[6]:
+    with tabs[8]:
         st.header("🏷️ Tài liệu tham khảo")
         st.info("💡 Bảng dưới đây hiển thị thông tin thư mục của toàn bộ tài liệu anh đã nạp. Anh có thể nhấp đúp chuột vào từng ô để sửa thủ công.")
         docs=st.session_state.get("documents",{})
@@ -1040,7 +1063,6 @@ DỮ LIỆU ĐẦU VÀO:\n{final}"""
             st.write("---"); st.subheader("📖 Danh sách Vancouver hiện tại")
             if st.session_state.get("citation_registry"): st.code(citation_bibliography_wrapper() or "Chưa có trích dẫn.",language="text")
             else: st.info("Chưa có trích dẫn nào được sinh ra trong bản nháp.")
-
 
 if __name__ == "__main__":
     main()
