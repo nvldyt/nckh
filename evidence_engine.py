@@ -1,4 +1,4 @@
-# File: evidence_engine.py (Bản OFFLINE - Tối ưu RAM & Đồng bộ Key AQ)
+# File: evidence_engine.py (Bản OFFLINE - Tối ưu RAM & Tìm kiếm Miễn Phí)
 
 import io
 import re
@@ -6,7 +6,6 @@ import os
 import hashlib
 import concurrent.futures
 import gc  # Thêm thư viện dọn rác RAM
-from serpapi import GoogleSearch
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, List, Tuple, Optional
 from semantic_chunker import SemanticChunker
@@ -16,7 +15,7 @@ import xml.etree.ElementTree as ET
 import streamlit as st
 import fitz
 
-import key_manager # Bắt buộc gọi trái tim chứa 8 Key ở đây
+import key_manager # Bắt buộc gọi trái tim chứa Key ở đây
 
 # ============================================================
 # 1. CẤU TRÚC DỮ LIỆU BẰNG CHỨNG
@@ -125,11 +124,8 @@ def extract_pdf(uploaded_file) -> Tuple[SourceDocument, List[EvidenceChunk]]:
     chunks: List[EvidenceChunk] = []
     
     try:
-        # Thay vì truyền cứng thư viện cũ vào semantic_chunker, ta khởi tạo instance chuẩn
-        # Lưu ý: Nếu semantic_chunker của anh ở local vẫn dùng thư viện cũ, anh cũng cần cập nhật nó.
         chunker = SemanticChunker(max_chunk_size=1200, min_chunk_size=100, chunk_overlap=250)
         
-        # Dùng 'with' để tự động đóng file PDF, chống kẹt RAM
         with fitz.open(stream=data, filetype="pdf") as doc:
             for page_no in range(len(doc)):
                 page = doc[page_no]
@@ -138,7 +134,6 @@ def extract_pdf(uploaded_file) -> Tuple[SourceDocument, List[EvidenceChunk]]:
                 if not raw.strip():
                     continue
 
-                # LƯU Ý: Đảm bảo class SemanticChunker không gọi ngầm google.generativeai
                 semantic_pieces = chunker.split_by_semantics(raw)
                 
                 for idx, (piece, start, end) in enumerate(semantic_pieces, start=1):
@@ -156,32 +151,14 @@ def extract_pdf(uploaded_file) -> Tuple[SourceDocument, List[EvidenceChunk]]:
     except Exception as e:
         st.error(f"Lỗi khi đọc file {uploaded_file.name}: {str(e)}")
     finally:
-        # Ép dọn rác, thu hồi RAM ngay sau khi đọc PDF xong
         del data
         gc.collect()
 
     return source, chunks
     
 # ============================================================
-# 6. TRA CỨU API (PUBMED & VN JOURNALS)
+# 6. TRA CỨU API (PUBMED QUỐC TẾ - GIỮ NGUYÊN)
 # ============================================================
-def get_serpapi_key() -> Optional[str]:
-    """
-    Lấy API Key cho việc tìm kiếm bài báo. 
-    Ưu tiên lấy từ key_manager, nếu không có thì dùng key mặc định.
-    Gỡ bỏ hoàn toàn st.secrets để không bị lỗi màn hình.
-    """
-    # 1. Thử lấy từ module key_manager (cách làm chuẩn)
-    try:
-        key = key_manager.get_serpapi_key()
-        if key and key != "CHUA_CO_KEY":
-            return key
-    except Exception:
-        pass # Nếu file key_manager bị lỗi thì bỏ qua, xuống bước 2
-
-    # 2. Key cứng dự phòng
-    return "f99c73f0a83c6e0ec159f8583534aa2d9deabdd339c44511323b83c15c4c6704"
-
 def search_pubmed(query_en: str, max_res: int = 5) -> List[Dict[str, Any]]:
     search_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
     params = {"db": "pubmed", "term": query_en, "retmode": "json", "retmax": max_res}
@@ -272,6 +249,9 @@ def search_pubmed_multi(main_query: str, max_res_per_query: int = 3) -> List[Dic
                 
     return all_articles[:12]
 
+# ============================================================
+# 6.5 TRA CỨU API (BÁO VIỆT NAM - DÙNG DUCKDUCKGO MIỄN PHÍ)
+# ============================================================
 def _sanitize_query(raw_query: str) -> str:
     if not raw_query:
         return raw_query
@@ -290,22 +270,12 @@ def _classify_vn_source(link: str) -> str:
     if "hup.edu.vn" in lower_link: return "Đại học Dược Hà Nội"
     return "Nghiên cứu Y học Việt Nam"
 
-def _run_google_search(params: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-    try:
-        search = GoogleSearch(params)
-        results = search.get_dict()
-    except Exception as e:
-        return [], f"Lỗi kết nối SerpAPI: {str(e)}"
-
-    if "error" in results:
-        return [], f"SerpAPI báo lỗi: {results['error']}"
-
-    return results.get("organic_results", []), None
-
 def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-    api_key = get_serpapi_key()
-    if not api_key:
-        return [], "⚠️ Chưa cấu hình SerpAPI Key (Tra cứu Tạp chí VN đang bị tắt)."
+    """Tra cứu bài báo Việt Nam MIỄN PHÍ 100% KHÔNG CẦN API KEY bằng DuckDuckGo"""
+    try:
+        from duckduckgo_search import DDGS
+    except ImportError:
+        return [], "⚠️ Thiếu thư viện. Hãy thêm 'duckduckgo-search' vào file requirements.txt trên GitHub rồi khởi động lại app."
 
     query = _sanitize_query(query)
     if not query:
@@ -314,64 +284,65 @@ def search_vn_journals(query: str, max_results: int = 5) -> Tuple[List[Dict[str,
     seen_links: set = set()
     collected_results: List[Dict[str, Any]] = []
 
-    search_query = f"nghiên cứu {query} (tạp chí OR y học OR dược OR vjol OR pdf)"
-    params_main = {
-        "engine": "google",
-        "q": search_query,
-        "api_key": api_key,
-        "hl": "vi",
-        "gl": "vn",
-        "num": max_results,
-    }
-
-    organic_results, error_msg = _run_google_search(params_main)
-    if error_msg:
-        return [], error_msg
-
-    for item in organic_results:
-        link = item.get("link", "")
-        if not link or link in seen_links:
-            continue
-        seen_links.add(link)
-
-        collected_results.append({
-            "title": item.get("title", "Không có tiêu đề"),
-            "link": link,
-            "snippet": item.get("snippet", "Không có tóm tắt."),
-            "source": _classify_vn_source(link),
-            "origin": "Tạp chí VN",
-        })
-
-    if not collected_results:
-        params_fallback = {
-            "engine": "google",
-            "q": f"nghiên cứu y học {query} site:vn",
-            "api_key": api_key,
-            "hl": "vi",
-            "gl": "vn",
-            "num": max_results,
-        }
-        fb_results, fb_error = _run_google_search(params_fallback)
-
-        if not fb_error:
-            for item in fb_results:
-                link = item.get("link", "")
+    domains = st.session_state.get("vn_journal_domains", [
+        "tapchiyhocvietnam.vn", "vjol.info", "tapchinghiencuuyhoc.vn",
+        "jmp.huemed-univ.edu.vn", "jmpm.vn", "huejmp.vn",
+        "tcydls108.benhvien108.vn", "tapchiyhcd.vn", "thaibinhjmp.vn", "hup.edu.vn"
+    ])
+    
+    site_query = " OR ".join([f"site:{d}" for d in domains])
+    search_query = f"{query} {site_query}"
+    
+    error_msg = None
+    
+    try:
+        with DDGS() as ddgs:
+            ddgs_results = list(ddgs.text(search_query, region='vn-vi', max_results=max_results))
+            
+            for item in ddgs_results:
+                link = item.get("href", "")
                 if not link or link in seen_links:
                     continue
                 seen_links.add(link)
 
+                try:
+                    source_name = _classify_vn_source(link)
+                except Exception:
+                    source_name = link.split("/")[2] if "//" in link else "N/A"
+
                 collected_results.append({
                     "title": item.get("title", "Không có tiêu đề"),
                     "link": link,
-                    "snippet": item.get("snippet", "Không có tóm tắt."),
-                    "source": "Google / VN Research (mở rộng)",
+                    "snippet": item.get("body", "Không có tóm tắt."),
+                    "source": source_name,
                     "origin": "Tạp chí VN",
                 })
-
-    if not collected_results:
-        return [], "Không tìm thấy bài báo tiếng Việt phù hợp. Bạn có thể thử đổi tên đề tài ngắn gọn hơn."
-
-    return collected_results, None
+                
+        if not collected_results:
+            # Nếu tìm trong các tạp chí Y khoa không có, tìm rộng ra toàn Việt Nam (site:vn)
+            fallback_query = f"{query} nghiên cứu y học site:vn"
+            with DDGS() as ddgs:
+                fb_results = list(ddgs.text(fallback_query, region='vn-vi', max_results=max_results))
+                for item in fb_results:
+                    link = item.get("href", "")
+                    if not link or link in seen_links:
+                        continue
+                    seen_links.add(link)
+                    collected_results.append({
+                        "title": item.get("title", "Không có tiêu đề"),
+                        "link": link,
+                        "snippet": item.get("body", "Không có tóm tắt."),
+                        "source": "Google / VN Research (mở rộng)",
+                        "origin": "Tạp chí VN",
+                    })
+                    
+        if not collected_results:
+            error_msg = "Không tìm thấy bài báo tiếng Việt phù hợp. Bạn có thể thử đổi tên đề tài ngắn gọn hơn."
+            
+    except Exception as e:
+        error_msg = f"⚠️ Máy chủ tìm kiếm báo Việt Nam quá tải hoặc lỗi kết nối: {e}"
+        
+    return collected_results, error_msg
 
 # ============================================================
 # 7. INGESTION TỪ API VÀO DATABASE
