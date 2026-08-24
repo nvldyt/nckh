@@ -10,8 +10,9 @@ MY_KEYS = [
     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"
 ]
 
-# 2. Key SerpAPI
-SERP_KEY = "32606a6973dc631a08a0ee52a30070edd58613b0cc5cb949d8efef740c7bf949"
+SERP_KEYS = [
+    "2a58c98ff036322c9c40f0154599496b7af2d78a3dd0d1eab0383e479d255cd8",
+]
 
 @st.cache_resource
 def get_key_cycler():
