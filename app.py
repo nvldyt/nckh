@@ -521,64 +521,65 @@ def main():
     # TAB 1 - Tra cứu TLTK
     # ------------------------------------------------------------
     with tabs[0]:
-        st.header("🔍 Tra cứu TLTK: PubMed + Bài báo khoa học")
-        st.info("Nhập tên đề tài bằng tiếng Việt. Hệ thống tự dịch sang từ khoá MeSH để tìm trên PubMed, đồng thời tìm bài báo tiếng Việt liên quan.")
+        st.header("🔍 Tra cứu TLTK: PubMed (Quốc tế)")
+        st.info("Nhập tên đề tài bằng tiếng Việt. Hệ thống tự dịch sang từ khoá MeSH để tra cứu tài liệu y khoa chuẩn quốc tế trên PubMed.")
         render_evidence_database_status()
-        cs,cb=st.columns([4,1])
-        with cs: t3_query=st.text_input("Tên đề tài nghiên cứu (tiếng Việt):",key=ui_key("t3_query_input"))
-        with cb: max_res=st.number_input("Số bài/nguồn",min_value=2,max_value=10,value=5,key=ui_key("t3_max_res"))
-        if st.button("🚀 Tra cứu TLTK",type="primary",key=ui_key("t3_btn_search")):
-            if not t3_query.strip(): st.warning("Vui lòng nhập tên đề tài nghiên cứu!")
+        
+        cs, cb = st.columns([4, 1])
+        with cs: 
+            t3_query = st.text_input("Tên đề tài nghiên cứu (tiếng Việt):", key=ui_key("t3_query_input"))
+        with cb: 
+            # ĐÃ MỞ KHÓA: cho phép lấy tối đa 50 bài, mặc định là 20
+            max_res = st.number_input("Số bài/nguồn", min_value=2, max_value=50, value=20, key=ui_key("t3_max_res"))
+            
+        if st.button("🚀 Tra cứu TLTK", type="primary", key=ui_key("t3_btn_search")):
+            if not t3_query.strip(): 
+                st.warning("Vui lòng nhập tên đề tài nghiên cứu!")
             else:
-                st.session_state["t3_query"]=t3_query
+                st.session_state["t3_query"] = t3_query
                 with st.spinner("Đang dịch & chuẩn hoá từ khoá sang MeSH (PubMed)..."):
-                    en_query=translate_query_to_mesh(t3_query); st.session_state["t3_en_keyword"]=en_query
-                with st.spinner("Đang tìm & tải Abstract từ PubMed..."):
-                    st.session_state["t3_pm_data"]=search_pubmed(normalize_pubmed_query(en_query,t3_query),max_res)
-                with st.spinner("Đang rút gọn từ khóa & tìm trên tạp chí Y học Việt Nam..."):
-                    st.session_state["t3_vn_keyword"]=t3_query
-                    vn_results,vn_err=search_vn_journals(t3_query,max_res)
-                    st.session_state["t3_vn_data"]=vn_results
-                    if vn_err: st.warning(vn_err)
-        if st.session_state.get("t3_pm_data") or st.session_state.get("t3_vn_data"):
-            st.write("---"); cv,cp=st.columns(2)
-            with cv:
-                st.markdown("### 🇻🇳 Tạp chí Y học Việt Nam")
-                if st.session_state.get("t3_vn_keyword"): st.success(f"🔑 Từ khoá đã rút gọn: **{st.session_state['t3_vn_keyword']}**")
-                for i,art in enumerate(st.session_state.get("t3_vn_data",[])):
-                    with st.container(border=True):
-                        if art.get("link"): st.markdown(f"**[{art.get('title','')}]({art['link']})**")
-                        else: st.markdown(f"**{art.get('title','')}**")
-                        st.caption(art.get("source","")); st.write(art.get("snippet",""))
-                        if st.button("➕ Nạp vào Evidence Database",key=ui_key(f"vn_ingest_{i}")):
-                            try:
-                                if ingest_vn_article(art): rebuild_index(); st.success("Đã nạp. Nhớ Audit bản gốc trước khi dùng số liệu chi tiết."); st.rerun()
-                                else: st.info("Nguồn này đã có trong Evidence Database.")
-                            except Exception as exc: st.error(f"❌ Lỗi nạp nguồn: {exc}")
-            with cp:
-                st.markdown("### 🌍 PubMed (Quốc tế)")
-                if st.session_state.get("t3_en_keyword"): st.success(f"🔑 Từ khoá MeSH: **{st.session_state['t3_en_keyword']}**")
-                for i,art in enumerate(st.session_state.get("t3_pm_data",[])):
-                    with st.container(border=True):
-                        st.markdown(f"**[{art.get('title','')}]({art.get('url','#')})**")
-                        st.caption(f"✍️ {art.get('authors','')} ({art.get('year','')}) — {art.get('journal','')}")
-                        with st.expander("Xem tóm tắt (Abstract)"): st.write(art.get("abstract",""))
-                        if st.button("➕ Nạp vào Evidence Database",key=ui_key(f"pm_ingest_{i}")):
-                            try:
-                                if ingest_pubmed_article(art): rebuild_index(); st.success("Đã nạp vào Evidence Database."); st.rerun()
-                                else: st.info("Nguồn này đã có trong Evidence Database.")
-                            except Exception as exc: st.error(f"❌ Lỗi nạp nguồn: {exc}")
+                    en_query = translate_query_to_mesh(t3_query)
+                    st.session_state["t3_en_keyword"] = en_query
+                    
+                with st.spinner(f"Đang tìm & tải {max_res} Abstract từ PubMed..."):
+                    st.session_state["t3_pm_data"] = search_pubmed(normalize_pubmed_query(en_query, t3_query), max_res)
+                    
+        # HIỂN THỊ KẾT QUẢ PUBMED
+        if st.session_state.get("t3_pm_data"):
             st.write("---")
-            if st.button("➕ Nạp TẤT CẢ kết quả ở trên vào Evidence Database",key=ui_key("t3_ingest_all")):
-                count=0
+            st.markdown("### 🌍 Kết quả tra cứu PubMed")
+            if st.session_state.get("t3_en_keyword"): 
+                st.success(f"🔑 Từ khoá MeSH: **{st.session_state['t3_en_keyword']}**")
+                
+            for i, art in enumerate(st.session_state.get("t3_pm_data", [])):
+                with st.container(border=True):
+                    st.markdown(f"**[{art.get('title', '')}]({art.get('url', '#')})**")
+                    st.caption(f"✍️ {art.get('authors', '')} ({art.get('year', '')}) — {art.get('journal', '')}")
+                    with st.expander("Xem tóm tắt (Abstract)"): 
+                        st.write(art.get("abstract", ""))
+                        
+                    if st.button("➕ Nạp vào Evidence Database", key=ui_key(f"pm_ingest_{i}")):
+                        try:
+                            if ingest_pubmed_article(art): 
+                                rebuild_index()
+                                st.success("Đã nạp vào Evidence Database.")
+                                st.rerun()
+                            else: 
+                                st.info("Nguồn này đã có trong Evidence Database.")
+                        except Exception as exc: 
+                            st.error(f"❌ Lỗi nạp nguồn: {exc}")
+                            
+            st.write("---")
+            if st.button("➕ Nạp TẤT CẢ kết quả ở trên vào Evidence Database", key=ui_key("t3_ingest_all")):
+                count = 0
                 with st.spinner("Đang nạp tất cả nguồn và cập nhật index..."):
-                    for art in st.session_state.get("t3_pm_data",[]):
-                        try: count += 1 if ingest_pubmed_article(art) else 0
-                        except Exception: pass
-                    for art in st.session_state.get("t3_vn_data",[]):
-                        try: count += 1 if ingest_vn_article(art) else 0
-                        except Exception: pass
-                    if count: rebuild_index()
+                    for art in st.session_state.get("t3_pm_data", []):
+                        try: 
+                            count += 1 if ingest_pubmed_article(art) else 0
+                        except Exception: 
+                            pass
+                    if count: 
+                        rebuild_index()
                 st.success(f"Đã nạp {count} nguồn mới vào Evidence Database.")
 
     # ------------------------------------------------------------
