@@ -489,7 +489,7 @@ def restore_project(data: dict):
 def main():
     init_state()
     st.title("🔬 HỖ TRỢ NGHIÊN CỨU KHOA HỌC")
-    st.caption("Evidence-Based RAG • Tra cứu TLTK • Citation Registry • Statistical Engine • Audit")
+    st.caption("Evidence-Based RAG • PubMed • Citation Registry • Statistical Engine • Audit")
 
     with st.sidebar:
         st.header("⚙️ Quản lý dự án")
@@ -506,7 +506,7 @@ def main():
                 st.error(f"❌ Lỗi: {exc}")
     
     tabs = st.tabs([
-        "🔍 1. Tra cứu TLTK", 
+        "🔍 1. PubMed", 
         "📑 2. Tài liệu",
         "🛠️ 3. Tổng hợp", 
         "⚡ 4. Tóm tắt",
@@ -518,10 +518,10 @@ def main():
     ])
 
     # ------------------------------------------------------------
-    # TAB 1 - Tra cứu TLTK
+    # TAB 1 - PubMed
     # ------------------------------------------------------------
     with tabs[0]:
-        st.header("🔍 Tra cứu TLTK: PubMed (Quốc tế)")
+        st.header("🔍 PubMed")
         st.info("Nhập tên đề tài bằng tiếng Việt. Hệ thống tự dịch sang từ khoá MeSH để tra cứu tài liệu y khoa chuẩn quốc tế trên PubMed.")
         render_evidence_database_status()
         
@@ -532,7 +532,7 @@ def main():
             # ĐÃ MỞ KHÓA: cho phép lấy tối đa 50 bài, mặc định là 20
             max_res = st.number_input("Số bài/nguồn", min_value=2, max_value=50, value=20, key=ui_key("t3_max_res"))
             
-        if st.button("🚀 Tra cứu TLTK", type="primary", key=ui_key("t3_btn_search")):
+        if st.button("🚀 PubMed", type="primary", key=ui_key("t3_btn_search")):
             if not t3_query.strip(): 
                 st.warning("Vui lòng nhập tên đề tài nghiên cứu!")
             else:
