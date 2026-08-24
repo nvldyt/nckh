@@ -56,6 +56,7 @@ from offline_writing import render_offline_tab
 # --- IMPORT 2 MODULE MỚI ---
 from summarizer_engine import render_summarizer_tab
 from ollama_writer_engine import render_ollama_writer_tab
+from medical_stats_engine import generate_table_one
 
 
 # ============================================================
@@ -963,6 +964,65 @@ def main():
                 with t4:
                     st.markdown(st.session_state["assembled_ch4"]); d4=create_word_document("Chương 4: Bàn luận",st.session_state["assembled_ch4"],citation_bibliography_wrapper()); st.download_button("📥 Tải Chương 4 ra file Word (kèm TLTK)",data=d4,file_name="Chuong_4_Ban_luan.docx",mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",key=ui_key("dl_ch4"))
 
+            # ... (Phần code Auto-Assembler của anh ở trên giữ nguyên) ...
+            if st.session_state.get("assembled_ch3") and st.session_state.get("assembled_ch4"):
+                t3,t4=st.tabs(["📄 Chương 3: Kết quả","📄 Chương 4: Bàn luận"])
+                with t3:
+                    st.markdown(st.session_state["assembled_ch3"]); d3=create_word_document("Chương 3: Kết quả nghiên cứu",st.session_state["assembled_ch3"]); st.download_button("📥 Tải Chương 3 ra file Word",data=d3,file_name="Chuong_3_Ket_qua.docx",mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",key=ui_key("dl_ch3"))
+                with t4:
+                    st.markdown(st.session_state["assembled_ch4"]); d4=create_word_document("Chương 4: Bàn luận",st.session_state["assembled_ch4"],citation_bibliography_wrapper()); st.download_button("📥 Tải Chương 4 ra file Word (kèm TLTK)",data=d4,file_name="Chuong_4_Ban_luan.docx",mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",key=ui_key("dl_ch4"))
+
+            # =====================================================================
+            # CHÈN MODULE BẢNG 1 VÀO ĐÂY (NGAY TRƯỚC PHẦN THỐNG KÊ MÔ TẢ LẺ)
+            # =====================================================================
+            st.write("---")
+            st.subheader("⭐ ĐẶC BIỆT: Tự động lập Bảng 1 (Đặc điểm đối tượng nghiên cứu)")
+            st.info("💡 Bảng sẽ tự động tính n (%), Mean ± SD cho biến chuẩn và Median (IQR) cho biến không chuẩn.")
+            
+            all_cols = df.columns.tolist()
+            c1, c2 = st.columns(2)
+            with c1:
+                columns_to_show = st.multiselect("📍 Chọn các biến số cần đưa vào Bảng 1:", options=all_cols, key=ui_key("t1_cols"))
+                categorical_vars = st.multiselect("🏷️ Chọn biến Định tính (Tính n, %):", options=columns_to_show, key=ui_key("t1_cats"))
+            with c2:
+                non_normal_vars = st.multiselect("📉 Chọn biến Định lượng phân bố KHÔNG chuẩn (Tính Median, IQR):", options=[c for c in columns_to_show if c not in categorical_vars], key=ui_key("t1_nonnorm"))
+                groupby_var = st.selectbox("✂️ Biến chia nhóm (Tùy chọn tính p-value):", options=["Không chia nhóm"] + all_cols, key=ui_key("t1_group"))
+            
+            if st.button("🚀 Trích xuất Bảng 1 (Tự động nạp vào Giỏ)", type="primary", key=ui_key("btn_table_one")):
+                if not columns_to_show: 
+                    st.warning("⚠️ Vui lòng chọn ít nhất 1 biến số để hiển thị!")
+                else:
+                    with st.spinner("Đang chạy thuật toán thống kê y khoa..."):
+                        try:
+                            from medical_stats_engine import generate_table_one
+                            actual_groupby = None if groupby_var == "Không chia nhóm" else groupby_var
+                            
+                            # Gọi hàm tạo bảng
+                            html_table = generate_table_one(
+                                df=df, columns=columns_to_show, categorical=categorical_vars,
+                                groupby=actual_groupby, nonnormal=non_normal_vars
+                            )
+                            
+                            # Hiển thị ra màn hình
+                            st.markdown(f"<div style='background-color: white; padding: 15px; border-radius: 8px; color: black; overflow-x: auto;'>{html_table}</div>", unsafe_allow_html=True)
+                            
+                            # Nạp vào Giỏ kết quả (Lưu dưới dạng DataFrame đọc từ HTML để AI xử lý được)
+                            parsed_df = pd.read_html(html_table)[0] 
+                            rid = "TABLE_1_BASELINE"
+                            st.session_state["saved_tables"][rid] = parsed_df
+                            upsert_candidate(rid, "Đặc điểm chung của đối tượng nghiên cứu (Bảng 1)", "baseline", columns_to_show, 5.0, 5.0, 5.0)
+                            
+                            st.success("✅ Đã khởi tạo và nạp Bảng 1 vào Giỏ kết quả thành công!")
+                        except Exception as e:
+                            st.error(f"⚠️ Lỗi phân tích: {e}")
+
+            # =====================================================================
+            # PHẦN CODE CŨ CỦA ANH TIẾP TỤC Ở ĐÂY
+            # =====================================================================
+            st.write("---"); st.subheader("1. Thống kê mô tả (biến phân loại)")
+            desc_vars=st.multiselect("Chọn biến phân loại",all_cols,key=ui_key("desc_vars"))
+            # ... (Các phần từ mục 1 đến mục 8 của anh giữ nguyên không đổi) ...
+            
             st.write("---"); st.subheader("1. Thống kê mô tả (biến phân loại)"); all_cols=df.columns.tolist(); desc_vars=st.multiselect("Chọn biến phân loại",all_cols,key=ui_key("desc_vars"))
             if st.button("Tính tần số và tỷ lệ (Tự động nạp vào Giỏ)",key=ui_key("calc_desc")):
                 if not desc_vars: st.warning("Vui lòng chọn ít nhất 1 biến.")
