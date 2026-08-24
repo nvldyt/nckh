@@ -9,10 +9,10 @@ from typing import List, Dict, Any, Tuple, Optional
 import key_manager 
 
 # ============================================================
-# CẤU HÌNH MODEL GROQ CHUẨN XÁC
+# CẤU HÌNH MODEL GROQ ỔN ĐỊNH TUYỆT ĐỐI
 # ============================================================
-DEFAULT_MODEL = "llama-3.3-70b-versatile"
-MODEL_LITE = "llama-3.1-8b-instant"
+DEFAULT_MODEL = "llama3-70b-8192"
+MODEL_LITE = "llama3-8b-8192"
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 BASE_SYSTEM_RULES = """
