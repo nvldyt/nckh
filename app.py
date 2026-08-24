@@ -45,9 +45,11 @@ from retrieval_engine import (
     build_bm25_index, build_embedding_index,
     update_embedding_index, retrieve_evidence,
 )
+
+# SỬA LẠI ĐOẠN NÀY: Chỉ gọi những hàm/biến thực sự tồn tại trong writing_engine
 from writing_engine import (
     call_gemini, generate_evidence_based,
-    BASE_SYSTEM_RULES, MODEL_LITE, DEFAULT_MODEL,
+    BASE_SYSTEM_RULES, MODEL_LITE, DEFAULT_MODEL
 )
 from synthesis_engine import build_literature_matrix
 from chapter_assembler_engine import assemble_results_and_discussion_chapter
