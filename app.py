@@ -109,7 +109,7 @@ def init_state():
         "assembled_ch3": "", "assembled_ch4": "",
         "excel_data": None, "excel_df": None, "clean_logs": [],
         "ai_pending_remark": "",
-        "cached_summary": "", # Đã bổ sung biến lưu tóm tắt Offline
+        "cached_summary": "",
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -286,7 +286,7 @@ def add_pdf_documents(uploaded_files) -> Tuple[int, int, List[str]]:
                             for k, v in meta.items():
                                 if v:
                                     st.session_state["documents"][sid][k] = v
-            gc.collect()
+                    gc.collect()
         except Exception as exc:
             errors.append(f"{getattr(uploaded_file,'name','PDF')}: {exc}")
             gc.collect()
@@ -453,7 +453,7 @@ def project_payload() -> dict:
         "assembled_ch3": st.session_state.get("assembled_ch3", ""),
         "assembled_ch4": st.session_state.get("assembled_ch4", ""),
         "vn_journal_domains": st.session_state.get("vn_journal_domains", list(DEFAULT_VN_JOURNAL_DOMAINS)),
-        "cached_summary": st.session_state.get("cached_summary", ""), # Đã bổ sung biến
+        "cached_summary": st.session_state.get("cached_summary", ""),
     }
 
 
@@ -467,7 +467,7 @@ def restore_project(data: dict):
     st.session_state["assembled_ch3"] = data.get("assembled_ch3", "")
     st.session_state["assembled_ch4"] = data.get("assembled_ch4", "")
     st.session_state["vn_journal_domains"] = data.get("vn_journal_domains", list(DEFAULT_VN_JOURNAL_DOMAINS))
-    st.session_state["cached_summary"] = data.get("cached_summary", "") # Khôi phục biến
+    st.session_state["cached_summary"] = data.get("cached_summary", "")
     st.session_state["result_cart"] = []
     for item in data.get("result_cart", []):
         if isinstance(item, dict):
@@ -505,7 +505,6 @@ def main():
             except Exception as exc:
                 st.error(f"❌ Lỗi: {exc}")
     
-    # Đã cấu hình lên 9 Tabs (Chèn thêm Tab Tóm tắt Python và Tab Ollama Local)
     tabs = st.tabs([
         "🔍 1. Tra cứu TLTK", 
         "📑 2. Tài liệu (PDF)",
@@ -632,7 +631,7 @@ def main():
         render_summarizer_tab()
 
     # ------------------------------------------------------------
-    # TAB 5 – VIẾT LUẬN VĂN (GEMINI AI API)
+    # TAB 5 – VIẾT LUẬN VĂN (GEMINI API)
     # ------------------------------------------------------------
     with tabs[4]:
         st.header("📝 Viết tự động bằng AI (RAG)")
@@ -811,7 +810,6 @@ def main():
                 with t4:
                     st.markdown(st.session_state["assembled_ch4"]); d4=create_word_document("Chương 4: Bàn luận",st.session_state["assembled_ch4"],citation_bibliography_wrapper()); st.download_button("📥 Tải Chương 4 ra file Word (kèm TLTK)",data=d4,file_name="Chuong_4_Ban_luan.docx",mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",key=ui_key("dl_ch4"))
 
-            # 1. mô tả
             st.write("---"); st.subheader("1. Thống kê mô tả (biến phân loại)"); all_cols=df.columns.tolist(); desc_vars=st.multiselect("Chọn biến phân loại",all_cols,key=ui_key("desc_vars"))
             if st.button("Tính tần số và tỷ lệ (Tự động nạp vào Giỏ)",key=ui_key("calc_desc")):
                 if not desc_vars: st.warning("Vui lòng chọn ít nhất 1 biến.")
@@ -825,7 +823,6 @@ def main():
                         except Exception as exc: st.error(f"⚠️ Không thể phân tích [{var}]: {exc}")
                     st.success(f"✅ Đã nạp {n} bảng mô tả vào Giỏ!")
 
-            # 2. numeric
             st.write("---"); st.subheader("2. Biến định lượng — Mô tả"); numeric_candidates=[c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
             if numeric_candidates:
                 num_vars=st.multiselect("Chọn biến định lượng",numeric_candidates,key=ui_key("num_vars"))
@@ -841,7 +838,6 @@ def main():
                             except Exception as exc: st.error(f"⚠️ Không thể tính [{var}]: {exc}")
                         st.success(f"✅ Đã nạp {n} bảng định lượng vào Giỏ!")
 
-            # 3. crosstab
             st.write("---"); st.subheader("3. Bảng chéo và kiểm định (Chi-square / Fisher / OR / CI95)"); a,b=st.columns(2)
             with a:
                 all_d=st.checkbox("✅ Chọn tất cả biến phụ thuộc",key=ui_key("chk_all_deps")); dkey=ui_key("cross_deps_all") if all_d else ui_key("cross_deps_manual"); deps=st.multiselect("Các biến phụ thuộc",all_cols,default=all_cols if all_d else [],key=dkey)
@@ -864,7 +860,6 @@ def main():
                                 except Exception as exc: st.error(f"⚠️ Lỗi phân tích chéo [{indep} & {dep}]: {exc}")
                     st.success(f"✅ Đã phân tích và nạp {done} bảng kiểm định vào Giỏ!"); gc.collect()
 
-            # 4. compare
             st.write("---"); st.subheader("4. So sánh biến định lượng giữa 2 nhóm (T-test / Mann-Whitney)"); a,b=st.columns(2)
             with a:
                 sag=st.checkbox("✅ Chọn tất cả biến nhóm",key=ui_key("chk_all_groups")); gkey=ui_key("group_vars_all") if sag else ui_key("group_vars_manual"); groups=st.multiselect("Biến nhóm (Tự lọc biến 2 mức)",all_cols,default=all_cols if sag else [],key=gkey)
@@ -886,7 +881,6 @@ def main():
                                 except Exception as exc: st.error(f"⚠️ Lỗi so sánh [{gv} & {vv}]: {exc}")
                     st.success(f"✅ Đã nạp {done} kết quả so sánh vào Giỏ!"); gc.collect()
 
-            # 5 logistic
             st.write("---"); st.subheader("5. Hồi quy logistic nhị phân (OR và 95% CI)"); outcomes_all=[c for c in all_cols if df[c].dropna().nunique()==2]; forbidden=["unnamed","ngay","ngày","ten","tên","ma","mã","sobenhan","id"]; predictors_all=[c for c in all_cols if not any(k in str(c).lower() for k in forbidden) and df[c].dropna().nunique()>1]
             a,b=st.columns([1,2])
             with a:
@@ -907,7 +901,6 @@ def main():
                             except Exception as exc: st.error(f"⚠️ Không thể xây dựng mô hình cho [{out}]: {exc}")
                     st.success(f"✅ Đã nạp {done} mô hình hồi quy vào Giỏ!"); gc.collect()
 
-            # 8 AI
             st.write("---"); st.subheader("8. Diễn giải kết quả bằng AI (Nhận xét bảng chuẩn khoa học)"); st.info("💡 Anh có thể chọn một bảng riêng lẻ hoặc chọn **'🌟 Chọn TẤT CẢ các bảng trong Giỏ'** để AI tổng hợp nhận xét toàn bộ số liệu.")
             saved=st.session_state.get("saved_tables",{}); options=["-- Chỉ dùng số liệu dán tay bên dưới --","🌟 Chọn TẤT CẢ các bảng trong Giỏ"]+list(saved.keys()); choice=st.selectbox("Lựa chọn bảng hoặc nguồn dữ liệu:",options,key=ui_key("select_ai_table")); extra=st.text_area("Số liệu bổ bổ sung hoặc yêu cầu cụ thể (nếu có):",height=100,key=ui_key("interpretation_request"))
             if st.button("🤖 AI Viết Nhận Xét Bảng",type="primary",key=ui_key("ai_interpret")):
