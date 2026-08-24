@@ -1004,15 +1004,29 @@ def main():
                             )
                             
                             # Hiển thị ra màn hình
-                            st.markdown(f"<div style='background-color: white; padding: 15px; border-radius: 8px; color: black; overflow-x: auto;'>{html_table}</div>", unsafe_allow_html=True)
+                            st.markdown(
+                                f"<div style='background-color: white; padding: 15px; border-radius: 8px; color: black; overflow-x: auto;'>{html_table}</div>", 
+                                unsafe_allow_html=True
+                            )
                             
-                            # Nạp vào Giỏ kết quả (Lưu dưới dạng DataFrame đọc từ HTML để AI xử lý được)
-                            parsed_df = pd.read_html(html_table)[0] 
+                            # Nạp vào Giỏ kết quả (Sử dụng io.StringIO để đọc chuỗi HTML an toàn)
+                            import io
+                            parsed_df = pd.read_html(io.StringIO(html_table))[0] 
+                            
                             rid = "TABLE_1_BASELINE"
                             st.session_state["saved_tables"][rid] = parsed_df
-                            upsert_candidate(rid, "Đặc điểm chung của đối tượng nghiên cứu (Bảng 1)", "baseline", columns_to_show, 5.0, 5.0, 5.0)
+                            upsert_candidate(
+                                rid, 
+                                "Đặc điểm chung của đối tượng nghiên cứu (Bảng 1)", 
+                                "baseline", 
+                                columns_to_show, 
+                                5.0, 
+                                5.0, 
+                                5.0
+                            )
                             
                             st.success("✅ Đã khởi tạo và nạp Bảng 1 vào Giỏ kết quả thành công!")
+                            
                         except Exception as e:
                             st.error(f"⚠️ Lỗi phân tích: {e}")
 
