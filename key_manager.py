@@ -5,7 +5,7 @@ import streamlit as st
 
 # 1. Danh sách 8 Key Gemini
 MY_KEYS = [
-    "AQ.Ab8RN6K3v_2siDbdNB2ke8-9JVID8bTq8yNGjQhJuyHtrJ88bA"
+    "AQ.Ab8RN6J9Ebk6H2rHBFpkSdSBOPXrcZ3TBjkiEX6x-GOnXLII9g"
 ]
 
 # 2. Key SerpAPI
