@@ -16,37 +16,46 @@ def generate_table_one(
 ) -> str:
     """
     SKILL 05 & 09: Xây dựng Bảng Đặc điểm đối tượng (Table 1).
-    Tự động tính n (%), Mean ± SD (phân bố chuẩn) hoặc Median (IQR) (phân bố không chuẩn).
-    Tự động tắt p-value nếu không chia nhóm.
+    Bao gồm cơ chế Safe-cast để chống crash khi người dùng nhầm lẫn biến định lượng vào định tính.
     """
+    import numpy as np
+    
     if df.empty or not columns:
         raise ValueError("Dữ liệu trống hoặc chưa chọn biến số.")
         
-    # Đảm bảo các biến định tính được định dạng đúng là string/category
-    for cat in categorical:
-        if cat in df.columns:
-            df[cat] = df[cat].astype(str)
+    # TẠO BẢN SAO ĐỂ BẢO VỆ DỮ LIỆU GỐC
+    df_temp = df.copy()
 
-    # THUẬT TOÁN THÔNG MINH: Chỉ tính p-value nếu có biến chia nhóm thực sự
+    # ÉP KIỂU AN TOÀN CHO BIẾN ĐỊNH TÍNH (Chống lỗi Invalid value for dtype 'str')
+    for cat in categorical:
+        if cat in df_temp.columns:
+            # Đưa về dạng object linh hoạt, sau đó biến đổi thành chữ, giữ nguyên NaN
+            df_temp[cat] = df_temp[cat].astype(object)
+            df_temp[cat] = df_temp[cat].apply(lambda x: str(x) if pd.notnull(x) else np.nan)
+            
+    # Xử lý tương tự cho biến chia nhóm (để đảm bảo làm tiêu đề cột không bị lỗi)
+    if groupby and groupby in df_temp.columns:
+        df_temp[groupby] = df_temp[groupby].astype(object)
+        df_temp[groupby] = df_temp[groupby].apply(lambda x: str(x) if pd.notnull(x) else np.nan)
+
+    # Chỉ tính p-value nếu có biến chia nhóm thực sự
     auto_pval = True if groupby else False
 
     try:
         mytable = TableOne(
-            df, 
+            df_temp, 
             columns=columns, 
             categorical=categorical, 
             groupby=groupby, 
             nonnormal=nonnormal, 
-            pval=auto_pval, # Áp dụng luật tự động ở đây
+            pval=auto_pval,
             missing=False,
             decimals={"continuous": 2, "categorical": 1}
         )
         return mytable.table_html
     except Exception as e:
-        # Báo lỗi thẳng ra ngoài để giao diện Streamlit bắt được, không trả về chuỗi text
-        raise ValueError(f"Lỗi từ hệ thống TableOne: {str(e)}")
-
-
+        raise ValueError(f"Lỗi hệ thống TableOne: {str(e)}")
+        
 def run_advanced_comparison(
     df: pd.DataFrame, 
     target_col: str, 
