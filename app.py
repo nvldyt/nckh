@@ -720,6 +720,7 @@ def main():
             return clean_text
         
         import re
+        import re
 
         def run_quick_task(label, query, task, k):
             with st.spinner(f"AI đang soạn: {label}..."): 
@@ -730,25 +731,27 @@ def main():
                 return
             
             # ==============================================================
-            # BỘ LỌC ÉP BUỘC ĐÁNH SỐ & ĐỒNG BỘ TAB 9 (KHẮC PHỤC LỖI TẬN GỐC)
+            # BỘ LỌC ĐÁNH SỐ TỐI THƯỢNG (Bắt được mọi loại dấu gạch ngang của AI)
             # ==============================================================
-            # 1. Quét tìm tất cả các mã [REF-SRC-XXX] hoặc SRC-XXX
-            pattern = r'\[?\s*(?:REF-)?(SRC-[A-Z0-9]+)\s*\]?'
             citation_mapping = {}
             current_index = 1
             
             def replacer(match):
                 nonlocal current_index
-                ref_id = match.group(1).strip()
-                if ref_id not in citation_mapping:
-                    citation_mapping[ref_id] = current_index
-                    current_index += 1
-                return f"[{citation_mapping[ref_id]}]"
+                # Lấy phần mã băm (ví dụ: 3FD1BE479E) bất chấp dấu gạch ngang phía trước
+                hash_code = match.group(1) or match.group(2)
+                core_id = f"SRC-{hash_code.upper()}"
                 
-            # 2. Ép thay thế toàn bộ mã văn bản thành [1], [2], [3]
-            clean_out = re.sub(pattern, replacer, out)
+                if core_id not in citation_mapping:
+                    citation_mapping[core_id] = current_index
+                    current_index += 1
+                return f"[{citation_mapping[core_id]}]"
+                
+            # Regex siêu mạnh: Bắt mọi cụm có chữ SRC, không quan tâm AI chế ra dấu gạch gì
+            pattern = r'(?:\[[^\[\]\n]*SRC[^a-zA-Z0-9]?([a-zA-Z0-9]+)[^\[\]\n]*\])|(?:SRC[^a-zA-Z0-9]?([a-zA-Z0-9]+))'
+            clean_out = re.sub(pattern, replacer, out, flags=re.IGNORECASE)
             
-            # 3. Đồng bộ danh sách chuẩn vào bộ nhớ hệ thống (để Tab 9 nhận diện)
+            # Đồng bộ danh sách chuẩn vào bộ nhớ hệ thống (ĐỂ TAB 9 NHẬN DIỆN ĐƯỢC)
             new_refs = []
             docs = st.session_state.get("documents", {})
             for ref_id, idx in citation_mapping.items():
@@ -760,13 +763,13 @@ def main():
             
             st.session_state["current_references"] = new_refs
             st.session_state["citation_registry"] = citation_mapping
-            st.session_state["last_generated"] = clean_out # Lưu bản sạch để xuất Word
+            st.session_state["last_generated"] = clean_out
             # ==============================================================
 
             with result_box:
                 st.write("---")
                 st.subheader(label)
-                # In ra bản đã được làm sạch (clean_out) thay vì out gốc
+                # In ra bản văn bản ĐÃ ĐƯỢC ÉP SỐ THỨ TỰ (clean_out)
                 st.markdown(clean_out) 
                 
                 st.markdown("### 🔎 Dấu vết bằng chứng (Evidence Trace)")
