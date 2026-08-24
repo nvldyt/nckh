@@ -2,26 +2,24 @@ import os
 import time
 import gc
 import io
+import requests
 import streamlit as st
 from typing import List, Dict, Any, Tuple, Optional
-
-# SỬ DỤNG SDK CHÍNH THỨC MỚI CỦA GOOGLE
-from google import genai
-from google.genai import types
 
 import key_manager 
 
 # ============================================================
-# CẤU HÌNH MODEL MẶC ĐỊNH
+# CẤU HÌNH MODEL GROQ (Sử dụng Llama 3.3 70B viết y khoa cực đỉnh)
 # ============================================================
-DEFAULT_MODEL = "gemini-2.5-flash"  # Sử dụng model ổn định với SDK mới
-MODEL_LITE = "gemini-2.5-flash-lite" 
+DEFAULT_MODEL = "llama-3.3-70b-versatile"
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 # ============================================================
-# 1. HÀM GỌI GEMINI DÙNG SDK CHÍNH THỨC
+# 1. HÀM GỌI AI THÔNG QUA GROQ API
 # ============================================================
 
 def call_gemini(prompt: str, model: str = None, temperature: float = 0.3, max_retries: int = 3) -> str:
+    """Hàm gọi AI sử dụng Groq API (giữ nguyên tên hàm để không ảnh hưởng các Tab khác)"""
     model_name = model if model else DEFAULT_MODEL
     
     for attempt in range(max_retries):
@@ -31,43 +29,45 @@ def call_gemini(prompt: str, model: str = None, temperature: float = 0.3, max_re
                 st.error("❌ Không tìm thấy API Key nào trong hệ thống!")
                 return None
             
-            # Khởi tạo client trực tiếp bằng SDK chính thức của Google
-            client = genai.Client(api_key=api_key)
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
             
-            # Cấu hình tham số sinh văn bản
-            config = types.GenerateContentConfig(
-                temperature=temperature,
-                safety_settings=[
-                    types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
-                    types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
-                    types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
-                    types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
-                ]
-            )
+            payload = {
+                "model": model_name,
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": temperature
+            }
             
-            response = client.models.generate_content(
-                model=model_name,
-                contents=prompt,
-                config=config
-            )
+            response = requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=60)
+            res_data = response.json()
             
-            if response and response.text:
-                return response.text.strip()
+            if response.status_code == 200:
+                try:
+                    return res_data["choices"][0]["message"]["content"].strip()
+                except (KeyError, IndexError):
+                    st.warning("⚠️ Nhận được phản hồi nhưng định dạng không đúng.")
+                    return None
             else:
-                st.warning("⚠️ Nhận được phản hồi rỗng từ Gemini.")
-                return None
+                err_msg = str(res_data).lower()
+                if any(code in err_msg for code in ["429", "rate_limit", "quota"]):
+                    st.toast(f"🔄 Key Groq bị giới hạn, đang đổi Key...")
+                    time.sleep(2)
+                    continue
+                
+                if attempt == max_retries - 1:
+                    st.error(f"❌ Lỗi từ Groq API: {res_data}")
+                    return None
+                time.sleep(2)
                 
         except Exception as e:
-            err_str = str(e).lower()
-            if any(code in err_str for code in ["429", "resource_exhausted", "quota", "unauthenticated"]):
-                st.toast(f"🔄 Key gặp vấn đề, đang tự động đổi Key mới...")
-                time.sleep(2)
-                continue
-                
             if attempt == max_retries - 1:
-                st.error(f"❌ Lỗi API Gemini: {e}")
+                st.error(f"❌ Lỗi kết nối Groq: {e}")
                 return None
-            time.sleep(2 ** attempt)
+            time.sleep(2)
             
     return None
 
@@ -128,7 +128,7 @@ def generate_evidence_based(task_prompt, evidence, citation_engine, study_contex
 
     # Bước 1 & 2: Dàn ý
     outline_prompt = f"{BASE_SYSTEM_RULES}\n{context_str}\nNHIỆM VỤ: Lập dàn ý 3-4 luận điểm cho: {task_prompt}\nBẰNG CHỨNG: {evidence_context}"
-    outline_res = call_gemini(outline_prompt, model=MODEL_LITE, temperature=0.1)
+    outline_res = call_gemini(outline_prompt, temperature=0.1)
     structured_outline = outline_res if outline_res else "1. Đặt vấn đề\n2. Phân tích\n3. Kết luận"
 
     # Bước 3: Viết nháp
