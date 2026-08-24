@@ -5,7 +5,7 @@ import io
 import streamlit as st
 from typing import List, Dict, Any, Tuple, Optional
 
-# SỬ DỤNG SDK CHÍNH THỨC MỚI CỦA GOOGLE (Tự động tương thích hoàn toàn với key AQ.)
+# SỬ DỤNG SDK CHÍNH THỨC MỚI CỦA GOOGLE
 from google import genai
 from google.genai import types
 
