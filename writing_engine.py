@@ -40,12 +40,12 @@ def call_gemini(
                 st.error("❌ Không tìm thấy API Key nào trong hệ thống!")
                 return None
             
-            # ĐỐI VỚI KEY AQ.: Bắt buộc dùng chuẩn Bearer Token trong Header thay vì truyền trên URL
+            # ĐỐI VỚI KEY (Cả AIza hay AQ.): Phải truyền qua header x-goog-api-key
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
             
             headers = {
                 "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}"
+                "x-goog-api-key": api_key  # <--- SỬA ĐÚNG DÒNG NÀY (Bỏ hẳn chữ Bearer đi)
             }
             
             payload = {
