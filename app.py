@@ -703,7 +703,11 @@ def main():
                 try: audit=Audit_generated_text_wrapper(out)
                 except Exception as exc: audit={"warnings":[]}; st.warning(f"Không thể chạy Audit tự động: {exc}")
                 x,y=st.columns(2)
-                with x: st.error(f"Phát hiện citation ảo: {', '.join(invalid)}") if invalid else st.success("Không phát hiện citation ảo.")
+                with x:
+    if invalid:
+        st.error(f"Phát hiện citation ảo: {', '.join(invalid)}")
+    else:
+        st.success("Không phát hiện citation ảo.")
                 with y: st.warning(f"Số liệu lạ (Cần Audit lại): {', '.join(audit.get('warnings',[]))}") if audit.get("warnings") else st.success("Không phát hiện số liệu lạ ngoài bằng chứng.")
                 st.session_state["Audit_log"].append({"type":label,"invalid_citation":invalid,"Audit":audit}); st.session_state["Audit_log"]=st.session_state["Audit_log"][-100:]
 
