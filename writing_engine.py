@@ -22,9 +22,6 @@ MODEL_LITE = "gemini-3.5-flash-lite"
 # 1. QUẢN LÝ API (BYPASS BẰNG REST API TRỰC TIẾP)
 # ============================================================
 
-# Đảm bảo anh đã có DEFAULT_MODEL và key_manager được khai báo ở trên trong file của anh
-# Ví dụ: DEFAULT_MODEL = "gemini-3.5-flash"
-
 def call_gemini(prompt: str, model: str = None, temperature: float = 0.3, max_retries: int = 3) -> str:
     model_name = model if model else DEFAULT_MODEL
     
@@ -65,32 +62,23 @@ def call_gemini(prompt: str, model: str = None, temperature: float = 0.3, max_re
                     st.warning("⚠️ Nhận được phản hồi nhưng không có nội dung văn bản.")
                     return None
             else:
-                st.error(f"❌ Lỗi API Gemini: {res_data}")
-                import time
-                time.sleep(2)
+                # Xử lý khi API báo lỗi (quá tải, hết hạn mức...)
+                err_msg = str(res_data).lower()
+                if any(code in err_msg for code in ["429", "resource_exhausted", "503", "unavailable", "quota"]):
+                    st.toast(f"🔄 Key bị quá tải (Lỗi {response.status_code}), đang đổi Key mới...")
+                    time.sleep(2)
+                    continue  # Bỏ qua phần còn lại, nhảy sang vòng lặp tiếp theo để lấy Key mới
+                
+                # Nếu đã thử hết số lần mà vẫn lỗi nặng thì báo ra màn hình
+                if attempt == max_retries - 1:
+                    st.error(f"❌ Lỗi API Gemini: {res_data}")
+                    return None
+                
+                time.sleep(2 ** attempt)
                 
         except Exception as e:
-            st.error(f"❌ Lỗi kết nối ở lần thử {attempt + 1}: {e}")
-            import time
-            time.sleep(2)
-            
-    return None
-            
-            err_msg = str(res_data).lower()
-            if any(code in err_msg for code in ["429", "resource_exhausted", "503", "unavailable", "quota"]):
-                st.toast("🔄 Key bị quá tải, đang đổi Key mới...")
-                time.sleep(1.5)
-                continue
-            
             if attempt == max_retries - 1:
-                st.error(f"❌ Lỗi API Gemini: {res_data}")
-                return None
-            
-            time.sleep(2 ** attempt)
-            
-        except Exception as exc:
-            if attempt == max_retries - 1:
-                st.error(f"❌ Lỗi kết nối mạng: {exc}")
+                st.error(f"❌ Lỗi kết nối mạng ở lần thử {attempt + 1}: {e}")
                 return None
             time.sleep(2 ** attempt)
             
@@ -101,7 +89,6 @@ def call_gemini(prompt: str, model: str = None, temperature: float = 0.3, max_re
 # ============================================================
 
 def extract_text_from_file(uploaded_file):
-    # (Giữ nguyên logic của bạn)
     import fitz, docx, pandas as pd
     file_name = uploaded_file.name.lower()
     try:
