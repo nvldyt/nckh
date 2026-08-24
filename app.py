@@ -876,7 +876,13 @@ def main():
                     try:
                         with st.spinner("Agent đang tự động quét, viết nhận xét, truy xuất y văn và lắp ráp hai chương..."):
                             a3,a4=assemble_results_and_discussion_chapter(selection_decisions=st.session_state["selection_decisions"],saved_tables=st.session_state["saved_tables"],chunks=st.session_state.get("chunks",[]),embeddings=st.session_state.get("embeddings"),bm25=st.session_state.get("bm25"),citation_engine=get_citation_engine(),study_context=st.session_state.get("study_context",{}))
-                        st.session_state["assembled_ch3"]=a3; st.session_state["assembled_ch4"]=a4; st.success("🎉 Đã lắp ráp thành công toàn bộ bản thảo hai chương!")
+                            
+                            # Kích hoạt bộ lọc đánh số thứ tự nối tiếp cho cả 2 chương
+                            full_draft = a3 + "\n\n---SPLIT_CHAPTER---\n\n" + a4
+                            clean_draft = format_numbered_citations(full_draft)
+                            clean_a3, clean_a4 = clean_draft.split("\n\n---SPLIT_CHAPTER---\n\n")
+                            
+                        st.session_state["assembled_ch3"]=clean_a3; st.session_state["assembled_ch4"]=clean_a4; st.success("🎉 Đã lắp ráp thành công toàn bộ bản thảo hai chương!")
                     except Exception as exc: st.error(f"❌ Auto-Assembler lỗi: {exc}")
             if st.session_state.get("assembled_ch3") and st.session_state.get("assembled_ch4"):
                 t3,t4=st.tabs(["📄 Chương 3: Kết quả","📄 Chương 4: Bàn luận"])
