@@ -2,11 +2,10 @@ import os
 import time
 import gc
 import io
-import requests
 import streamlit as st
 from typing import List, Dict, Any, Tuple, Optional
 
-# CHỈ DÙNG THƯ VIỆN MỚI
+# SỬ DỤNG SDK CHÍNH THỨC MỚI CỦA GOOGLE (Tự động tương thích hoàn toàn với key AQ.)
 from google import genai
 from google.genai import types
 
@@ -15,11 +14,11 @@ import key_manager
 # ============================================================
 # CẤU HÌNH MODEL MẶC ĐỊNH
 # ============================================================
-DEFAULT_MODEL = "gemini-3.7-flash"
-MODEL_LITE = "gemini-3.5-flash-lite" 
+DEFAULT_MODEL = "gemini-2.5-flash"  # Sử dụng model ổn định với SDK mới
+MODEL_LITE = "gemini-2.5-flash-lite" 
 
 # ============================================================
-# 1. QUẢN LÝ API (BYPASS BẰNG REST API TRỰC TIẾP)
+# 1. HÀM GỌI GEMINI DÙNG SDK CHÍNH THỨC
 # ============================================================
 
 def call_gemini(prompt: str, model: str = None, temperature: float = 0.3, max_retries: int = 3) -> str:
@@ -32,53 +31,41 @@ def call_gemini(prompt: str, model: str = None, temperature: float = 0.3, max_re
                 st.error("❌ Không tìm thấy API Key nào trong hệ thống!")
                 return None
             
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+            # Khởi tạo client trực tiếp bằng SDK chính thức của Google
+            client = genai.Client(api_key=api_key)
             
-            headers = {
-                "Content-Type": "application/json",
-                "x-goog-api-key": api_key
-            }
-            
-            payload = {
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {
-                    "temperature": temperature
-                },
-                "safetySettings": [
-                    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-                    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+            # Cấu hình tham số sinh văn bản
+            config = types.GenerateContentConfig(
+                temperature=temperature,
+                safety_settings=[
+                    types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
+                    types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
+                    types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
+                    types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
                 ]
-            }
+            )
             
-            response = requests.post(url, headers=headers, json=payload, timeout=30)
-            res_data = response.json()
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=config
+            )
             
-            if response.status_code == 200:
-                try:
-                    return res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
-                except (KeyError, IndexError):
-                    st.warning("⚠️ Nhận được phản hồi nhưng không có nội dung văn bản.")
-                    return None
+            if response and response.text:
+                return response.text.strip()
             else:
-                # Xử lý khi API báo lỗi (quá tải, hết hạn mức...)
-                err_msg = str(res_data).lower()
-                if any(code in err_msg for code in ["429", "resource_exhausted", "503", "unavailable", "quota"]):
-                    st.toast(f"🔄 Key bị quá tải (Lỗi {response.status_code}), đang đổi Key mới...")
-                    time.sleep(2)
-                    continue  # Bỏ qua phần còn lại, nhảy sang vòng lặp tiếp theo để lấy Key mới
-                
-                # Nếu đã thử hết số lần mà vẫn lỗi nặng thì báo ra màn hình
-                if attempt == max_retries - 1:
-                    st.error(f"❌ Lỗi API Gemini: {res_data}")
-                    return None
-                
-                time.sleep(2 ** attempt)
+                st.warning("⚠️ Nhận được phản hồi rỗng từ Gemini.")
+                return None
                 
         except Exception as e:
+            err_str = str(e).lower()
+            if any(code in err_str for code in ["429", "resource_exhausted", "quota", "unauthenticated"]):
+                st.toast(f"🔄 Key gặp vấn đề, đang tự động đổi Key mới...")
+                time.sleep(2)
+                continue
+                
             if attempt == max_retries - 1:
-                st.error(f"❌ Lỗi kết nối mạng ở lần thử {attempt + 1}: {e}")
+                st.error(f"❌ Lỗi API Gemini: {e}")
                 return None
             time.sleep(2 ** attempt)
             
@@ -110,7 +97,7 @@ def extract_text_from_file(uploaded_file):
         gc.collect()
 
 # ============================================================
-# 3. HỆ THỐNG PROMPT VÀ WRITING PIPELINE (GIỮ NGUYÊN)
+# 3. HỆ THỐNG PROMPT VÀ WRITING PIPELINE
 # ============================================================
 
 BASE_SYSTEM_RULES = """
@@ -153,7 +140,3 @@ def generate_evidence_based(task_prompt, evidence, citation_engine, study_contex
     # Bước 4: Citation
     final_text, references, invalid_tags = citation_engine.process_vancouver_citations(raw_output)
     return final_text, references, invalid_tags
-
-def render_writing_chat():
-    # (Giữ nguyên toàn bộ logic hiển thị st.chat_message của bạn tại đây)
-    pass
