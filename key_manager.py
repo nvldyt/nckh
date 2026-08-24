@@ -5,7 +5,8 @@ import streamlit as st
 
 # 1. Đưa chìa khóa Groq (gsk_...) của anh vào đây
 MY_KEYS = [
-    "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"
+    "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,
+    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"
 ]
 
 # 2. Key SerpAPI
