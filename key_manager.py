@@ -3,9 +3,9 @@ import itertools
 import os
 import streamlit as st
 
-# 1. Danh sách Key Gemini (Anh có thể thêm nhiều key vào đây, phân tách bằng dấu phẩy)
+# 1. Đưa chìa khóa Groq (gsk_...) của anh vào đây
 MY_KEYS = [
-    "AQ.Ab8RN6J9Ebk6H2rHBFpkSdSBOPXrcZ3TBjkiEX6x-GOnXLII9g"
+    "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"
 ]
 
 # 2. Key SerpAPI
@@ -16,7 +16,7 @@ def get_key_cycler():
     return itertools.cycle(MY_KEYS)
 
 def get_next_key():
-    """Hàm lấy Key Gemini tiếp theo theo vòng lặp"""
+    """Hàm lấy Key tiếp theo"""
     return next(get_key_cycler())
 
 def get_serpapi_key():
