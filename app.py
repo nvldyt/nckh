@@ -686,11 +686,13 @@ def main():
         citation_rules="Chỉ dùng SOURCE_TAG thật để hệ thống tự chuyển thành [n]. Các số trích dẫn theo thứ tự xuất hiện."
         result_box=st.container()
 
+        # --- THÊM HÀM BỘ LỌC VÀO TRƯỚC RUN_QUICK_TASK ---
         import re
         def format_numbered_citations(generated_text: str) -> str:
             pattern = r'\[(?:REF-)?(SRC-[A-Z0-9]+)\]'
             citation_mapping = {}
             current_index = 1
+            
             def replacer(match):
                 nonlocal current_index
                 ref_id = match.group(1)
@@ -698,7 +700,24 @@ def main():
                     citation_mapping[ref_id] = current_index
                     current_index += 1
                 return f"[{citation_mapping[ref_id]}]"
-            return re.sub(pattern, replacer, generated_text)
+                
+            clean_text = re.sub(pattern, replacer, generated_text)
+            
+            # --- PHẦN BỔ SUNG: ĐỒNG BỘ DANH SÁCH VỚI TAB 9 ---
+            new_refs = []
+            docs = st.session_state.get("documents", {})
+            for ref_id, idx in citation_mapping.items():
+                new_refs.append({
+                    "ref_id": ref_id,
+                    "vancouver_index": idx,
+                    "metadata": docs.get(ref_id, {})
+                })
+            
+            # Ép hệ thống lưu danh sách chuẩn vào bộ nhớ để Tab 9 & lúc xuất file Word có thể đọc được
+            st.session_state["current_references"] = new_refs
+            st.session_state["citation_registry"] = citation_mapping
+            
+            return clean_text
         
         def run_quick_task(label,query,task,k):
             with st.spinner(f"AI đang soạn: {label}..."): out,evidence,invalid=generate_evidence_based_wrapper(task,query,k)
