@@ -12,11 +12,13 @@ import re
 import time
 import json
 import gc
+
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 import streamlit as st
+import requests
 from docx import Document
 
 from chat_data_engine import render_chat_assistant
@@ -904,12 +906,6 @@ def main():
                 st.download_button("Bấm vào đây để tải file",data=db,file_name="Ban_nhap.docx",mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",use_container_width=True,key=ui_key("download_current_draft"))
         render_writing_chat()
 
-    # ------------------------------------------------------------
-    # TAB 6 – VIẾT BẰNG OLLAMA LOCAL 
-    # ------------------------------------------------------------
-    import streamlit as st
-import requests
-
 # =====================================================================
 # 1. HÀM CỐT LÕI GỌI AI TỪ COLAB
 # =====================================================================
@@ -987,12 +983,13 @@ def render_ollama_writer_tab():
                     )
 
 # =====================================================================
-# CÁCH GỌI TẠI KHỐI TẠO TAB (Giữ nguyên như code của anh)
+# 3. GỌI HÀM VÀO TAB 6 (Đặt phần này vào đúng vị trí thiết kế Tab của anh)
 # =====================================================================
+# ------------------------------------------------------------
+# TAB 6 – VIẾT BẰNG OLLAMA LOCAL 
+# ------------------------------------------------------------
 # with tabs[5]:
 #     render_ollama_writer_tab()
-
-
     # ------------------------------------------------------------
     # TAB 7 – PHÂN TÍCH SỐ LIỆU 
     # ------------------------------------------------------------
