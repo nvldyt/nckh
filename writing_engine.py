@@ -22,14 +22,12 @@ MODEL_LITE = "gemini-3.5-flash-lite"
 # 1. QUẢN LÝ API (BYPASS BẰNG REST API TRỰC TIẾP)
 # ============================================================
 
-def call_gemini(
-    prompt: str,
-    model: Optional[str] = None,
-    temperature: float = 0.1,
-    max_retries: int = 5,
-) -> Optional[str]:
+# Đảm bảo anh đã có DEFAULT_MODEL và key_manager được khai báo ở trên trong file của anh
+# Ví dụ: DEFAULT_MODEL = "gemini-1.5-pro-latest"
+
+def call_gemini(prompt: str, model: str = None, temperature: float = 0.3, max_retries: int = 3) -> str:
     """
-    Hàm gọi AI gửi Key AQ. dưới dạng Bearer Token (OAuth 2.0) theo đúng yêu cầu của Google.
+    Hàm gọi AI gửi Key AQ. hoặc AIza thông qua header x-goog-api-key (Chuẩn REST API của Google).
     """
     model_name = model if model else DEFAULT_MODEL
     
@@ -45,7 +43,7 @@ def call_gemini(
             
             headers = {
                 "Content-Type": "application/json",
-                "x-goog-api-key": api_key  # <--- SỬA ĐÚNG DÒNG NÀY (Bỏ hẳn chữ Bearer đi)
+                "x-goog-api-key": api_key  # <--- CHUẨN XÁC: Truyền thẳng Key thô, bỏ hẳn chữ Bearer
             }
             
             payload = {
@@ -68,7 +66,17 @@ def call_gemini(
                 try:
                     return res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
                 except (KeyError, IndexError):
+                    st.warning("⚠️ Nhận được phản hồi nhưng không có nội dung văn bản.")
                     return None
+            else:
+                st.error(f"❌ Lỗi API Gemini: {res_data}")
+                time.sleep(2) # Chờ 2 giây rồi thử lại với key khác (nếu có)
+                
+        except Exception as e:
+            st.error(f"❌ Lỗi kết nối ở lần thử {attempt + 1}: {e}")
+            time.sleep(2)
+            
+    return None
             
             err_msg = str(res_data).lower()
             if any(code in err_msg for code in ["429", "resource_exhausted", "503", "unavailable", "quota"]):
