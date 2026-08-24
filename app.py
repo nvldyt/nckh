@@ -1034,7 +1034,8 @@ def main():
             # PHẦN CODE CŨ CỦA ANH TIẾP TỤC Ở ĐÂY
             # =====================================================================
             st.write("---"); st.subheader("1. Thống kê mô tả (biến phân loại)")
-            desc_vars=st.multiselect("Chọn biến phân loại",all_cols,key=ui_key("desc_vars"))
+            # CODE MỚI ĐÃ CỐ ĐỊNH KEY ĐỘC NHẤT:
+            desc_vars = st.multiselect("Chọn biến phân loại", all_cols, key="tab7_unique_desc_vars_key")
             # ... (Các phần từ mục 1 đến mục 8 của anh giữ nguyên không đổi) ...
             
             st.write("---"); st.subheader("1. Thống kê mô tả (biến phân loại)"); all_cols=df.columns.tolist(); desc_vars=st.multiselect("Chọn biến phân loại",all_cols,key=ui_key("desc_vars"))
