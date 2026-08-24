@@ -507,11 +507,11 @@ def main():
     
     tabs = st.tabs([
         "🔍 1. Tra cứu TLTK", 
-        "📑 2. Tài liệu (PDF)",
-        "🛠️ 3. Tổng hợp (Offline)", 
-        "⚡ 4. Tóm tắt (Python)",
-        "✍️ 5. Viết văn (Gemini API)", 
-        "🤖 6. Viết văn (Ollama Local)",
+        "📑 2. Tài liệu",
+        "🛠️ 3. Tổng hợp", 
+        "⚡ 4. Tóm tắt",
+        "✍️ 5. Viết văn (Grok AI)", 
+        "🤖 6. Viết văn (Ollama)",
         "📊 7. Phân tích số liệu", 
         "🔎 8. Kiểm tra luận văn", 
         "🏷️ 9. Trích dẫn TLTK",
