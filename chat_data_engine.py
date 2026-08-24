@@ -37,7 +37,7 @@ def extract_text_from_file(uploaded_file):
 
 def render_chat_assistant():
     st.write("---")
-    st.subheader("🤖 Phân tích Dữ liệu với Gemini (Bản Offline)")
+    st.subheader("🤖 Phân tích Dữ liệu với Groq AI (Bản Offline)")
     st.caption("Trò chuyện trực tiếp với dữ liệu Excel của anh. AI đã bị ép buộc bám sát danh sách thuốc thực tế.")
     
     # 1. Khởi tạo bộ nhớ cho cuộc trò chuyện
@@ -113,12 +113,12 @@ DANH SÁCH GIÁ TRỊ THỰC TẾ ĐANG CÓ TRONG FILE (Dùng để đối chi�
 LỆNH BẮT BUỘC DÀNH CHO AI:
 1. TUYỆT ĐỐI KHÔNG BỊA ĐẶT (hallucinate) tên thuốc, thảo dược hoặc số liệu không có trong "Danh sách giá trị thực tế" ở trên.
 2. Khi phân tích tương tác thuốc hoặc lập bảng, CHỈ ĐƯỢC PHÉP sử dụng các tên thuốc/hoạt chất có xuất hiện thực tế trong danh sách.
-3. Nếu người dùng hỏi về một thông tin/thuốc không có trong dữ liệu, phải trả lời rõ: "Dữ liệu thực tế trong file không chứa loại thuốc này".
+3. Nếu người dùng hỏi về một thông tự/thuốc không có trong dữ liệu, phải trả lời rõ: "Dữ liệu thực tế trong file không chứa loại thuốc này".
 4. Dữ liệu mẫu (3 dòng đầu) để hiểu cấu trúc: 
 {sample_data}
 """
         
-        # 5. Giao tiếp với Gemini (Sử dụng hàm call_gemini siêu xoay vòng)
+        # 5. Giao tiếp với Groq AI (Sử dụng hàm call_gemini siêu xoay vòng)
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             with st.spinner("AI đang quét dữ liệu thực tế và phân tích..."):
