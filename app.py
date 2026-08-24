@@ -45,11 +45,9 @@ from retrieval_engine import (
     build_bm25_index, build_embedding_index,
     update_embedding_index, retrieve_evidence,
 )
-
-# SỬA LẠI ĐOẠN NÀY: Chỉ gọi những hàm/biến thực sự tồn tại trong writing_engine
 from writing_engine import (
     call_gemini, generate_evidence_based,
-    BASE_SYSTEM_RULES, MODEL_LITE, DEFAULT_MODEL
+    BASE_SYSTEM_RULES, MODEL_LITE, DEFAULT_MODEL,
 )
 from synthesis_engine import build_literature_matrix
 from chapter_assembler_engine import assemble_results_and_discussion_chapter
@@ -511,9 +509,9 @@ def main():
         "🔍 1. Tra cứu TLTK", 
         "📑 2. Tài liệu (PDF)",
         "🛠️ 3. Tổng hợp (Offline)", 
-        "⚡ 4. Tóm tắt (Python)",       # TAB MỚI 1
+        "⚡ 4. Tóm tắt (Python)",
         "✍️ 5. Viết văn (Gemini API)", 
-        "🤖 6. Viết văn (Ollama Local)", # TAB MỚI 2
+        "🤖 6. Viết văn (Ollama Local)",
         "📊 7. Phân tích số liệu", 
         "🔎 8. Kiểm tra luận văn", 
         "🏷️ 9. Trích dẫn TLTK",
@@ -627,7 +625,7 @@ def main():
         render_offline_tab()
 
     # ------------------------------------------------------------
-    # TAB 4 – TÓM TẮT BẰNG PYTHON (MODULE MỚI THÊM)
+    # TAB 4 – TÓM TẮT BẰNG PYTHON
     # ------------------------------------------------------------
     with tabs[3]:
         render_summarizer_tab()
@@ -686,6 +684,7 @@ def main():
 
         citation_rules="Chỉ dùng SOURCE_TAG thật để hệ thống tự chuyển thành [n]. Các số trích dẫn theo thứ tự xuất hiện."
         result_box=st.container()
+        
         def run_quick_task(label,query,task,k):
             with st.spinner(f"AI đang soạn: {label}..."): out,evidence,invalid=generate_evidence_based_wrapper(task,query,k)
             if not out: st.warning("Không nhận được nội dung từ AI."); return
@@ -700,16 +699,27 @@ def main():
                         for ch in [x for x in evidence if x.get("source_id")==sid]:
                             st.markdown(f"- **Trang/Mục:** `{ch.get('page','N/A')}` | **Độ khớp:** `{ch.get('score',0):.4f}` | **Mã đoạn:** `{ch.get('chunk_id','N/A')}`"); st.info(f"_{ch.get('text','')}_")
                 with st.expander("📖 Danh mục Tài liệu tham khảo (Của bản nháp này)"): st.code(citation_bibliography_wrapper() or "Chưa có citation registry.",language="text")
-                try: audit=Audit_generated_text_wrapper(out)
-                except Exception as exc: audit={"warnings":[]}; st.warning(f"Không thể chạy Audit tự động: {exc}")
+                
+                try: 
+                    audit=Audit_generated_text_wrapper(out)
+                except Exception as exc: 
+                    audit={"warnings":[]}
+                    st.warning(f"Không thể chạy Audit tự động: {exc}")
+                
                 x,y=st.columns(2)
-                with x:
-    if invalid:
-        st.error(f"Phát hiện citation ảo: {', '.join(invalid)}")
-    else:
-        st.success("Không phát hiện citation ảo.")
-                with y: st.warning(f"Số liệu lạ (Cần Audit lại): {', '.join(audit.get('warnings',[]))}") if audit.get("warnings") else st.success("Không phát hiện số liệu lạ ngoài bằng chứng.")
-                st.session_state["Audit_log"].append({"type":label,"invalid_citation":invalid,"Audit":audit}); st.session_state["Audit_log"]=st.session_state["Audit_log"][-100:]
+                with x: 
+                    if invalid:
+                        st.error(f"Phát hiện citation ảo: {', '.join(invalid)}")
+                    else:
+                        st.success("Không phát hiện citation ảo.")
+                with y: 
+                    if audit.get("warnings"):
+                        st.warning(f"Số liệu lạ (Cần Audit lại): {', '.join(audit.get('warnings',[]))}")
+                    else:
+                        st.success("Không phát hiện số liệu lạ ngoài bằng chứng.")
+                
+                st.session_state["Audit_log"].append({"type":label,"invalid_citation":invalid,"Audit":audit})
+                st.session_state["Audit_log"]=st.session_state["Audit_log"][-100:]
 
         st.subheader("📝 Lệnh viết nhanh"); b1,b2,b3,b4,b5=st.columns(5)
         with b1: btn1=st.button("Đặt vấn đề",key=ui_key("btn_dat_van_de"))
@@ -719,29 +729,37 @@ def main():
         with b5: btn5=st.button("Trích dẫn TLTK",key=ui_key("btn_tltk"))
         st.write("---"); st.subheader("Lệnh tùy chỉnh")
         custom_prompt=st.text_area("Nhập câu lệnh khác:",key=ui_key("custom_prompt_tab3")); k_custom=st.slider("Số nguồn bằng chứng truy xuất",3,MAX_TOP_K,DEFAULT_TOP_K,key=ui_key("top_k_tab3")); btnc=st.button("▶️ Chạy lệnh tùy chỉnh",key=ui_key("btn_custom"))
+        
         if btn1: run_quick_task("Đặt vấn đề","Đặt vấn đề, tính cấp thiết, lý do nghiên cứu, dịch tễ học, gánh nặng bệnh tật liên quan sử dụng thuốc",f"Viết phần 'Đặt vấn đề'. Viết thành MỘT MẠCH VĂN LIỀN MẠCH, khoảng 400 từ, gồm 3-4 đoạn văn.\n{citation_rules}",6)
         if btn2: run_quick_task("Tổng quan tài liệu","Tổng quan y văn, các nghiên cứu liên quan, cơ chế dược lý, kết quả chính, khuyến cáo điều trị",f"Viết phần 'Tổng quan tài liệu' chuyên sâu.\n{citation_rules}",8)
         if btn3: run_quick_task("Phương pháp nghiên cứu","Đối tượng nghiên cứu, tiêu chuẩn chọn loại, thiết kế nghiên cứu, cỡ mẫu, biến số nghiên cứu",f"Viết 'Chương 2. ĐỐI TƯỢNG VÀ PHƯƠNG PHÁP NGHIÊN CỨU'.\n{citation_rules}",5)
         if btn4:
-            if not my_research_data.strip() and not my_table_remarks.strip(): st.warning("⚠️ Cần dán bảng số liệu (ô 1) và nhận xét (ô 2) vào phía trên trước!")
+            if not my_research_data.strip() and not my_table_remarks.strip(): 
+                st.warning("⚠️ Cần dán bảng số liệu (ô 1) và nhận xét (ô 2) vào phía trên trước!")
             else:
-                ctx=f"SỐ LIỆU BẢNG:\n{my_research_data}\n\nNHẬN XÉT DIỄN GIẢI:\n{my_table_remarks}"; run_quick_task("Bàn luận và So sánh toàn diện",ctx,f"DỮ LIỆU NGHIÊN CỨU:\n{ctx}\nYÊU CẦU: Viết BÀN LUẬN TOÀN DIỆN. Giải thích nguyên nhân và so sánh với y văn. Viết liền mạch, không dùng nhãn phân chia.\n{citation_rules}",8)
+                ctx=f"SỐ LIỆU BẢNG:\n{my_research_data}\n\nNHẬN XÉT DIỄN GIẢI:\n{my_table_remarks}"
+                run_quick_task("Bàn luận và So sánh toàn diện",ctx,f"DỮ LIỆU NGHIÊN CỨU:\n{ctx}\nYÊU CẦU: Viết BÀN LUẬN TOÀN DIỆN. Giải thích nguyên nhân và so sánh với y văn. Viết liền mạch, không dùng nhãn phân chia.\n{citation_rules}",8)
         if btn5:
             query="Tài liệu tham khảo, tác giả, năm xuất bản, tạp chí"
             task=f"Chọn các SOURCE_TAG phù hợp làm tài liệu tham khảo chính và để hệ thống tạo danh mục Vancouver.\n{citation_rules}"
             run_quick_task("Trích dẫn TLTK",query,task,10)
         if btnc:
-            if not custom_prompt.strip(): st.warning("Vui lòng nhập yêu cầu!")
-            else: run_quick_task("Kết quả lệnh tùy chỉnh",custom_prompt,f"{custom_prompt}\n{citation_rules}",k_custom)
+            if not custom_prompt.strip(): 
+                st.warning("Vui lòng nhập yêu cầu!")
+            else: 
+                run_quick_task("Kết quả lệnh tùy chỉnh",custom_prompt,f"{custom_prompt}\n{citation_rules}",k_custom)
+        
         st.write("---"); st.subheader("📄 Xuất Bản Nháp")
         if st.button("📥 Tải bản nháp hiện tại ra file Word",use_container_width=True,type="primary",key=ui_key("export_current_draft")):
-            if not st.session_state.get("last_generated"): st.warning("Chưa có bản nháp. Vui lòng chạy một lệnh viết luận văn trước.")
+            if not st.session_state.get("last_generated"): 
+                st.warning("Chưa có bản nháp. Vui lòng chạy một lệnh viết luận văn trước.")
             else:
-                db=create_word_document("Bản nháp hỗ trợ nghiên cứu",st.session_state["last_generated"],citation_bibliography_wrapper()); st.download_button("Bấm vào đây để tải file",data=db,file_name="Ban_nhap.docx",mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",use_container_width=True,key=ui_key("download_current_draft"))
+                db=create_word_document("Bản nháp hỗ trợ nghiên cứu",st.session_state["last_generated"],citation_bibliography_wrapper())
+                st.download_button("Bấm vào đây để tải file",data=db,file_name="Ban_nhap.docx",mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",use_container_width=True,key=ui_key("download_current_draft"))
         render_writing_chat()
 
     # ------------------------------------------------------------
-    # TAB 6 – VIẾT BẰNG OLLAMA LOCAL (MODULE MỚI THÊM)
+    # TAB 6 – VIẾT BẰNG OLLAMA LOCAL 
     # ------------------------------------------------------------
     with tabs[5]:
         render_ollama_writer_tab()
@@ -938,31 +956,49 @@ DỮ LIỆU ĐẦU VÀO:\n{final}"""
         st.header("🔎 Audit luận văn toàn diện")
         st.markdown('<div class="warning-box">⚠️ <b>Giới hạn cần biết:</b> Công cụ chỉ báo nguy cơ.</div>',unsafe_allow_html=True)
         text=st.text_area("Dán đoạn văn cần Audit vào đây:",height=250,key=ui_key("Audit_text")); c1,c2,c3,c4,c5,c6=st.columns(6); st.write("---"); box=st.container()
+        
         with c1:
             if st.button("🔢 Số liệu",use_container_width=True,key=ui_key("Audit_numbers")):
-                if not text.strip(): st.warning("Chưa có văn bản.")
+                if not text.strip(): 
+                    st.warning("Chưa có văn bản.")
                 else:
-                    try: r=Audit_generated_text_wrapper(text)
-                    except Exception as exc: r={"exact_matches":[],"derived_matches":[],"warnings":[],"evidence_used":[]}; st.error(f"❌ Không thể Audit số liệu: {exc}")
+                    try: 
+                        r=Audit_generated_text_wrapper(text)
+                    except Exception as exc: 
+                        r={"exact_matches":[],"derived_matches":[],"warnings":[],"evidence_used":[]}
+                        st.error(f"❌ Không thể Audit số liệu: {exc}")
+                    
                     with box:
-                        st.markdown("### 🔢 Kết quả Audit Số liệu"); st.success("**Level 1 (Khớp chính xác):** "+(", ".join(r.get("exact_matches",[])) or "Không có")); st.info("**Level 2 (Khớp phái sinh):** "+(", ".join(r.get("derived_matches",[])) or "Không có"));
-                        if r.get("warnings"): st.error("**Level 3 (⚠️ SỐ LIỆU LẠ):** "+", ".join(r["warnings"]))
-                        else: st.success("**Level 3:** Không phát hiện số liệu lạ!")
+                        st.markdown("### 🔢 Kết quả Audit Số liệu")
+                        st.success("**Level 1 (Khớp chính xác):** " + (", ".join(r.get("exact_matches",[])) or "Không có"))
+                        st.info("**Level 2 (Khớp phái sinh):** " + (", ".join(r.get("derived_matches",[])) or "Không có"))
+                        
+                        if r.get("warnings"): 
+                            st.error("**Level 3 (⚠️ SỐ LIỆU LẠ):** " + ", ".join(r["warnings"]))
+                        else: 
+                            st.success("**Level 3:** Không phát hiện số liệu lạ!")
+                        
                         with st.expander("📄 Xem bằng chứng đối chiếu"):
                             for e in r.get("evidence_used",[]): st.write(f"> {e.get('text','')}")
         with c2:
             if st.button("📚 Trích dẫn",use_container_width=True,key=ui_key("Audit_citation")):
-                if not text.strip(): st.warning("Chưa có văn bản.")
+                if not text.strip(): 
+                    st.warning("Chưa có văn bản.")
                 else:
                     cites=re.findall(r"\[(\d+)\]",text); refs={str(x.get("vancouver_index")):x for x in st.session_state.get("current_references",[])}
                     with box:
-                        st.markdown("### 📚 Kết quả Audit Citation"); fake=[x for x in cites if x not in refs]
-                        if fake: st.error("❌ Phát hiện trích dẫn ẢO: "+", ".join(f"[{x}]" for x in fake))
-                        elif cites: st.success("✅ Toàn bộ trích dẫn khớp!")
-                        else: st.info("Không tìm thấy trích dẫn [n].")
+                        st.markdown("### 📚 Kết quả Audit Citation")
+                        fake=[x for x in cites if x not in refs]
+                        if fake: 
+                            st.error("❌ Phát hiện trích dẫn ẢO: " + ", ".join(f"[{x}]" for x in fake))
+                        elif cites: 
+                            st.success("✅ Toàn bộ trích dẫn khớp!")
+                        else: 
+                            st.info("Không tìm thấy trích dẫn [n].")
         with c3:
             if st.button("🔍 Trùng lặp",use_container_width=True,key=ui_key("Audit_overlap")):
-                if not text.strip(): st.warning("Chưa có văn bản.")
+                if not text.strip(): 
+                    st.warning("Chưa có văn bản.")
                 else:
                     try: ov=internal_overlap_Audit_wrapper(text)
                     except Exception as exc: ov=[]; st.error(f"❌ Không thể quét trùng lặp: {exc}")
@@ -972,28 +1008,34 @@ DỮ LIỆU ĐẦU VÀO:\n{final}"""
                         for x in ov: st.markdown(f"**{x.get('file','')} – trang {x.get('page','')}**\nSimilarity: **{x.get('similarity',0)}**\n> {x.get('text','')}")
         with c4:
             if st.button("🔤 Chính tả",use_container_width=True,key=ui_key("Audit_spelling")):
-                if not text.strip(): st.warning("Chưa có văn bản.")
+                if not text.strip(): 
+                    st.warning("Chưa có văn bản.")
                 else:
                     p=f"{BASE_SYSTEM_RULES}\nRà soát đoạn văn bản sau để tìm lỗi chính tả/thuật ngữ. ĐOẠN VĂN: {text}"
                     try: res=call_gemini(p,model=MODEL_LITE)
                     except Exception as exc: res=f"Lỗi gọi Gemini: {exc}"
-                    with box: st.markdown("### 🔤 Chính tả & Thuật ngữ\n"+str(res))
+                    with box: 
+                        st.markdown("### 🔤 Chính tả & Thuật ngữ\n"+str(res))
         with c5:
             if st.button("🤖 Check văn AI",use_container_width=True,key=ui_key("Audit_ai_style")):
-                if not text.strip(): st.warning("Chưa có văn bản.")
+                if not text.strip(): 
+                    st.warning("Chưa có văn bản.")
                 else:
                     p=f"{BASE_SYSTEM_RULES}\nSoi khắt khe các dấu hiệu văn bản do AI viết. ĐOẠN VĂN: {text}"
                     try: res=call_gemini(p,model=MODEL_LITE)
                     except Exception as exc: res=f"Lỗi gọi Gemini: {exc}"
-                    with box: st.markdown("### 🤖 Chỉ báo nguy cơ AI viết\n"+str(res))
+                    with box: 
+                        st.markdown("### 🤖 Chỉ báo nguy cơ AI viết\n"+str(res))
         with c6:
             if st.button("⚖️ Phản biện",use_container_width=True,key=ui_key("logic_review")):
-                if not text.strip(): st.warning("Chưa có văn bản.")
+                if not text.strip(): 
+                    st.warning("Chưa có văn bản.")
                 else:
                     p=f"{BASE_SYSTEM_RULES}\nĐóng vai phản biện luận văn CKI Dược lâm sàng. Chỉ ra điểm yếu logic: thiếu bằng chứng, tương quan/nhân quả, vượt giới hạn thiết kế nghiên cứu. ĐOẠN VĂN: {text}"
                     try: res=call_gemini(p)
                     except Exception as exc: res=f"Lỗi gọi Gemini: {exc}"
-                    with box: st.markdown("### ⚖️ Kết quả Phản biện\n"+str(res))
+                    with box: 
+                        st.markdown("### ⚖️ Kết quả Phản biện\n"+str(res))
 
     # ------------------------------------------------------------
     # TAB 9 – TLTK / METADATA
