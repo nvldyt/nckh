@@ -38,7 +38,7 @@ def render_summarizer_tab():
                     
                     # Ghép các đoạn đầu tiên để làm đoạn trích xuất đại diện (khoảng 1000 ký tự)
                     combined_text = " ".join(doc_chunks).strip()
-                    snippet = combined_text[:1000] if combined_text else "Không có nội dung văn bản bóc tách."
+                    snippet = combined_text[:4000] if combined_text else "Không có nội dung văn bản bóc tách."
 
                     summary_text += f"#### [{sid}] {title}\n"
                     summary_text += f"- **Nguồn:** {origin} | **Tác giả:** {authors} ({year})\n"
