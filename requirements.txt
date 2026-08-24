@@ -3,19 +3,24 @@
 torch>=2.0.0
 torchvision>=0.15.0
 
-# 2. CỐT LÕI AI: CHỈ GIỮ LẠI BẢN GENERATIVEAI (Bản cũ nhưng ổn định)
+# 2. CỐT LÕI AI & RAG
 streamlit>=1.30.0
 google-genai>=1.0.0
 sentence-transformers>=3.0.0
 rank-bm25>=0.2.2
 
-# 3. Xử lý Dữ liệu và Thống kê
+# 3. Xử lý Dữ liệu và Thống kê cơ bản
 pandas>=2.2.0
 numpy>=1.26.0
 scipy>=1.13.0
 statsmodels>=0.14.0
 
-# 4. Tiện ích, Đọc/Ghi file & Crawl API
+# 4. Thống kê chuyên sâu Y khoa (Mới thêm)
+tableone==0.8.0
+pingouin==0.5.4
+lifelines==0.28.0
+
+# 5. Tiện ích, Đọc/Ghi file & Crawl API
 PyMuPDF>=1.23.0
 python-docx>=1.1.0
 openpyxl>=3.1.0
