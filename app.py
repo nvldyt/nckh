@@ -685,10 +685,60 @@ def main():
 
         citation_rules="Chỉ dùng SOURCE_TAG thật để hệ thống tự chuyển thành [n]. Các số trích dẫn theo thứ tự xuất hiện."
         result_box=st.container()
+
+        import re
+        def format_numbered_citations(generated_text: str) -> str:
+            pattern = r'\[(?:REF-)?(SRC-[A-Z0-9]+)\]'
+            citation_mapping = {}
+            current_index = 1
+            def replacer(match):
+                nonlocal current_index
+                ref_id = match.group(1)
+                if ref_id not in citation_mapping:
+                    citation_mapping[ref_id] = current_index
+                    current_index += 1
+                return f"[{citation_mapping[ref_id]}]"
+            return re.sub(pattern, replacer, generated_text)
         
         def run_quick_task(label,query,task,k):
             with st.spinner(f"AI đang soạn: {label}..."): out,evidence,invalid=generate_evidence_based_wrapper(task,query,k)
             if not out: st.warning("Không nhận được nội dung từ AI."); return
+            
+            # Kích hoạt bộ lọc đánh số thứ tự [1], [2]
+            out = format_numbered_citations(out)
+            
+            with result_box:
+                st.write("---"); st.subheader(label); st.markdown(out); st.markdown("### 🔎 Dấu vết bằng chứng (Evidence Trace)")
+                refs=st.session_state.get("current_references",[])
+                for ref in refs:
+                    vi=ref.get("vancouver_index",""); rid=ref.get("ref_id",""); sid=rid.replace("REF-","") if rid.startswith("REF-") else rid; meta=ref.get("metadata",{}) or {}
+                    with st.expander(f"[{vi}] ↳ {meta.get('title','Tài liệu chưa có tiêu đề')[:85]}..."):
+                        st.write(f"**Tệp gốc:** `{meta.get('file_name','N/A')}`")
+                        if meta.get("doi"): st.write(f"**DOI:** {meta['doi']}")
+                        for ch in [x for x in evidence if x.get("source_id")==sid]:
+                            st.markdown(f"- **Trang/Mục:** `{ch.get('page','N/A')}` | **Độ khớp:** `{ch.get('score',0):.4f}` | **Mã đoạn:** `{ch.get('chunk_id','N/A')}`"); st.info(f"_{ch.get('text','')}_")
+                with st.expander("📖 Danh mục Tài liệu tham khảo (Của bản nháp này)"): st.code(citation_bibliography_wrapper() or "Chưa có citation registry.",language="text")
+                
+                try: 
+                    audit=Audit_generated_text_wrapper(out)
+                except Exception as exc: 
+                    audit={"warnings":[]}
+                    st.warning(f"Không thể chạy Audit tự động: {exc}")
+                
+                x,y=st.columns(2)
+                with x: 
+                    if invalid:
+                        st.error(f"Phát hiện citation ảo: {', '.join(invalid)}")
+                    else:
+                        st.success("Không phát hiện citation ảo.")
+                with y: 
+                    if audit.get("warnings"):
+                        st.warning(f"Số liệu lạ (Cần Audit lại): {', '.join(audit.get('warnings',[]))}")
+                    else:
+                        st.success("Không phát hiện số liệu lạ ngoài bằng chứng.")
+                
+                st.session_state["Audit_log"].append({"type":label,"invalid_citation":invalid,"Audit":audit})
+                st.session_state["Audit_log"]=st.session_state["Audit_log"][-100:]
             with result_box:
                 st.write("---"); st.subheader(label); st.markdown(out); st.markdown("### 🔎 Dấu vết bằng chứng (Evidence Trace)")
                 refs=st.session_state.get("current_references",[])
