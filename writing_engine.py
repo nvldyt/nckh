@@ -9,17 +9,30 @@ from typing import List, Dict, Any, Tuple, Optional
 import key_manager 
 
 # ============================================================
-# CẤU HÌNH MODEL GROQ (Sử dụng Llama 3.3 70B viết y khoa cực đỉnh)
+# CẤU HÌNH MODEL & BIẾN HỆ THỐNG (Khởi tạo đầy đủ để app.py không bị lỗi import)
 # ============================================================
 DEFAULT_MODEL = "llama-3.3-70b-versatile"
+MODEL_LITE = "llama-3.3-70b-versatile"
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+BASE_SYSTEM_RULES = """
+Bạn là trợ lý nghiên cứu khoa học, hỗ trợ viết luận văn Chuyên khoa cấp I ngành Dược lâm sàng.
+NGUYÊN TẮC BẮT BUỘC:
+1. Tài liệu được cung cấp là nguồn bằng chứng ưu tiên duy nhất.
+2. Không tự tạo số liệu, p-value, OR, RR, HR, CI95%, tỷ lệ %, liều dùng hoặc cỡ mẫu nếu không có trong bằng chứng.
+3. Không tự tạo tên tác giả, năm, tên bài báo, DOI, PMID.
+4. Nếu context không đủ bằng chứng, phải diễn đạt tự nhiên (VD: "Tuy nhiên, y văn hiện tại chưa đề cập..."). 
+5. Mọi khẳng định dựa trên tài liệu phải chèn MÃ ĐỊNH DANH của tài liệu đó ngay sau câu. Ví dụ: "Tỷ lệ này là 12% [REF-001]."
+6. TUYỆT ĐỐI KHÔNG tự tạo [1], [2], [3] và không dùng citation dạng tác giả-năm.
+7. KHÔNG sử dụng các nhãn phân chia máy móc như "Dữ kiện (FACT):", "Diễn giải (INTERPRETATION):".
+8. Dùng chính xác thuật ngữ chuyên ngành Dược lâm sàng, văn phong y khoa liền mạch.
+"""
 
 # ============================================================
 # 1. HÀM GỌI AI THÔNG QUA GROQ API
 # ============================================================
 
 def call_gemini(prompt: str, model: str = None, temperature: float = 0.3, max_retries: int = 3) -> str:
-    """Hàm gọi AI sử dụng Groq API (giữ nguyên tên hàm để không ảnh hưởng các Tab khác)"""
     model_name = model if model else DEFAULT_MODEL
     
     for attempt in range(max_retries):
@@ -97,21 +110,8 @@ def extract_text_from_file(uploaded_file):
         gc.collect()
 
 # ============================================================
-# 3. HỆ THỐNG PROMPT VÀ WRITING PIPELINE
+# 3. HỆ THỐNG WRITING PIPELINE
 # ============================================================
-
-BASE_SYSTEM_RULES = """
-Bạn là trợ lý nghiên cứu khoa học, hỗ trợ viết luận văn Chuyên khoa cấp I ngành Dược lâm sàng.
-NGUYÊN TẮC BẮT BUỘC:
-1. Tài liệu được cung cấp là nguồn bằng chứng ưu tiên duy nhất.
-2. Không tự tạo số liệu, p-value, OR, RR, HR, CI95%, tỷ lệ %, liều dùng hoặc cỡ mẫu nếu không có trong bằng chứng.
-3. Không tự tạo tên tác giả, năm, tên bài báo, DOI, PMID.
-4. Nếu context không đủ bằng chứng, phải diễn đạt tự nhiên (VD: "Tuy nhiên, y văn hiện tại chưa đề cập..."). 
-5. Mọi khẳng định dựa trên tài liệu phải chèn MÃ ĐỊNH DANH của tài liệu đó ngay sau câu. Ví dụ: "Tỷ lệ này là 12% [REF-001]."
-6. TUYỆT ĐỐI KHÔNG tự tạo [1], [2], [3] và không dùng citation dạng tác giả-năm.
-7. KHÔNG sử dụng các nhãn phân chia máy móc như "Dữ kiện (FACT):", "Diễn giải (INTERPRETATION):".
-8. Dùng chính xác thuật ngữ chuyên ngành Dược lâm sàng, văn phong y khoa liền mạch.
-"""
 
 def generate_evidence_based(task_prompt, evidence, citation_engine, study_context=None):
     if not evidence:
@@ -128,7 +128,7 @@ def generate_evidence_based(task_prompt, evidence, citation_engine, study_contex
 
     # Bước 1 & 2: Dàn ý
     outline_prompt = f"{BASE_SYSTEM_RULES}\n{context_str}\nNHIỆM VỤ: Lập dàn ý 3-4 luận điểm cho: {task_prompt}\nBẰNG CHỨNG: {evidence_context}"
-    outline_res = call_gemini(outline_prompt, temperature=0.1)
+    outline_res = call_gemini(outline_prompt, model=MODEL_LITE, temperature=0.1)
     structured_outline = outline_res if outline_res else "1. Đặt vấn đề\n2. Phân tích\n3. Kết luận"
 
     # Bước 3: Viết nháp
