@@ -13,10 +13,11 @@ def generate_table_one(
     groupby: str = None, 
     nonnormal: List[str] = None,
     pval: bool = True
-) -> pd.DataFrame:
+) -> str:
     """
     SKILL 05 & 09: Xây dựng Bảng Đặc điểm đối tượng (Table 1).
     Tự động tính n (%), Mean ± SD (phân bố chuẩn) hoặc Median (IQR) (phân bố không chuẩn).
+    Tự động tắt p-value nếu không chia nhóm.
     """
     if df.empty or not columns:
         raise ValueError("Dữ liệu trống hoặc chưa chọn biến số.")
@@ -26,20 +27,24 @@ def generate_table_one(
         if cat in df.columns:
             df[cat] = df[cat].astype(str)
 
+    # THUẬT TOÁN THÔNG MINH: Chỉ tính p-value nếu có biến chia nhóm thực sự
+    auto_pval = True if groupby else False
+
     try:
         mytable = TableOne(
             df, 
             columns=columns, 
             categorical=categorical, 
             groupby=groupby, 
-            nonnormal=nonnormal, # Biến không phân bố chuẩn sẽ tự động dùng Median (IQR)
-            pval=pval,
+            nonnormal=nonnormal, 
+            pval=auto_pval, # Áp dụng luật tự động ở đây
             missing=False,
             decimals={"continuous": 2, "categorical": 1}
         )
         return mytable.table_html
     except Exception as e:
-        return f"Lỗi khi tạo Bảng 1: {str(e)}"
+        # Báo lỗi thẳng ra ngoài để giao diện Streamlit bắt được, không trả về chuỗi text
+        raise ValueError(f"Lỗi từ hệ thống TableOne: {str(e)}")
 
 
 def run_advanced_comparison(
