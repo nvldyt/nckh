@@ -53,19 +53,20 @@ def create_word_document(title: str, body: str) -> bytes:
     return out.getvalue()
 
 def render_ollama_writer_tab():
-    """Giao diện Tab 5: Viết luận văn bằng Ollama"""
-    st.subheader("🤖 5. Trợ lý Viết luận văn bằng Ollama (Offline)")
-    st.info("Ollama sẽ lấy bản tóm tắt y văn ở Tab 3 để làm ngữ cảnh và tự động viết thành các đoạn văn bản học thuật hoàn chỉnh.")
+    """Giao diện Tab: Viết luận văn bằng Ollama"""
+    st.subheader("🤖 Trợ lý Viết luận văn bằng Ollama (Offline)")
+    st.info("Ollama sẽ lấy bản tóm tắt y văn ở Tab 4 để làm ngữ cảnh và tự động viết thành các đoạn văn bản học thuật hoàn chỉnh.")
 
-    # Kiểm tra xem đã có bản tóm tắt từ Tab 3 chưa
+    # Kiểm tra xem đã có bản tóm tắt từ Tab Tóm tắt chưa
     summary_context = st.session_state.get("cached_summary", "")
     if not summary_context:
-        st.warning("⚠️ Chưa có dữ liệu tóm tắt! Anh hãy quay lại Tab 3 bấm nút 'Tổng hợp' trước để chuẩn bị ngữ cảnh cho AI.")
+        st.warning("⚠️ Chưa có dữ liệu tóm tắt! Anh hãy quay lại Tab 'Tóm tắt (Python)' bấm nút 'Tổng hợp' trước để chuẩn bị ngữ cảnh cho AI.")
         return
 
     col1, col2 = st.columns(2)
     with col1:
-        ollama_model = st.selectbox("Lựa chọn Model:", ["qwen2.5:7b", "qwen2.5:14b", "llama3:8b"], key="ollama_model_select")
+        # Đã cập nhật qwen2.5:3b lên đầu tiên cho máy 8GB RAM
+        ollama_model = st.selectbox("Lựa chọn Model:", ["qwen2.5:3b", "qwen2.5:7b", "llama3:8b"], key="ollama_model_select")
     with col2:
         section_choice = st.selectbox(
             "Chọn phần cần viết:",
