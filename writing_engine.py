@@ -11,7 +11,7 @@ import key_manager
 # ============================================================
 # CẤU HÌNH MODEL GROQ CHUẨN XÁC
 # ============================================================
-DEFAULT_MODEL = "llama-3.1-70b-versatile"
+DEFAULT_MODEL = "llama-3.3-70b-versatile"
 MODEL_LITE = "llama-3.1-8b-instant"
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
