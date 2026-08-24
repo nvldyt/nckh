@@ -988,8 +988,8 @@ def render_ollama_writer_tab():
 # 3. GỌI HÀM VÀO TAB 6 (Đặt phần này vào đúng vị trí thiết kế Tab của anh)
 # =====================================================================
 
-# with tabs[5]:
-#     render_ollama_writer_tab()
+with tabs[5]:
+   render_ollama_writer_tab()
     # ------------------------------------------------------------
     # TAB 7 – PHÂN TÍCH SỐ LIỆU 
     # ------------------------------------------------------------
