@@ -26,9 +26,6 @@ MODEL_LITE = "gemini-3.5-flash-lite"
 # Ví dụ: DEFAULT_MODEL = "gemini-3.5-flash"
 
 def call_gemini(prompt: str, model: str = None, temperature: float = 0.3, max_retries: int = 3) -> str:
-    """
-    Hàm gọi AI gửi Key AQ. hoặc AIza thông qua header x-goog-api-key (Chuẩn REST API của Google).
-    """
     model_name = model if model else DEFAULT_MODEL
     
     for attempt in range(max_retries):
@@ -38,12 +35,11 @@ def call_gemini(prompt: str, model: str = None, temperature: float = 0.3, max_re
                 st.error("❌ Không tìm thấy API Key nào trong hệ thống!")
                 return None
             
-            # ĐỐI VỚI KEY (Cả AIza hay AQ.): Phải truyền qua header x-goog-api-key
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
             
             headers = {
                 "Content-Type": "application/json",
-                "x-goog-api-key": api_key  # <--- CHUẨN XÁC: Truyền thẳng Key thô, bỏ hẳn chữ Bearer
+                "x-goog-api-key": api_key
             }
             
             payload = {
@@ -70,10 +66,12 @@ def call_gemini(prompt: str, model: str = None, temperature: float = 0.3, max_re
                     return None
             else:
                 st.error(f"❌ Lỗi API Gemini: {res_data}")
-                time.sleep(2) # Chờ 2 giây rồi thử lại với key khác (nếu có)
+                import time
+                time.sleep(2)
                 
         except Exception as e:
             st.error(f"❌ Lỗi kết nối ở lần thử {attempt + 1}: {e}")
+            import time
             time.sleep(2)
             
     return None
