@@ -33,8 +33,8 @@ from statistical_engine import (
 )
 from evidence_engine import (
     SourceDocument, EvidenceChunk, extract_pdf,
-    search_pubmed, search_vn_journals, ingest_pubmed_article,
-    ingest_vn_article, add_source_and_chunks,
+    search_pubmed, ingest_pubmed_article, 
+    add_source_and_chunks
 )
 from project_storage import save_project, load_project, list_projects, delete_project
 from data_engine import auto_clean_data
