@@ -91,33 +91,31 @@ def render_pdf_documents_tab(
         with c_btn2:
             if st.button("🚀 AI tự động đọc và điền Metadata cho file PDF", key=ui_key("batch_metadata_tab2")):
                 updated = 0
-                with st.spinner("AI đang lật các trang đầu để tìm Metadata..."):
+                with st.spinner("AI đang lùng sục siêu dữ liệu (Bỏ qua quảng cáo & Quét 15 đoạn đầu)..."):
                     for sid, meta in st.session_state.get("documents", {}).items():
                         if meta.get("origin") != "PDF": continue
                         
-                        # --- GOM 3 TRANG ĐẦU TIÊN CỦA FILE ĐỂ QUÉT ---
+                        # --- GOM 15 ĐOẠN TEXT ĐẦU TIÊN BẤT CHẤP SỐ TRANG ---
                         first_chunks = []
                         for c in st.session_state.get("chunks", []):
                             if _field(c, "source_id") == sid:
                                 text_chunk = _field(c, "text", "") or ""
-                                page_val = str(_field(c, "page", "")).strip()
-                                if page_val in ["1", "2", "3"]:
-                                    first_chunks.append(text_chunk)
+                                if text_chunk: first_chunks.append(text_chunk)
                         
-                        target = "\n".join(first_chunks)
-                        if not target:
-                            target = "\n".join([_field(c, "text", "") or "" for c in st.session_state.get("chunks", []) if _field(c, "source_id") == sid][:10])
-                        
-                        target = target[:12000]
-                        # ---------------------------------------------
+                        # Nối 15 đoạn đầu lại, lấy tối đa 15.000 ký tự đưa cho AI
+                        target = "\n".join(first_chunks[:15])[:15000]
+                        # ----------------------------------------------------
 
                         if target:
                             m = extract_metadata_from_text_ai_wrapper(target)
                             if m:
                                 for k, v in m.items():
-                                    if v and k == "title" and str(v).lower().endswith(".pdf"):
+                                    v_str = str(v).strip()
+                                    # Ép cứng: Nếu AI ngu ngốc trả về tên file .pdf hoặc chữ "null" thì vứt bỏ
+                                    if v_str and k == "title" and v_str.lower().endswith(".pdf"):
                                         continue
-                                    if v: meta[k] = v
+                                    if v_str and v_str.lower() not in ["null", "none", "unknown", ""]: 
+                                        meta[k] = v_str
                                 updated += 1
                 st.success(f"✅ Đã cập nhật metadata cho {updated} file PDF.")
                 if updated: 
