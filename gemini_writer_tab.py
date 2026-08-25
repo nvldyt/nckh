@@ -258,9 +258,37 @@ def render_gemini_writer_tab(
             ctx = f"SỐ LIỆU BẢNG:\n{my_research_data}\n\nNHẬN XÉT DIỄN GIẢI:\n{my_table_remarks}"
             run_quick_task("Bàn luận và So sánh toàn diện", ctx, f"DỮ LIỆU NGHIÊN CỨU:\n{ctx}\nYÊU CẦU: Viết BÀN LUẬN TOÀN DIỆN. Giải thích nguyên nhân và so sánh với y văn. Viết liền mạch, không dùng nhãn phân chia.\n{citation_rules}", 8)
     if btn5:
-        query = "Tài liệu tham khảo, tác giả, năm xuất bản, tạp chí"
-        task = f"Chọn các SOURCE_TAG phù hợp làm tài liệu tham khảo chính và để hệ thống tạo danh mục Vancouver.\n{citation_rules}"
-        run_quick_task("Trích dẫn TLTK", query, task, 10)
+        with result_box:
+            st.write("---")
+            st.subheader("📚 Trích dẫn Tài liệu tham khảo (Chuẩn Vancouver)")
+            
+            # 1. DANH SÁCH ĐÃ TRÍCH DẪN (Chính xác theo [1], [2] trong bài AI vừa viết)
+            used_bib = citation_bibliography_wrapper()
+            if used_bib:
+                st.markdown("#### 📌 Các tài liệu ĐÃ TRÍCH DẪN trong bản nháp vừa tạo:")
+                st.markdown(used_bib.replace("\n", "\n\n"))
+            else:
+                st.info("💡 Chưa có tài liệu nào được trích dẫn. Hãy chạy các lệnh viết văn (Đặt vấn đề, Tổng quan...) trước để hệ thống ghi nhận.")
+            
+            st.markdown("---")
+            
+            # 2. TOÀN BỘ KHO TÀI LIỆU
+            st.markdown("#### 📂 Toàn bộ tài liệu hiện có trong Evidence Database:")
+            docs = st.session_state.get("documents", {})
+            if docs:
+                bib_lines = []
+                for i, (sid, meta) in enumerate(docs.items(), 1):
+                    authors = meta.get("authors") or "Tác giả chưa xác định"
+                    title = meta.get("title") or meta.get("file_name") or "Tài liệu chưa xác định"
+                    journal = meta.get("journal") or "Tạp chí chưa rõ"
+                    year = meta.get("year") or "Năm chưa rõ"
+                    text = f"**[{i}]** {authors}. *{title}*. {journal}. {year}."
+                    if meta.get("doi"): 
+                        text += f" DOI: {meta['doi']}."
+                    bib_lines.append(text)
+                st.markdown("\n\n".join(bib_lines))
+            else:
+                st.warning("⚠️ Chưa có tài liệu nào trong hệ thống.")
     if btnc:
         if not custom_prompt.strip(): st.warning("Vui lòng nhập yêu cầu!")
         else: run_quick_task("Kết quả lệnh tùy chỉnh", custom_prompt, f"{custom_prompt}\n{citation_rules}", k_custom)
