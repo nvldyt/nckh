@@ -12,9 +12,20 @@ from writing_engine import call_gemini, BASE_SYSTEM_RULES, DEFAULT_MODEL, MODEL_
 from synthesis_engine import build_literature_matrix
 from audit_engine import Audit_generated_text
 
-def render_gemini_writer_tab(ui_key, render_evidence_database_status, build_literature_matrix, create_word_document, 
-                                 generate_evidence_based_wrapper, get_citation_engine, citation_bibliography_wrapper, 
-                                 Audit_generated_text_wrapper, internal_overlap_Audit_wrapper, _field):
+def render_gemini_writer_tab(
+    ui_key, 
+    render_evidence_database_status, 
+    build_literature_matrix, 
+    create_word_document, 
+    generate_evidence_based_wrapper, 
+    get_citation_engine, 
+    citation_bibliography_wrapper, 
+    Audit_generated_text_wrapper, 
+    internal_overlap_Audit_wrapper, 
+    _field,
+    format_numbered_citations,
+    extract_metadata_from_text_ai_wrapper
+):
     
     st.header("📝 Viết tự động bằng AI (RAG)")
     st.header("✍️ Viết luận văn dựa trên bằng chứng")
