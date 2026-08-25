@@ -506,7 +506,35 @@ def restore_project(data: dict):
         except Exception: pass
     rebuild_index()
     gc.collect()
-
+def format_numbered_citations(generated_text: str) -> str:
+    """Hàm chuẩn hóa và đánh số thứ tự trích dẫn nối tiếp chuẩn Vancouver."""
+    pattern = r'\[(?:REF-)?(SRC-[A-Z0-9]+)\]'
+    citation_mapping = {}
+    current_index = 1
+    
+    def replacer(match):
+        nonlocal current_index
+        ref_id = match.group(1)
+        if ref_id not in citation_mapping:
+            citation_mapping[ref_id] = current_index
+            current_index += 1
+        return f"[{citation_mapping[ref_id]}]"
+        
+    clean_text = re.sub(pattern, replacer, generated_text)
+    
+    new_refs = []
+    docs = st.session_state.get("documents", {})
+    for ref_id, idx in citation_mapping.items():
+        new_refs.append({
+            "ref_id": ref_id,
+            "vancouver_index": idx,
+            "metadata": docs.get(ref_id, {})
+        })
+    
+    st.session_state["current_references"] = new_refs
+    st.session_state["citation_registry"] = citation_mapping
+    
+    return clean_text
 
 # ============================================================
 # 4. MAIN UI - 9 TABS TÍCH HỢP ĐẦY ĐỦ
