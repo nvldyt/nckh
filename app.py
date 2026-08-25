@@ -283,6 +283,36 @@ VĂN BẢN CẦN QUÉT:
 # ============================================================
 # 3. HELPER FUNCTIONS
 # ============================================================
+def parse_vancouver_text_wrapper(pasted_text: str, docs_info: dict) -> dict:
+    prompt = f"""
+Bạn là chuyên gia dữ liệu. 
+Tôi có một danh sách các tài liệu trong hệ thống như sau (Định dạng: MÃ_ID --- Tên file/Tiêu đề tạm):
+{json.dumps(docs_info, ensure_ascii=False, indent=2)}
+
+Người dùng vừa dán một danh sách trích dẫn (chuẩn Vancouver) như sau:
+{pasted_text}
+
+NHIỆM VỤ:
+1. Phân tích các trích dẫn người dùng dán để lấy: authors, title, journal, year, doi.
+2. Đối chiếu Tiêu đề/Tác giả với danh sách tài liệu trong hệ thống để tìm ra MÃ_ID phù hợp nhất cho mỗi trích dẫn.
+3. TRẢ VỀ DUY NHẤT 1 KHỐI JSON THEO CẤU TRÚC:
+{{
+    "MÃ_ID_TƯƠNG_ỨNG_1": {{"authors": "...", "title": "...", "year": "...", "journal": "...", "doi": "..."}},
+    "MÃ_ID_TƯƠNG_ỨNG_2": {{"authors": "...", "title": "...", "year": "...", "journal": "...", "doi": "..."}}
+}}
+"""
+    try:
+        res = call_gemini(prompt, model=DEFAULT_MODEL, temperature=0.0)
+        if not res: return {}
+        import re
+        match = re.search(r'\{.*\}', res, re.DOTALL)
+        if match:
+            out = json.loads(match.group(0))
+            return {str(k): {str(ik).lower(): str(iv) for ik, iv in v.items()} for k, v in out.items() if isinstance(v, dict)}
+        return {}
+    except Exception:
+        return {}
+
 def add_pdf_documents(uploaded_files) -> Tuple[int, int, List[str]]:
     new_sources = 0
     new_chunks_count = 0
@@ -602,8 +632,9 @@ def main():
             retrieve_evidence_wrapper=retrieve_evidence_wrapper,
             MAX_TOP_K=MAX_TOP_K,
             DEFAULT_TOP_K=DEFAULT_TOP_K,
-            extract_metadata_from_text_ai_wrapper=extract_metadata_from_text_ai_wrapper,  # <--- Biến này
-            _field=_field  # <--- Và biến này
+            extract_metadata_from_text_ai_wrapper=extract_metadata_from_text_ai_wrapper,
+            parse_vancouver_text_wrapper=parse_vancouver_text_wrapper,  # <--- THÊM DÒNG NÀY
+            _field=_field
         )
     # ------------------------------------------------------------
     # TAB 3 – TỔNG HỢP OFFLINE
