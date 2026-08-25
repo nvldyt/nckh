@@ -298,29 +298,37 @@ def add_pdf_documents(uploaded_files) -> Tuple[int, int, List[str]]:
                 new_chunks_list.extend(chunks)
                 sid = _field(source, "source_id")
                 if sid and chunks:
+                    # GOM TOÀN BỘ CHỮ Ở TRANG 1 ĐỂ TÌM TÁC GIẢ, NĂM, TẠP CHÍ, TIÊU ĐỀ
                     page_one = []
                     for c in chunks:
-                        page = str(_field(c, "page", "") or "").strip().lower()
-                        txt = _field(c, "text", "") or ""
-                        if page in {"1", "trang 1", "page 1"}:
-                            page_one.append(txt)
-                    target = page_one[0] if page_one else (_field(chunks[0], "text", "") or "")
+                        page_val = _field(c, "page", "")
+                        # Lấy tất cả các đoạn thuộc trang 1
+                        if str(page_val).strip() == "1":
+                            page_one.append(_field(c, "text", "") or "")
+                    
+                    # Nếu không xác định được trang, lấy 5 đoạn đầu tiên. Giới hạn 6000 ký tự.
+                    target = "\n".join(page_one) if page_one else "\n".join([_field(c, "text", "") or "" for c in chunks[:5]])
+                    target = target[:6000]
+                    
                     if target:
                         meta = extract_metadata_from_text_ai_wrapper(target)
                         if meta and sid in st.session_state.get("documents", {}):
                             for k, v in meta.items():
+                                # Loại chặn: Nếu AI vẫn ngớ ngẩn lấy đuôi .pdf làm Tiêu đề thì bỏ qua
+                                if v and k == "title" and str(v).lower().endswith(".pdf"):
+                                    continue
                                 if v:
                                     st.session_state["documents"][sid][k] = v
-                    gc.collect()
+                gc.collect()
         except Exception as exc:
             errors.append(f"{getattr(uploaded_file,'name','PDF')}: {exc}")
             gc.collect()
+            
     if new_sources:
         rebuild_index(new_chunks=new_chunks_list)
     del new_chunks_list
     gc.collect()
     return new_sources, new_chunks_count, errors
-
 
 def evidence_database_summary() -> Dict[str, Any]:
     docs = st.session_state.get("documents", {})
