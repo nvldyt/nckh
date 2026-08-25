@@ -94,15 +94,30 @@ def render_pdf_documents_tab(
                 with st.spinner("AI đang quét metadata của toàn bộ PDF..."):
                     for sid, meta in st.session_state.get("documents", {}).items():
                         if meta.get("origin") != "PDF": continue
-                        target = ""
+                        
+                        # --- BẮT ĐẦU ĐOẠN ĐỒNG BỘ THUẬT TOÁN TÌM TRANG 1 ---
+                        page_one = []
+                        first_chunks = []
                         for c in st.session_state.get("chunks", []):
                             if _field(c, "source_id") == sid:
-                                target = _field(c, "text", "") or ""
-                                if target: break
+                                text_chunk = _field(c, "text", "") or ""
+                                first_chunks.append(text_chunk)
+                                # Ưu tiên hút toàn bộ chữ thuộc trang 1
+                                if str(_field(c, "page", "")).strip() == "1":
+                                    page_one.append(text_chunk)
+                        
+                        # Nếu không có số trang, lấy 5 đoạn đầu tiên. Giới hạn 6000 ký tự.
+                        target = "\n".join(page_one) if page_one else "\n".join(first_chunks[:5])
+                        target = target[:6000]
+                        # --- KẾT THÚC ĐOẠN SỬA ---
+
                         if target:
                             m = extract_metadata_from_text_ai_wrapper(target)
                             if m:
                                 for k, v in m.items():
+                                    # Ép: nếu AI trả về chuỗi có đuôi .pdf, ta bỏ qua không thèm nhận
+                                    if v and k == "title" and str(v).lower().endswith(".pdf"):
+                                        continue
                                     if v: meta[k] = v
                                 updated += 1
                 st.success(f"✅ Đã cập nhật metadata cho {updated} file PDF.")
