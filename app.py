@@ -247,34 +247,33 @@ def internal_overlap_Audit_wrapper(text: str, top_k: int = 5):
 
 def extract_metadata_from_text_ai_wrapper(text: str) -> dict:
     prompt = f"""
-Bạn là chuyên gia thư viện y khoa. Nhiệm vụ của bạn là trích xuất siêu dữ liệu (metadata) từ văn bản thô của trang đầu tiên của một bài báo nghiên cứu.
+Bạn là chuyên gia thư viện y khoa. Nhiệm vụ của bạn là trích xuất siêu dữ liệu (metadata) từ văn bản thô được trích xuất từ các trang đầu tiên của một bài báo nghiên cứu.
 
-ĐẶC BIỆT LƯU Ý VỚI BÀI BÁO TIẾNG VIỆT:
-1. Tác giả (authors): Thường nằm ngay dưới tiêu đề bài báo. Hãy lọc bỏ tên cơ quan/bệnh viện/đại học. Gom các tên người lại, cách nhau bằng dấu phẩy.
-2. Tạp chí (journal): Tìm các cụm từ bắt đầu bằng "Tạp chí", "Y học", "Nghiên cứu", "Y dược", "Journal".
-3. Năm xuất bản (year): Tìm con số 4 chữ số hợp lý nhất.
+QUY TẮC NGHIÊM NGẶT (RẤT QUAN TRỌNG):
+1. VƯỢT QUA NHIỄU QUẢNG CÁO: Bài báo có thể có 1-2 trang đầu là bìa quảng cáo của ResearchGate hoặc tạp chí. BỎ QUA hoàn toàn các cụm từ như "Join ResearchGate for free", "Downloaded from...". HÃY TÌM ĐẾN TRANG CÓ CHỨA TIÊU ĐỀ BÀI BÁO THỰC SỰ.
+2. Tiêu đề (title): Tên khoa học của bài nghiên cứu.
+3. Tác giả (authors): Lọc bỏ tên cơ quan/bệnh viện/email. Gom các tên người lại, cách nhau bằng dấu phẩy.
+4. Tạp chí (journal): Tìm các cụm từ bắt đầu bằng "Tạp chí", "Y học", "Journal", "Review", "Clin", "Med", v.v.
+5. Năm xuất bản (year): Con số 4 chữ số (VD: 2021, 2023) hợp lý nhất.
 
-TRẢ VỀ DUY NHẤT MỘT CHUỖI JSON HỢP LỆ, KHÔNG GIẢI THÍCH GÌ THÊM.
+TRẢ VỀ DUY NHẤT MỘT CHUỖI JSON HỢP LỆ, KHÔNG GIẢI THÍCH GÌ THÊM. Nếu không tìm thấy, để chuỗi rỗng "".
 Cấu trúc JSON bắt buộc:
 {{"authors":"...","title":"...","year":"...","journal":"...","doi":"..."}}
 
-ĐOẠN VĂN BẢN QUÉT ĐƯỢC:
-{text[:4500]}
+ĐOẠN VĂN BẢN QUÉT ĐƯỢC CỦA CÁC TRANG ĐẦU:
+{text[:12000]}
 """
     try:
-        res = call_gemini(prompt, model=DEFAULT_MODEL, temperature=0.0)
+        res = call_gemini(prompt, model=DEFAULT_MODEL, temperature=0.1)
     except Exception:
         return {}
     if not res:
         return {}
     try:
         cleaned = res.strip()
-        if cleaned.startswith("```json"):
-            cleaned = cleaned[7:]
-        elif cleaned.startswith("```"):
-            cleaned = cleaned[3:]
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3]
+        if cleaned.startswith("```json"): cleaned = cleaned[7:]
+        elif cleaned.startswith("```"): cleaned = cleaned[3:]
+        if cleaned.endswith("```"): cleaned = cleaned[:-3]
         out = json.loads(cleaned.strip())
         return out if isinstance(out, dict) else {}
     except Exception:
@@ -298,23 +297,23 @@ def add_pdf_documents(uploaded_files) -> Tuple[int, int, List[str]]:
                 new_chunks_list.extend(chunks)
                 sid = _field(source, "source_id")
                 if sid and chunks:
-                    # GOM TOÀN BỘ CHỮ Ở TRANG 1 ĐỂ TÌM TÁC GIẢ, NĂM, TẠP CHÍ, TIÊU ĐỀ
-                    page_one = []
+                    # GOM CHỮ TỪ 3 TRANG ĐẦU (Đề phòng trang bìa ResearchGate)
+                    first_chunks = []
                     for c in chunks:
-                        page_val = _field(c, "page", "")
-                        # Lấy tất cả các đoạn thuộc trang 1
-                        if str(page_val).strip() == "1":
-                            page_one.append(_field(c, "text", "") or "")
+                        page_val = str(_field(c, "page", "")).strip()
+                        if page_val in ["1", "2", "3"]:
+                            first_chunks.append(_field(c, "text", "") or "")
                     
-                    # Nếu không xác định được trang, lấy 5 đoạn đầu tiên. Giới hạn 6000 ký tự.
-                    target = "\n".join(page_one) if page_one else "\n".join([_field(c, "text", "") or "" for c in chunks[:5]])
-                    target = target[:6000]
+                    target = "\n".join(first_chunks)
+                    if not target:
+                        target = "\n".join([_field(c, "text", "") or "" for c in chunks[:10]])
+                    
+                    target = target[:12000] # Nới rộng giới hạn lên 12000 ký tự
                     
                     if target:
                         meta = extract_metadata_from_text_ai_wrapper(target)
                         if meta and sid in st.session_state.get("documents", {}):
                             for k, v in meta.items():
-                                # Loại chặn: Nếu AI vẫn ngớ ngẩn lấy đuôi .pdf làm Tiêu đề thì bỏ qua
                                 if v and k == "title" and str(v).lower().endswith(".pdf"):
                                     continue
                                 if v:
@@ -324,8 +323,7 @@ def add_pdf_documents(uploaded_files) -> Tuple[int, int, List[str]]:
             errors.append(f"{getattr(uploaded_file,'name','PDF')}: {exc}")
             gc.collect()
             
-    if new_sources:
-        rebuild_index(new_chunks=new_chunks_list)
+    if new_sources: rebuild_index(new_chunks=new_chunks_list)
     del new_chunks_list
     gc.collect()
     return new_sources, new_chunks_count, errors
