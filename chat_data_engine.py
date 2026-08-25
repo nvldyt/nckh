@@ -36,7 +36,7 @@ def extract_text_from_file(uploaded_file):
 
 def render_chat_assistant():
     st.write("---")
-    st.subheader("🤖 Phân tích Dữ liệu với Groq AI (Bản Offline)")
+    st.subheader("🤖 Phân tích Dữ liệu với Groq AI")
     st.caption("Trò chuyện trực tiếp với dữ liệu Excel của anh. AI đã bị ép buộc bám sát danh sách thuốc thực tế.")
     
     # 1. Khởi tạo bộ nhớ cho cuộc trò chuyện
