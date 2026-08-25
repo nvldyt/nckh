@@ -624,7 +624,9 @@ def main():
             citation_bibliography_wrapper=citation_bibliography_wrapper,
             Audit_generated_text_wrapper=Audit_generated_text_wrapper,
             internal_overlap_Audit_wrapper=internal_overlap_Audit_wrapper,
-            _field=_field
+            _field=_field,
+            format_numbered_citations=format_numbered_citations,
+            extract_metadata_from_text_ai_wrapper=extract_metadata_from_text_ai_wrapper
         )
     # ------------------------------------------------------------
     # TAB 6 – VIẾT BẰNG OLLAMA LOCAL 
