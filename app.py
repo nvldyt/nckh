@@ -250,33 +250,34 @@ import json
 
 def extract_metadata_from_text_ai_wrapper(text: str) -> dict:
     prompt = f"""
-Bạn là hệ thống trích xuất dữ liệu y khoa tự động. NHIỆM VỤ CỦA BẠN: Đọc đoạn văn bản sau và trích xuất đúng 5 trường thông tin.
+Bạn là chuyên gia trích xuất dữ liệu Y khoa. NHIỆM VỤ: Đọc văn bản thô của bài báo và tìm đúng 5 trường thông tin dưới đây.
 
-QUY TẮC TUYỆT ĐỐI BẮT BUỘC:
-1. CHỈ TRẢ VỀ ĐÚNG 1 ĐOẠN JSON. KHÔNG VIẾT THÊM BẤT KỲ CHỮ NÀO KHÁC (Cấm nói "Đây là kết quả...", "Dưới đây là...").
-2. VƯỢT QUA NHIỄU QUẢNG CÁO: Lờ đi các trang bìa ghi "Join ResearchGate for free", "Downloaded from".
-3. Tiêu đề (title): Tuyệt đối không lấy tên file (.pdf). Tìm tiêu đề khoa học lớn nhất của bài báo.
-4. Tác giả (authors): Chỉ lấy tên người, cách nhau bằng dấu phẩy. Bỏ qua tên trường đại học/bệnh viện.
+QUY TẮC SỐNG CÒN:
+1. KHÔNG LẤY TÊN FILE: Tiêu đề bài báo tuyệt đối không được có đuôi .pdf. Hãy tìm tên khoa học thật sự.
+2. VƯỢT QUA BÌA QUẢNG CÁO: Nếu thấy chữ "Join ResearchGate", "Downloaded from", hãy lờ đi và đọc tiếp xuống dưới.
+3. ĐỊNH DẠNG: Chỉ trả về ĐÚNG MỘT KHỐI JSON. Không nói thêm bất kỳ câu nào khác. Không dùng Markdown (như ```json).
 
-Định dạng JSON bắt buộc:
+MẪU JSON BẮT BUỘC (Các key phải viết chữ thường):
 {{"authors": "...", "title": "...", "year": "...", "journal": "...", "doi": "..."}}
 
 VĂN BẢN CẦN QUÉT:
 {text[:15000]}
 """
     try:
-        # Ép temperature = 0.0 để AI làm việc như một cỗ máy, không sáng tạo
+        # Ép temperature=0.0 để AI làm việc như một cái máy, không sáng tạo
         res = call_gemini(prompt, model=DEFAULT_MODEL, temperature=0.0)
-        if not res: 
-            return {}
-            
-        # Dùng Regex tóm cổ chính xác khối JSON, bất chấp AI có "nói nhảm" thêm chữ ở ngoài
+        if not res: return {}
+        
+        # Regex bắt sống khối JSON từ dấu { đầu tiên đến dấu } cuối cùng
+        import re
+        import json
         match = re.search(r'\{.*\}', res, re.DOTALL)
         if match:
             out = json.loads(match.group(0))
-            return out if isinstance(out, dict) else {}
+            # Chuẩn hóa toàn bộ key về chữ thường một lần nữa cho chắc ăn
+            return {str(k).lower(): str(v) for k, v in out.items()}
         return {}
-    except Exception as e:
+    except Exception:
         return {}
 
 # ============================================================
