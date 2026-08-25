@@ -95,30 +95,36 @@ def render_pdf_documents_tab(
                     for sid, meta in st.session_state.get("documents", {}).items():
                         if meta.get("origin") != "PDF": continue
                         
-                        # --- GOM 15 ĐOẠN TEXT ĐẦU TIÊN BẤT CHẤP SỐ TRANG ---
+                        # Gom 15 đoạn text đầu tiên (khoảng 3-4 trang) để AI quét
                         first_chunks = []
                         for c in st.session_state.get("chunks", []):
-                            if _field(c, "source_id") == sid:
+                            # Dùng str() để đảm bảo ID khớp nhau tuyệt đối
+                            if str(_field(c, "source_id")) == str(sid):
                                 text_chunk = _field(c, "text", "") or ""
                                 if text_chunk: first_chunks.append(text_chunk)
                         
-                        # Nối 15 đoạn đầu lại, lấy tối đa 15.000 ký tự đưa cho AI
                         target = "\n".join(first_chunks[:15])[:15000]
-                        # ----------------------------------------------------
 
                         if target:
                             m = extract_metadata_from_text_ai_wrapper(target)
                             if m:
                                 for k, v in m.items():
+                                    k_lower = str(k).lower().strip() # Ép key về chữ thường (title, authors...)
                                     v_str = str(v).strip()
-                                    # Ép cứng: Nếu AI ngu ngốc trả về tên file .pdf hoặc chữ "null" thì vứt bỏ
-                                    if v_str and k == "title" and v_str.lower().endswith(".pdf"):
-                                        continue
-                                    if v_str and v_str.lower() not in ["null", "none", "unknown", ""]: 
-                                        meta[k] = v_str
+                                    
+                                    if k_lower in ["title", "authors", "journal", "year", "doi"]:
+                                        # Bỏ qua nếu AI trả về giá trị rỗng hoặc chữ null
+                                        if v_str and v_str.lower() not in ["null", "none", "unknown", "n/a", "na", ""]:
+                                            # ĐÁNH CHẶN: Nếu AI vẫn cố chấp lấy tên file .pdf thì vứt bỏ
+                                            if k_lower == "title" and v_str.lower().endswith(".pdf"):
+                                                continue
+                                            meta[k_lower] = v_str
                                 updated += 1
+                                
                 st.success(f"✅ Đã cập nhật metadata cho {updated} file PDF.")
                 if updated: 
+                    # QUAN TRỌNG NHẤT: Bắn tín hiệu ép Streamlit XÓA CACHE và vẽ lại bảng mới
+                    st.session_state["ui_version"] = st.session_state.get("ui_version", 0) + 1
                     time.sleep(0.8)
                     st.rerun()
                     
