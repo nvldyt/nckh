@@ -595,7 +595,9 @@ def main():
             add_pdf_documents=add_pdf_documents,
             retrieve_evidence_wrapper=retrieve_evidence_wrapper,
             MAX_TOP_K=MAX_TOP_K,
-            DEFAULT_TOP_K=DEFAULT_TOP_K
+            DEFAULT_TOP_K=DEFAULT_TOP_K,
+            extract_metadata_from_text_ai_wrapper=extract_metadata_from_text_ai_wrapper,  # <--- Biến này
+            _field=_field  # <--- Và biến này
         )
     # ------------------------------------------------------------
     # TAB 3 – TỔNG HỢP OFFLINE
