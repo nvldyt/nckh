@@ -245,40 +245,39 @@ def internal_overlap_Audit_wrapper(text: str, top_k: int = 5):
     return internal_overlap_Audit(text, st.session_state.get("chunks", []), top_k=top_k)
 
 
+import re
+import json
+
 def extract_metadata_from_text_ai_wrapper(text: str) -> dict:
     prompt = f"""
-Bạn là chuyên gia thư viện y khoa. Nhiệm vụ của bạn là trích xuất siêu dữ liệu (metadata) từ văn bản thô được trích xuất từ các trang đầu tiên của một bài báo nghiên cứu.
+Bạn là hệ thống trích xuất dữ liệu y khoa tự động. NHIỆM VỤ CỦA BẠN: Đọc đoạn văn bản sau và trích xuất đúng 5 trường thông tin.
 
-QUY TẮC NGHIÊM NGẶT (RẤT QUAN TRỌNG):
-1. VƯỢT QUA NHIỄU QUẢNG CÁO: Bài báo có thể có 1-2 trang đầu là bìa quảng cáo của ResearchGate hoặc tạp chí. BỎ QUA hoàn toàn các cụm từ như "Join ResearchGate for free", "Downloaded from...". HÃY TÌM ĐẾN TRANG CÓ CHỨA TIÊU ĐỀ BÀI BÁO THỰC SỰ.
-2. Tiêu đề (title): Tên khoa học của bài nghiên cứu.
-3. Tác giả (authors): Lọc bỏ tên cơ quan/bệnh viện/email. Gom các tên người lại, cách nhau bằng dấu phẩy.
-4. Tạp chí (journal): Tìm các cụm từ bắt đầu bằng "Tạp chí", "Y học", "Journal", "Review", "Clin", "Med", v.v.
-5. Năm xuất bản (year): Con số 4 chữ số (VD: 2021, 2023) hợp lý nhất.
+QUY TẮC TUYỆT ĐỐI BẮT BUỘC:
+1. CHỈ TRẢ VỀ ĐÚNG 1 ĐOẠN JSON. KHÔNG VIẾT THÊM BẤT KỲ CHỮ NÀO KHÁC (Cấm nói "Đây là kết quả...", "Dưới đây là...").
+2. VƯỢT QUA NHIỄU QUẢNG CÁO: Lờ đi các trang bìa ghi "Join ResearchGate for free", "Downloaded from".
+3. Tiêu đề (title): Tuyệt đối không lấy tên file (.pdf). Tìm tiêu đề khoa học lớn nhất của bài báo.
+4. Tác giả (authors): Chỉ lấy tên người, cách nhau bằng dấu phẩy. Bỏ qua tên trường đại học/bệnh viện.
 
-TRẢ VỀ DUY NHẤT MỘT CHUỖI JSON HỢP LỆ, KHÔNG GIẢI THÍCH GÌ THÊM. Nếu không tìm thấy, để chuỗi rỗng "".
-Cấu trúc JSON bắt buộc:
-{{"authors":"...","title":"...","year":"...","journal":"...","doi":"..."}}
+Định dạng JSON bắt buộc:
+{{"authors": "...", "title": "...", "year": "...", "journal": "...", "doi": "..."}}
 
-ĐOẠN VĂN BẢN QUÉT ĐƯỢC CỦA CÁC TRANG ĐẦU:
-{text[:12000]}
+VĂN BẢN CẦN QUÉT:
+{text[:15000]}
 """
     try:
-        res = call_gemini(prompt, model=DEFAULT_MODEL, temperature=0.1)
-    except Exception:
+        # Ép temperature = 0.0 để AI làm việc như một cỗ máy, không sáng tạo
+        res = call_gemini(prompt, model=DEFAULT_MODEL, temperature=0.0)
+        if not res: 
+            return {}
+            
+        # Dùng Regex tóm cổ chính xác khối JSON, bất chấp AI có "nói nhảm" thêm chữ ở ngoài
+        match = re.search(r'\{.*\}', res, re.DOTALL)
+        if match:
+            out = json.loads(match.group(0))
+            return out if isinstance(out, dict) else {}
         return {}
-    if not res:
+    except Exception as e:
         return {}
-    try:
-        cleaned = res.strip()
-        if cleaned.startswith("```json"): cleaned = cleaned[7:]
-        elif cleaned.startswith("```"): cleaned = cleaned[3:]
-        if cleaned.endswith("```"): cleaned = cleaned[:-3]
-        out = json.loads(cleaned.strip())
-        return out if isinstance(out, dict) else {}
-    except Exception:
-        return {}
-
 
 # ============================================================
 # 3. HELPER FUNCTIONS
