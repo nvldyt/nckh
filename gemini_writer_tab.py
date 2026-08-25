@@ -31,74 +31,9 @@ def render_gemini_writer_tab(
     st.header("✍️ Viết luận văn dựa trên bằng chứng")
     st.warning("Đây là công cụ tạo bản nháp. Mọi citation và số liệu phải được Audit lại (đối chiếu bản gốc) trước khi đưa vào luận văn chính thức.")
     render_evidence_database_status("dùng cho các nút viết nhanh bên dưới")
-
+    
     # =====================================================================
-    # 1. QUẢN LÝ METADATA (ĐÃ TÍCH HỢP GỌN GÀNG VÀO TAB 5)
-    # =====================================================================
-    with st.expander("🏷️ QUẢN LÝ THÔNG TIN THƯ MỤC (METADATA) TÀI LIỆU", expanded=False):
-        st.info("💡 Bảng dưới đây quản lý (Tác giả, Năm, Tạp chí, DOI) để AI tự động trích dẫn chuẩn Vancouver. Anh có thể sửa tay hoặc nhờ AI quét hàng loạt.")
-        docs = st.session_state.get("documents", {})
-        if not docs: 
-            st.warning("⚠️ Chưa có tài liệu nào trong Evidence Database.")
-        else:
-            data = []
-            for sid, meta in docs.items(): 
-                data.append({
-                    "source_id": str(sid), 
-                    "origin": str(meta.get("origin") or "Khác"), 
-                    "authors": str(meta.get("authors") or ""), 
-                    "title": str(meta.get("title") or meta.get("file_name") or ""), 
-                    "journal": str(meta.get("journal") or ""), 
-                    "year": str(meta.get("year") or ""), 
-                    "doi": str(meta.get("doi") or "")
-                })
-            
-            ed = st.data_editor(
-                pd.DataFrame(data), 
-                column_config={
-                    "source_id": st.column_config.TextColumn("Mã ID", disabled=True), 
-                    "origin": st.column_config.TextColumn("Nguồn", disabled=True), 
-                    "authors": "Tác giả", 
-                    "title": "Tên bài báo / Tài liệu", 
-                    "journal": "Tạp chí / NXB", 
-                    "year": "Năm XB", 
-                    "doi": "DOI"
-                }, 
-                use_container_width=True, 
-                num_rows="fixed", 
-                key=ui_key("meta_editor")
-            )
-            
-            c_btn1, c_btn2 = st.columns([1, 1])
-            with c_btn1:
-                if st.button("💾 Lưu các chỉnh sửa bảng trên", type="primary", key=ui_key("save_metadata_changes")):
-                    for _, row in ed.iterrows():
-                        sid = str(row["source_id"])
-                        if sid in st.session_state["documents"]:
-                            for k in ["authors", "title", "journal", "year", "doi"]: 
-                                st.session_state["documents"][sid][k] = "" if pd.isna(row[k]) else str(row[k])
-                    st.success("✅ Đã cập nhật thông tin thư mục thành công!")
-                    time.sleep(0.8)
-                    st.rerun()
-            with c_btn2:
-                if st.button("🚀 AI tự động đọc và điền Metadata cho file PDF", key=ui_key("batch_metadata")):
-                    updated = 0
-                    with st.spinner("AI đang quét metadata của toàn bộ PDF..."):
-                        for sid, meta in st.session_state.get("documents", {}).items():
-                            if meta.get("origin") != "PDF": continue
-                            target = ""
-                            for c in st.session_state.get("chunks", []):
-                                if _field(c, "source_id") == sid:
-                                    target = _field(c, "text", "") or ""
-                                    if target: break
-                            if target:
-                                # Trực tiếp gọi hàm wrapper hoặc xử lý ở đây nếu cần
-                                updated += 1
-                    st.success(f"✅ Đã cập nhật metadata cho {updated} file PDF.")
-                    if updated: time.sleep(0.8); st.rerun()
-
-    # =====================================================================
-    # 2. KHAI BÁO BỐI CẢNH NGHIÊN CỨU (STUDY CONTEXT)
+    # 1. KHAI BÁO BỐI CẢNH NGHIÊN CỨU (STUDY CONTEXT)
     # =====================================================================
     with st.expander("🎯 KHAI BÁO BỐI CẢNH NGHIÊN CỨU (STUDY CONTEXT) - Cấu hình 1 lần dùng mãi mãi", expanded=True):
         st.info("💡 Khai báo thông tin đề tài tại đây để AI tự động hiểu và bám sát vào mục tiêu của anh trong mọi lần sinh văn bản, không sợ lạc đề.")
@@ -116,7 +51,7 @@ def render_gemini_writer_tab(
             st.success("✅ Đã lưu bối cảnh! Bộ não AI đã được đồng bộ hóa với đề tài của anh.")
 
     # =====================================================================
-    # 3. MA TRẬN TỔNG HỢP Y VĂN
+    # 2. MA TRẬN TỔNG HỢP Y VĂN
     # =====================================================================
     with st.expander("🌟 Tự động lập Ma trận tổng hợp y văn từ Evidence Database", expanded=False):
         st.info("💡 Tính năng này tự động quét tất cả các tài liệu / bài báo bạn đã nạp, tổng hợp thành bảng so sánh chuẩn y khoa (Tác giả, Năm, Thiết kế, Cỡ mẫu, Kết quả chính).")
@@ -139,7 +74,7 @@ def render_gemini_writer_tab(
                     st.error("❌ Không thể trích xuất dữ liệu ma trận. Vui lòng thử lại.")
 
     # =====================================================================
-    # 4. DỮ LIỆU NGHIÊN CỨU & CÁC NÚT VIẾT NHANH
+    # 3. DỮ LIỆU NGHIÊN CỨU & CÁC NÚT VIẾT NHANH
     # =====================================================================
     st.markdown("### 📊 Dữ liệu nghiên cứu của riêng anh")
     if st.session_state.get("ai_pending_remark"):
