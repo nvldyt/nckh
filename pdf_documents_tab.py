@@ -12,6 +12,7 @@ def render_pdf_documents_tab(
     MAX_TOP_K,
     DEFAULT_TOP_K,
     extract_metadata_from_text_ai_wrapper,
+    parse_vancouver_text_wrapper, # <--- THÊM BIẾN NÀY
     _field
 ):
     st.header("📚 Ngân hàng tài liệu gốc (PDF)")
@@ -127,7 +128,36 @@ def render_pdf_documents_tab(
                     st.session_state["ui_version"] = st.session_state.get("ui_version", 0) + 1
                     time.sleep(0.8)
                     st.rerun()
-                    
+    # --- TÍNH NĂNG MỚI: DÁN TRÍCH DẪN ---
+        with st.expander("🪄 DÁN DANH SÁCH TRÍCH DẪN VÀO ĐÂY ĐỂ AI TỰ ĐỘNG KHỚP VÀO BẢNG", expanded=False):
+            pasted_bib = st.text_area("Dán các dòng trích dẫn (VD: Vancouver) vào đây:", height=150, key=ui_key("pasted_bib_text"))
+            if st.button("⚡ Phân tích và Tự động điền vào bảng", type="primary", key=ui_key("parse_bib_btn")):
+                if not pasted_bib.strip():
+                    st.warning("Vui lòng dán văn bản trước!")
+                else:
+                    with st.spinner("AI đang bóc tách và khớp dữ liệu với các file hiện tại..."):
+                        # Tạo từ điển {ID: Tên file} để gửi cho AI làm gốc đối chiếu
+                        docs_info = {sid: meta.get("title") or meta.get("file_name") or "" for sid, meta in st.session_state.get("documents", {}).items()}
+                        
+                        parsed_data = parse_vancouver_text_wrapper(pasted_bib, docs_info)
+                        if parsed_data:
+                            updated = 0
+                            for sid, new_meta in parsed_data.items():
+                                if sid in st.session_state["documents"]:
+                                    for k in ["authors", "title", "journal", "year", "doi"]:
+                                        val = new_meta.get(k, "")
+                                        if val and val.lower() not in ["null", "none", "n/a", "na", "unknown", ""]:
+                                            st.session_state["documents"][sid][k] = val
+                                    updated += 1
+                            if updated:
+                                st.success(f"✅ Đã khớp và cập nhật thành công {updated} tài liệu!")
+                                st.session_state["ui_version"] = st.session_state.get("ui_version", 0) + 1
+                                time.sleep(0.8)
+                                st.rerun()
+                            else:
+                                st.warning("AI đã bóc tách nhưng không khớp được với tài liệu nào trong bảng.")
+                        else:
+                            st.error("❌ Lỗi: AI không trích xuất được thông tin hợp lệ.")
     # =========================================================
     st.write("---")
     st.subheader("🔎 Tìm bằng chứng trong toàn bộ Evidence Database")
