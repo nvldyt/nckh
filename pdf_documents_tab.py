@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import gc
+import time
 
 def render_pdf_documents_tab(
     ui_key,
@@ -9,7 +10,9 @@ def render_pdf_documents_tab(
     add_pdf_documents,
     retrieve_evidence_wrapper,
     MAX_TOP_K,
-    DEFAULT_TOP_K
+    DEFAULT_TOP_K,
+    extract_metadata_from_text_ai_wrapper,
+    _field
 ):
     st.header("📚 Ngân hàng tài liệu gốc (PDF)")
     render_evidence_database_status()
@@ -35,15 +38,81 @@ def render_pdf_documents_tab(
             st.success("Đã xóa dữ liệu trong phiên hiện tại.")
             st.rerun()
             
+    # =========================================================
+    # QUẢN LÝ METADATA ĐƯỢC CHUYỂN VỀ ĐÚNG TAB 2
+    # =========================================================
     st.write("---")
-    st.subheader("Nguồn PDF đã nạp")
-    docs = list(st.session_state.get("documents", {}).values())
-    if docs: 
-        st.dataframe(pd.DataFrame(docs), use_container_width=True)
-    else: 
-        st.info("Chưa có tài liệu.")
+    st.subheader("🏷️ Quản lý & Cập nhật Thông tin thư mục (Metadata)")
+    st.info("💡 Bảng dưới đây quản lý (Tác giả, Năm, Tạp chí...) để AI tự động trích dẫn chuẩn Vancouver. Anh có thể sửa tay hoặc nhờ AI quét hàng loạt.")
+    
+    docs = st.session_state.get("documents", {})
+    if not docs: 
+        st.warning("⚠️ Chưa có tài liệu nào trong Evidence Database.")
+    else:
+        data = []
+        for sid, meta in docs.items(): 
+            data.append({
+                "source_id": str(sid), 
+                "origin": str(meta.get("origin") or "Khác"), 
+                "authors": str(meta.get("authors") or ""), 
+                "title": str(meta.get("title") or meta.get("file_name") or ""), 
+                "journal": str(meta.get("journal") or ""), 
+                "year": str(meta.get("year") or ""), 
+                "doi": str(meta.get("doi") or "")
+            })
         
-    st.subheader("Tìm bằng chứng trong toàn bộ Evidence Database")
+        ed = st.data_editor(
+            pd.DataFrame(data), 
+            column_config={
+                "source_id": st.column_config.TextColumn("Mã ID", disabled=True), 
+                "origin": st.column_config.TextColumn("Nguồn", disabled=True), 
+                "authors": "Tác giả", 
+                "title": "Tên bài báo / Tài liệu", 
+                "journal": "Tạp chí / NXB", 
+                "year": "Năm XB", 
+                "doi": "DOI"
+            }, 
+            use_container_width=True, 
+            num_rows="fixed", 
+            key=ui_key("meta_editor_tab2")
+        )
+        
+        c_btn1, c_btn2 = st.columns([1, 1])
+        with c_btn1:
+            if st.button("💾 Lưu các chỉnh sửa bảng trên", type="primary", key=ui_key("save_metadata_changes_tab2")):
+                for _, row in ed.iterrows():
+                    sid = str(row["source_id"])
+                    if sid in st.session_state["documents"]:
+                        for k in ["authors", "title", "journal", "year", "doi"]: 
+                            st.session_state["documents"][sid][k] = "" if pd.isna(row[k]) else str(row[k])
+                st.success("✅ Đã cập nhật thông tin thư mục thành công!")
+                time.sleep(0.8)
+                st.rerun()
+        with c_btn2:
+            if st.button("🚀 AI tự động đọc và điền Metadata cho file PDF", key=ui_key("batch_metadata_tab2")):
+                updated = 0
+                with st.spinner("AI đang quét metadata của toàn bộ PDF..."):
+                    for sid, meta in st.session_state.get("documents", {}).items():
+                        if meta.get("origin") != "PDF": continue
+                        target = ""
+                        for c in st.session_state.get("chunks", []):
+                            if _field(c, "source_id") == sid:
+                                target = _field(c, "text", "") or ""
+                                if target: break
+                        if target:
+                            m = extract_metadata_from_text_ai_wrapper(target)
+                            if m:
+                                for k, v in m.items():
+                                    if v: meta[k] = v
+                                updated += 1
+                st.success(f"✅ Đã cập nhật metadata cho {updated} file PDF.")
+                if updated: 
+                    time.sleep(0.8)
+                    st.rerun()
+                    
+    # =========================================================
+    st.write("---")
+    st.subheader("🔎 Tìm bằng chứng trong toàn bộ Evidence Database")
     evidence_query = st.text_area("Nhập vấn đề cần tìm trong tài liệu:", placeholder="Ví dụ: tỷ lệ bệnh nhân đạt huyết áp mục tiêu...", key=ui_key("evidence_query"))
     top_k = st.slider("Số đoạn bằng chứng", 3, MAX_TOP_K, DEFAULT_TOP_K, key=ui_key("top_k_tab1"))
     
