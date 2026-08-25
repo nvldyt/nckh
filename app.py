@@ -538,8 +538,7 @@ def main():
         "✍️ 5. Viết văn (Grok AI)", 
         "🤖 6. Viết văn (Ollama)",
         "📊 7. Phân tích số liệu", 
-        "🔎 8. Kiểm tra luận văn", 
-        "🏷️ 9. Trích dẫn TLTK",
+        "🔎 8. Kiểm tra luận văn"
     ])
 
     # ------------------------------------------------------------
@@ -665,6 +664,56 @@ def main():
         st.warning("Đây là công cụ tạo bản nháp. Mọi citation và số liệu phải được Audit lại (đối chiếu bản gốc) trước khi đưa vào luận văn chính thức.")
         render_evidence_database_status("dùng cho các nút viết nhanh bên dưới")
 
+        with st.expander("🎯 KHAI BÁO BỐI CẢNH NGHIÊN CỨU (STUDY CONTEXT) - Cấu hình 1 lần dùng mãi mãi",expanded=True):
+            # (Phần code Study Context của anh giữ nguyên ở đây) ...
+
+        with st.expander("🌟 Tự động lập Ma trận tổng hợp y văn từ Evidence Database",expanded=False):
+            # (Phần code Ma trận y văn của anh giữ nguyên ở đây) ...
+
+        # =================================================================
+        # BỔ SUNG MỚI: QUẢN LÝ METADATA TÍCH HỢP GỌN GÀNG VÀO TAB 5
+        # =================================================================
+        with st.expander("🏷️ QUẢN LÝ THÔNG TIN THƯ MỤC (METADATA) TÀI LIỆU", expanded=False):
+            st.info("💡 Bảng dưới đây quản lý (Tác giả, Năm, Tạp chí, DOI) để AI tự động trích dẫn chuẩn Vancouver. Anh có thể sửa tay hoặc nhờ AI quét hàng loạt.")
+            docs = st.session_state.get("documents", {})
+            if not docs: 
+                st.warning("⚠️ Chưa có tài liệu nào trong Evidence Database.")
+            else:
+                data = []
+                for sid, meta in docs.items(): 
+                    data.append({"source_id": str(sid), "origin": str(meta.get("origin") or "Khác"), "authors": str(meta.get("authors") or ""), "title": str(meta.get("title") or meta.get("file_name") or ""), "journal": str(meta.get("journal") or ""), "year": str(meta.get("year") or ""), "doi": str(meta.get("doi") or "")})
+                
+                ed = st.data_editor(pd.DataFrame(data), column_config={"source_id": st.column_config.TextColumn("Mã ID", disabled=True), "origin": st.column_config.TextColumn("Nguồn", disabled=True), "authors": "Tác giả", "title": "Tên bài báo / Tài liệu", "journal": "Tạp chí / NXB", "year": "Năm XB", "doi": "DOI"}, use_container_width=True, num_rows="fixed", key=ui_key("meta_editor"))
+                
+                c_btn1, c_btn2 = st.columns([1, 1])
+                with c_btn1:
+                    if st.button("💾 Lưu các chỉnh sửa bảng trên", type="primary", key=ui_key("save_metadata_changes")):
+                        for _, row in ed.iterrows():
+                            sid = str(row["source_id"])
+                            if sid in st.session_state["documents"]:
+                                for k in ["authors", "title", "journal", "year", "doi"]: 
+                                    st.session_state["documents"][sid][k] = "" if pd.isna(row[k]) else str(row[k])
+                        st.success("✅ Đã cập nhật thông tin thư mục thành công!"); time.sleep(0.8); st.rerun()
+                with c_btn2:
+                    if st.button("🚀 AI tự động đọc và điền Metadata cho file PDF", key=ui_key("batch_metadata")):
+                        updated = 0
+                        with st.spinner("AI đang quét metadata của toàn bộ PDF..."):
+                            for sid, meta in st.session_state.get("documents", {}).items():
+                                if meta.get("origin") != "PDF": continue
+                                target = ""
+                                for c in st.session_state.get("chunks", []):
+                                    if _field(c, "source_id") == sid:
+                                        target = _field(c, "text", "") or ""
+                                        if target: break
+                                if target:
+                                    m = extract_metadata_from_text_ai_wrapper(target)
+                                    if m:
+                                        for k, v in m.items():
+                                            if v: meta[k] = v
+                                        updated += 1
+                        st.success(f"✅ Đã cập nhật metadata cho {updated} file PDF.")
+                        if updated: time.sleep(0.8); st.rerun()
+    
         with st.expander("🎯 KHAI BÁO BỐI CẢNH NGHIÊN CỨU (STUDY CONTEXT) - Cấu hình 1 lần dùng mãi mãi",expanded=True):
             st.info("💡 Khai báo thông tin đề tài tại đây để AI tự động hiểu và bám sát vào mục tiêu của anh trong mọi lần sinh văn bản, không sợ lạc đề.")
             ctx=st.session_state.get("study_context",{}); a,b=st.columns(2)
@@ -1263,73 +1312,6 @@ DỮ LIỆU ĐẦU VÀO:\n{final}"""
                     with box: 
                         st.markdown("### ⚖️ Kết quả Phản biện\n"+str(res))
 
-    # ------------------------------------------------------------
-    # TAB 9 – TLTK / METADATA
-    # ------------------------------------------------------------
-    with tabs[8]:
-        st.header("🏷️ Tài liệu tham khảo")
-        st.info("💡 Bảng dưới đây hiển thị thông tin thư mục của toàn bộ tài liệu anh đã nạp. Anh có thể nhấp đúp chuột vào từng ô để sửa thủ công.")
-        docs=st.session_state.get("documents",{})
-        if not docs: st.warning("⚠️ Chưa có tài liệu nào trong Evidence Database.")
-        else:
-            data=[]
-            for sid,meta in docs.items(): data.append({"source_id":str(sid),"origin":str(meta.get("origin") or "Khác"),"authors":str(meta.get("authors") or ""),"title":str(meta.get("title") or meta.get("file_name") or ""),"journal":str(meta.get("journal") or ""),"year":str(meta.get("year") or ""),"doi":str(meta.get("doi") or "")})
-            ed=st.data_editor(pd.DataFrame(data),column_config={"source_id":st.column_config.TextColumn("Mã ID",disabled=True),"origin":st.column_config.TextColumn("Nguồn",disabled=True),"authors":"Tác giả","title":"Tên bài báo / Tài liệu","journal":"Tạp chí / NXB","year":"Năm XB","doi":"DOI"},use_container_width=True,num_rows="fixed",key=ui_key("meta_editor"))
-            if st.button("💾 Lưu các chỉnh sửa bảng trên",type="primary",key=ui_key("save_metadata_changes")):
-                for _,row in ed.iterrows():
-                    sid=str(row["source_id"])
-                    if sid in st.session_state["documents"]:
-                        for k in ["authors","title","journal","year","doi"]: st.session_state["documents"][sid][k]="" if pd.isna(row[k]) else str(row[k])
-                st.success("✅ Đã cập nhật thông tin thư mục thành công!"); time.sleep(.8); st.rerun()
-            st.write("---")
-            st.subheader("🤖 AI Tự động quét và lưu Metadata hàng loạt")
-            st.info("💡 Quét chunk đầu tiên của từng PDF trong kho để bổ sung Tác giả, Tên bài, Năm, Tạp chí và DOI. Có thể sửa lại bằng bảng phía trên.")
-            if st.button("🚀 AI Tự động đọc toàn bộ file PDF và lưu Metadata",type="primary",key=ui_key("batch_metadata")):
-                updated=0
-                with st.spinner("AI đang quét metadata của toàn bộ PDF..."):
-                    for sid,meta in st.session_state.get("documents",{}).items():
-                        if meta.get("origin")!="PDF":
-                            continue
-                        target=""
-                        for c in st.session_state.get("chunks",[]):
-                            if _field(c,"source_id")==sid:
-                                target=_field(c,"text","") or ""
-                                if target: break
-                        if target:
-                            m=extract_metadata_from_text_ai_wrapper(target)
-                            if m:
-                                for k,v in m.items():
-                                    if v: meta[k]=v
-                                updated+=1
-                st.success(f"✅ Đã cập nhật metadata cho {updated} file PDF.")
-                if updated: st.rerun()
-
-            for sid,meta in list(st.session_state.get("documents",{}).items()):
-                if meta.get("origin")=="PDF":
-                    with st.expander(f"🤖 AI đọc lại: {sid} — {meta.get('file_name','')}"):
-                        if st.button("Đọc lại metadata file này",key=ui_key(f"ai_meta_{sid}")):
-                            target=""
-                            for c in st.session_state.get("chunks",[]):
-                                if _field(c,"source_id")==sid:
-                                    target=_field(c,"text","") or ""
-                                    if target: break
-                            if target:
-                                m=extract_metadata_from_text_ai_wrapper(target)
-                                if m:
-                                    st.session_state["documents"][sid].update({k:v for k,v in m.items() if v})
-                                    st.success("✅ Đã cập nhật!")
-                                    st.rerun()
-
-            st.write("---")
-            st.subheader("⚙️ Danh sách domain Tạp chí Y học Việt Nam")
-            domains_text=st.text_area("Mỗi domain một dòng:",value="\n".join(st.session_state.get("vn_journal_domains",DEFAULT_VN_JOURNAL_DOMAINS)),height=120,key=ui_key("domains_text"))
-            if st.button("💾 Lưu danh sách domain",key=ui_key("save_domains")):
-                st.session_state["vn_journal_domains"]=[d.strip() for d in domains_text.splitlines() if d.strip()]
-                st.success("Đã cập nhật danh sách domain.")
-
-            st.write("---"); st.subheader("📖 Danh sách Vancouver hiện tại")
-            if st.session_state.get("citation_registry"): st.code(citation_bibliography_wrapper() or "Chưa có trích dẫn.",language="text")
-            else: st.info("Chưa có trích dẫn nào được sinh ra trong bản nháp.")
-
+    
 if __name__ == "__main__":
     main()
