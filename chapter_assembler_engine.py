@@ -1,13 +1,12 @@
+import time
 import pandas as pd
 import concurrent.futures
 from typing import List, Dict, Any, Optional, Tuple
+import streamlit as st
 
 from writing_engine import call_gemini, generate_evidence_based, BASE_SYSTEM_RULES
 from retrieval_engine import retrieve_evidence
 from citation_engine import CitationEngine
-
-import time
-import streamlit as st # Đảm bảo đã import streamlit
 
 def process_single_decision(
     idx: int,
@@ -19,8 +18,16 @@ def process_single_decision(
     citation_engine: CitationEngine,
     study_context: Optional[Dict[str, Any]]
 ) -> Tuple[int, str, str]:
-    """Hàm xử lý độc lập cho 1 bảng (Đã tối ưu chống nghẽn API)"""
-    table_title = decision.title
+    """Hàm xử lý độc lập cho 1 bảng (Đã tối ưu chống nghẽn API và bắt lỗi an toàn)"""
+    
+    # --- XỬ LÝ AN TOÀN: Hỗ trợ cả Object lẫn Dictionary cho decision ---
+    if isinstance(decision, dict):
+        table_title = decision.get("title", f"Bảng {idx}")
+        variables = decision.get("variables", [])
+    else:
+        table_title = getattr(decision, "title", f"Bảng {idx}")
+        variables = getattr(decision, "variables", [])
+
     table_markdown = df_table.to_markdown(index=False)
     
     ch3_part = f"## 3.{idx}. {table_title}\n\n{table_markdown}\n\n"
@@ -37,14 +44,14 @@ BẢNG SỐ LIỆU (Bảng {idx} - {table_title}):
 """
         table_remark = call_gemini(remark_prompt, temperature=0.0)
         
-        # Hãm phanh nhẹ để tránh dội bom API
+        # Hãm phanh chống dội bom Google API Rate Limit
         time.sleep(2) 
 
         if table_remark:
             ch3_part += f"**Nhận xét:** {table_remark}\n\n"
 
         # --- SUB-AGENT 2: RAG TÌM BẰNG CHỨNG ĐỐI CHIẾU ---
-        vars_str = ', '.join(decision.variables) if hasattr(decision, 'variables') else ''
+        vars_str = ', '.join(variables) if variables else ''
         query_for_rag = f"Kết quả nghiên cứu và bàn luận về {table_title}. Mối liên quan của các yếu tố: {vars_str}."
         
         evidence = retrieve_evidence(query_for_rag, chunks, embeddings, bm25, top_k=6)
@@ -70,14 +77,14 @@ YÊU CẦU BẮT BUỘC:
             study_context=study_context
         )
         
-        # Thêm nhịp nghỉ cho luồng
+        # Thêm nhịp nghỉ an toàn cho luồng
         time.sleep(2)
 
         if disc_text:
             ch4_part = f"## 4.{idx}. Bàn luận về {table_title}\n\n{disc_text}\n\n"
 
     except Exception as exc:
-        # Bắt lỗi chi tiết và in thẳng ra màn hình Streamlit để dễ debug
+        # Hiển thị lỗi đỏ chi tiết lên giao diện Streamlit thay vì nuốt mất lỗi
         st.error(f"Lỗi khi xử lý bảng [{table_title}]: {exc}")
         
     return idx, ch3_part, ch4_part
@@ -92,31 +99,56 @@ def assemble_results_and_discussion_chapter(
     study_context: Optional[Dict[str, Any]] = None
 ) -> Tuple[str, str]:
     """
-    Loop Agent tự động lắp ráp Chương Kết quả và Bàn luận (Tích hợp Đa luồng siêu tốc).
+    Loop Agent tự động lắp ráp Chương Kết quả và Bàn luận 
+    (Tích hợp cơ chế Fallback chống rỗng và Đa luồng kiểm soát tốc độ).
     """
-    if not selection_decisions or not saved_tables:
-        return "Chưa có quyết định tuyển chọn bảng hoặc giỏ bảng trống.", ""
+    if not saved_tables:
+        return "⚠️ Giỏ kết quả đang trống, không có bảng nào để tổng hợp.", ""
 
-    # Sắp xếp các quyết định theo thứ tự khuyến nghị
-    sorted_decisions = sorted(
-        [d for d in selection_decisions if d.recommended_order],
-        key=lambda x: int(x.recommended_order) if str(x.recommended_order).isdigit() else 999
-    )
+    # --- BƯỚC PHÒNG THỦ: Tránh bị lọc sạch nếu selection_decisions rỗng hoặc thiếu recommended_order ---
+    valid_decisions = []
+    if selection_decisions:
+        for d in selection_decisions:
+            rid = getattr(d, 'result_id', None) or (d.get('result_id') if isinstance(d, dict) else None)
+            if rid and rid in saved_tables:
+                valid_decisions.append(d)
 
-    # Khởi tạo sườn văn bản
+    # Nếu bộ lọc quét không ra kết quả, tự động kích hoạt CƠ CHẾ CỨU NGUY (Lấy toàn bộ bảng trong Giỏ)
+    if not valid_decisions:
+        st.warning("⚠️ Phát hiện danh sách tuyển chọn trống. Hệ thống đang tự động kích hoạt chế độ lấy toàn bộ bảng trong Giỏ kết quả để lập bản thảo.")
+        for tid in saved_tables.keys():
+            class FallbackDecision:
+                def __init__(self, tid):
+                    self.result_id = tid
+                    self.title = tid
+                    self.variables = []
+                    self.recommended_order = 1
+            valid_decisions.append(FallbackDecision(tid))
+
+    # Sắp xếp các quyết định theo thứ tự khuyến nghị an toàn
+    try:
+        sorted_decisions = sorted(
+            valid_decisions,
+            key=lambda x: int(getattr(x, 'recommended_order', 999) if not isinstance(x, dict) else x.get('recommended_order', 999)) 
+            if str(getattr(x, 'recommended_order', 999) if not isinstance(x, dict) else x.get('recommended_order', 999)).isdigit() else 999
+        )
+    except Exception:
+        sorted_decisions = valid_decisions
+
+    # Khởi tạo sườn văn bản hai chương
     results_content = ["# CHƯƠNG 3: KẾT QUẢ NGHIÊN CỨU\n\n"]
     discussion_content = ["# CHƯƠNG 4: BÀN LUẬN\n\n"]
     
-    # Dictionary để lưu kết quả theo đúng thứ tự idx
     ch3_results = {}
     ch4_results = {}
 
-    # Chạy đa luồng (Max 4 workers để tránh bị Google API Rate Limit)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+    # Chạy đa luồng an toàn (Giới hạn max_workers=2 để chống lỗi 429 - Too Many Requests từ Google API)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         futures = []
         for idx, decision in enumerate(sorted_decisions, start=1):
-            if decision.result_id in saved_tables:
-                df_table = saved_tables[decision.result_id]
+            rid = getattr(decision, 'result_id', None) or (decision.get('result_id') if isinstance(decision, dict) else "")
+            if rid in saved_tables:
+                df_table = saved_tables[rid]
                 futures.append(
                     executor.submit(
                         process_single_decision, 
@@ -124,18 +156,28 @@ def assemble_results_and_discussion_chapter(
                     )
                 )
 
-        # Gom kết quả khi các luồng hoàn thành
+        # Thu gom kết quả từ các luồng
         for future in concurrent.futures.as_completed(futures):
             try:
                 i, ch3_part, ch4_part = future.result()
-                ch3_results[i] = ch3_part
-                ch4_results[i] = ch4_part
+                if ch3_part:
+                    ch3_results[i] = ch3_part
+                if ch4_part:
+                    ch4_results[i] = ch4_part
             except Exception as e:
-                print(f"Lỗi khi xử lý một bảng: {e}")
+                st.error(f"Lỗi luồng đồng thời: {e}")
 
-    # Ráp lại văn bản theo đúng thứ tự ban đầu
+    # Ráp lại văn bản theo đúng thứ tự chỉ mục (idx) ban đầu
     for i in sorted(ch3_results.keys()):
         results_content.append(ch3_results[i])
+    for i in sorted(ch4_results.keys()):
         discussion_content.append(ch4_results[i])
 
-    return "".join(results_content), "".join(discussion_content)
+    # Kiểm tra lần cuối nếu nội dung quá ngắn
+    final_ch3 = "".join(results_content)
+    final_ch4 = "".join(discussion_content)
+
+    if len(final_ch3.strip()) <= len("# CHƯƠNG 3: KẾT QUẢ NGHIÊN CỨU\n\n"):
+        return "⚠️ Không thể tạo nội dung Chương 3. Vui lòng kiểm tra lại phản hồi từ API Gemini.", ""
+
+    return final_ch3, final_ch4
