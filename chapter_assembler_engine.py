@@ -6,6 +6,9 @@ from writing_engine import call_gemini, generate_evidence_based, BASE_SYSTEM_RUL
 from retrieval_engine import retrieve_evidence
 from citation_engine import CitationEngine
 
+import time
+import streamlit as st # Đảm bảo đã import streamlit
+
 def process_single_decision(
     idx: int,
     decision: Any,
@@ -16,35 +19,38 @@ def process_single_decision(
     citation_engine: CitationEngine,
     study_context: Optional[Dict[str, Any]]
 ) -> Tuple[int, str, str]:
-    """Hàm xử lý độc lập cho 1 bảng (Dùng để chạy Đa luồng)"""
+    """Hàm xử lý độc lập cho 1 bảng (Đã tối ưu chống nghẽn API)"""
     table_title = decision.title
     table_markdown = df_table.to_markdown(index=False)
     
     ch3_part = f"## 3.{idx}. {table_title}\n\n{table_markdown}\n\n"
     ch4_part = ""
 
-    # --- SUB-AGENT 1: TỰ ĐỘNG VIẾT NHẬN XÉT BẢNG ---
-    remark_prompt = f"""
+    try:
+        # --- SUB-AGENT 1: TỰ ĐỘNG VIẾT NHẬN XÉT BẢNG ---
+        remark_prompt = f"""
 {BASE_SYSTEM_RULES}
 Nhiệm vụ: Dựa vào bảng số liệu dưới đây, hãy viết phần 'Nhận xét' ngắn gọn, khoa học, CHỈ diễn giải các số liệu nổi bật (giá trị cao nhất, thấp nhất, tỷ lệ %). 
 TUYỆT ĐỐI KHÔNG giải thích nguyên nhân, KHÔNG bàn luận. Viết thành MỘT đoạn văn xuôi liền mạch.
 BẢNG SỐ LIỆU (Bảng {idx} - {table_title}):
 {table_markdown}
 """
-    # Nhiệt độ 0.0 để tuyệt đối trung thành với số liệu trong bảng
-    table_remark = call_gemini(remark_prompt, temperature=0.0)
-    if table_remark:
-        ch3_part += f"**Nhận xét:** {table_remark}\n\n"
+        table_remark = call_gemini(remark_prompt, temperature=0.0)
+        
+        # Hãm phanh nhẹ để tránh dội bom API
+        time.sleep(2) 
 
-    # --- SUB-AGENT 2: RAG TÌM BẰNG CHỨNG ĐỐI CHIẾU ---
-    # Tối ưu hóa câu truy vấn để Vector Embedding bắt ngữ nghĩa tốt hơn
-    vars_str = ', '.join(decision.variables) if hasattr(decision, 'variables') else ''
-    query_for_rag = f"Kết quả nghiên cứu và bàn luận về {table_title}. Mối liên quan của các yếu tố: {vars_str}."
-    
-    evidence = retrieve_evidence(query_for_rag, chunks, embeddings, bm25, top_k=6)
+        if table_remark:
+            ch3_part += f"**Nhận xét:** {table_remark}\n\n"
 
-    # --- SUB-AGENT 3: TỰ ĐỘNG VIẾT BÀN LUẬN & SO SÁNH ---
-    discussion_task = f"""
+        # --- SUB-AGENT 2: RAG TÌM BẰNG CHỨNG ĐỐI CHIẾU ---
+        vars_str = ', '.join(decision.variables) if hasattr(decision, 'variables') else ''
+        query_for_rag = f"Kết quả nghiên cứu và bàn luận về {table_title}. Mối liên quan của các yếu tố: {vars_str}."
+        
+        evidence = retrieve_evidence(query_for_rag, chunks, embeddings, bm25, top_k=6)
+
+        # --- SUB-AGENT 3: TỰ ĐỘNG VIẾT BÀN LUẬN & SO SÁNH ---
+        discussion_task = f"""
 Dựa trên kết quả thực tế của bảng số liệu dưới đây, hãy viết phần BÀN LUẬN chuyên sâu cho luận văn CKI Dược lâm sàng:
 - Tiêu đề bảng: {table_title}
 - Số liệu tóm tắt: 
@@ -57,16 +63,23 @@ YÊU CẦU BẮT BUỘC:
 3. Viết thành các đoạn văn xuôi y khoa liền mạch, khách quan.
 4. CHỈ SỬ DỤNG bằng chứng được cung cấp, không tự bịa số liệu.
 """
-    disc_text, _, _ = generate_evidence_based(
-        task_prompt=discussion_task,
-        evidence=evidence,
-        citation_engine=citation_engine,
-        study_context=study_context
-    )
+        disc_text, _, _ = generate_evidence_based(
+            task_prompt=discussion_task,
+            evidence=evidence,
+            citation_engine=citation_engine,
+            study_context=study_context
+        )
+        
+        # Thêm nhịp nghỉ cho luồng
+        time.sleep(2)
 
-    if disc_text:
-        ch4_part = f"## 4.{idx}. Bàn luận về {table_title}\n\n{disc_text}\n\n"
+        if disc_text:
+            ch4_part = f"## 4.{idx}. Bàn luận về {table_title}\n\n{disc_text}\n\n"
 
+    except Exception as exc:
+        # Bắt lỗi chi tiết và in thẳng ra màn hình Streamlit để dễ debug
+        st.error(f"Lỗi khi xử lý bảng [{table_title}]: {exc}")
+        
     return idx, ch3_part, ch4_part
 
 def assemble_results_and_discussion_chapter(
