@@ -378,19 +378,38 @@ def render_statistics_tab(
             if extra.strip(): final += f"SỐ LIỆU / YÊU CẦU BỔ SUNG:\n{extra.strip()}"
             if not final.strip(): st.warning("⚠️ Anh chưa chọn bảng nào hoặc chưa dán số liệu!")
             else:
+                # 1. TẠO PROMPT TỐI ƯU CHO GEMINI WEB (Kẻ bảng đẹp + Viết nhận xét)
                 prompt = f"""{BASE_SYSTEM_RULES}
-Nhiệm vụ của bạn là viết phần **'Nhận xét'** cho các bảng số liệu thống kê trong luận văn Dược lâm sàng.
-QUY TẮC VÀNG BẮT BUỘC:
-1. CHỈ ĐƯA RA SỐ LIỆU: Chỉ diễn giải các số liệu, tần số, tỷ lệ % nổi bật có trong bảng.
-2. VĂN PHONG KHOA HỌC: Câu văn logic, ngắn gọn, dễ hiểu, mạch lạc.
-3. TUYỆT ĐỐI KHÔNG BÀN LUẬN: Không giải thích nguyên nhân, không suy diễn cơ chế lâm sàng, không so sánh với các nghiên cứu khác.
-4. Trình bày thành các đoạn văn xuôi y khoa liền mạch, chuẩn mực.
-DỮ LIỆU ĐẦU VÀO:\n{final}"""
+
+NHIỆM VỤ ĐẶC BIỆT:
+Dữ liệu đầu vào dưới đây là kết quả thống kê thô. Hãy thực hiện 2 bước sau:
+
+BƯỚC 1: XÂY DỰNG BẢNG CHUẨN LUẬN VĂN (MARKDOWN)
+- Hãy tổng hợp và thiết kế lại thành 1 bảng số liệu hoàn chỉnh, khoa học, đúng chuẩn trình bày luận văn y khoa.
+- Gộp các cột hợp lý (ví dụ: gộp Số lượng và Tỷ lệ thành "n (%)"). Làm tròn 1-2 chữ số thập phân.
+- Đặt tên Bảng rõ ràng ở phía trên.
+
+BƯỚC 2: VIẾT NHẬN XÉT SỐ LIỆU
+- Ngay dưới bảng, hãy viết phần 'Nhận xét' bằng văn xuôi y khoa liền mạch, súc tích.
+- CHỈ diễn giải số liệu có trong bảng, tuyệt đối không bịa đặt hay suy diễn nguyên nhân.
+- Nêu bật các giá trị lớn nhất/nhỏ nhất và sự khác biệt có ý nghĩa thống kê (p < 0.05).
+- TUYỆT ĐỐI KHÔNG dùng gạch đầu dòng (-) hay dấu sao (*) để liệt kê.
+
+DỮ LIỆU ĐẦU VÀO:
+{final}"""
+                
+                # 2. HIỂN THỊ KHUNG COPY CHO NGƯỜI DÙNG
+                st.divider()
+                st.subheader("📋 Prompt định dạng Bảng & Viết bài (Copy lên Gemini Web)")
+                st.info("Bấm vào biểu tượng Copy ở góc phải ô dưới đây và dán vào Gemini Web.")
+                st.code(prompt, language="markdown")
+
+                # 3. VẪN GIỮ LẠI NÚT CHẠY API NHƯ CŨ (Phòng khi anh lười copy)
                 try:
                     with st.spinner("AI đang phân tích số liệu và soạn nhận xét chuyên sâu..."): 
                         out = call_gemini(prompt, model=DEFAULT_MODEL)
                     if out: 
-                        st.markdown("### 📝 Kết quả Nhận xét Bảng:")
+                        st.markdown("### 📝 Kết quả Nhận xét Bảng (Từ API API):")
                         st.markdown(out)
                 except Exception as exc: 
                     st.error(f"Lỗi gọi AI: {exc}")
