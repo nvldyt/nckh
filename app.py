@@ -600,7 +600,7 @@ def main():
         "🛠️ 3. Tổng hợp", 
         "⚡ 4. Tóm tắt",
         "✍️ 5. Viết văn (Grok AI)", 
-        "🤖 6. Viết văn (Ollama)",
+        "🤖 6. Viết văn (Qwen 72B)",
         "📊 7. Phân tích số liệu", 
         "🔎 8. Kiểm tra luận văn"
     ])
