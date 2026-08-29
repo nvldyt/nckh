@@ -5,8 +5,8 @@ from openai import OpenAI
 from key_manager import get_next_or_key
 
 def render_openrouter_writer_tab():
-    st.markdown("### 🌐 Trợ lý Viết Luận văn (OpenRouter - Llama 3.3 70B)")
-    st.caption("Mô hình tối ưu cho văn phong y khoa, suy luận logic sâu và cá thể hóa số liệu.")
+    st.markdown("### 🌐 Trợ lý Viết Luận văn (OpenRouter - Auto Free)")
+    st.caption("Tự động định tuyến qua các mô hình nguồn mở mạnh mẽ nhất hiện đang miễn phí.")
 
     if "or_messages" not in st.session_state:
         st.session_state["or_messages"] = []
@@ -15,18 +15,15 @@ def render_openrouter_writer_tab():
     with st.expander("🔍 Dữ liệu bối cảnh đang nạp tự động", expanded=False):
         context_blocks = []
         
-        # Lấy bằng chứng từ RAG (Tab 1 & 2)
         evidence = st.session_state.get("last_evidence", [])
         if evidence:
             ev_text = "\n".join([f"- {e.get('text', '')}" for e in evidence[:5]])
             context_blocks.append(f"TÀI LIỆU Y VĂN (RAG):\n{ev_text}")
             
-        # Lấy bảng tóm tắt y văn (Tab 4)
         summary = st.session_state.get("cached_summary", "")
         if summary:
             context_blocks.append(f"TÓM TẮT ĐỀ TÀI:\n{summary}")
 
-        # Lấy bảng số liệu thống kê (Tab 7)
         saved_tables = st.session_state.get("saved_tables", {})
         if saved_tables:
             table_info = "".join([f"Bảng {name}:\n{df.to_markdown()}\n\n" for name, df in saved_tables.items()])
@@ -75,8 +72,9 @@ def render_openrouter_writer_tab():
                         api_key=current_key,
                     )
                     
+                    # Sử dụng openrouter/free để hệ thống tự chọn model sống khỏe nhất
                     stream = client.chat.completions.create(
-                        model="meta-llama/llama-3.3-70b-instruct:free",
+                        model="openrouter/free",
                         messages=api_messages,
                         temperature=0.2,
                         stream=True
