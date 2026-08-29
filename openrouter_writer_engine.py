@@ -79,13 +79,14 @@ def render_openrouter_writer_tab():
                     client = OpenAI(
                         base_url="https://openrouter.ai/api/v1",
                         api_key=current_key,
+                        timeout=30.0, # Thêm thời gian chờ tối đa 30 giây để tránh treo đơ
                     )
                     
                     stream = client.chat.completions.create(
                         model="openrouter/free",
                         messages=api_messages,
                         temperature=0.2,
-                        max_tokens=2048,
+                        max_tokens=1024, # Giảm xuống 1024 để sinh nhanh hơn, tránh nghẽn
                         stream=True
                     )
                     
