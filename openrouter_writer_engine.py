@@ -5,25 +5,33 @@ from openai import OpenAI
 from key_manager import get_next_or_key
 
 def render_openrouter_writer_tab():
-    st.markdown("### 🌐 Trợ lý Viết Luận văn (OpenRouter - Auto Free)")
-    st.caption("Tự động định tuyến qua các mô hình nguồn mở mạnh mẽ nhất hiện đang miễn phí.")
+    st.markdown("### 🌐 Trợ lý Viết Luận văn (OpenRouter - Trích dẫn số tự động)")
+    st.caption("Tự động định tuyến mô hình mở và gán số thứ tự tài liệu tham khảo chuẩn y khoa.")
 
     if "or_messages" not in st.session_state:
         st.session_state["or_messages"] = []
 
-    # 1. TỰ ĐỘNG THU THẬP BỐI CẢNH TỪ CÁC TAB 1, 2, 3, 4, 7
-    with st.expander("🔍 Dữ liệu bối cảnh đang nạp tự động", expanded=False):
+    # 1. TỰ ĐỘNG THU THẬP VÀ ĐÁNH SỐ THỨ TỰ TÀI LIỆU TỪ CÁC TAB 1, 2, 3, 4, 7
+    with st.expander("🔍 Dữ liệu bối cảnh và danh mục tham khảo đang nạp", expanded=False):
         context_blocks = []
+        ref_counter = 1
         
+        # Đánh số thứ tự cho RAG / PubMed (Tab 1 & 2)
         evidence = st.session_state.get("last_evidence", [])
         if evidence:
-            ev_text = "\n".join([f"- {e.get('text', '')}" for e in evidence[:5]])
-            context_blocks.append(f"TÀI LIỆU Y VĂN (RAG):\n{ev_text}")
+            ev_lines = []
+            for e in evidence[:10]: # Lấy tối đa 10 tài liệu để đánh số
+                ev_lines.append(f"[{ref_counter}] {e.get('text', '')}")
+                ref_counter += 1
+            context_blocks.append(f"DANH MỤC TÀI LIỆU Y VĂN (RAG):\n" + "\n".join(ev_lines))
             
+        # Đánh số thứ tự cho tóm tắt hoặc tài liệu khác (Tab 4)
         summary = st.session_state.get("cached_summary", "")
         if summary:
-            context_blocks.append(f"TÓM TẮT ĐỀ TÀI:\n{summary}")
+            context_blocks.append(f"TÓM TẮT ĐỀ TÀI [{ref_counter}]:\n{summary}")
+            ref_counter += 1
 
+        # Nạp bảng số liệu (Tab 7)
         saved_tables = st.session_state.get("saved_tables", {})
         if saved_tables:
             table_info = "".join([f"Bảng {name}:\n{df.to_markdown()}\n\n" for name, df in saved_tables.items()])
@@ -31,7 +39,7 @@ def render_openrouter_writer_tab():
 
         compiled_context = "\n\n".join(context_blocks)
         if compiled_context:
-            st.success("✅ Đã kết nối và đồng bộ dữ liệu từ các Tab nghiên cứu.")
+            st.success(f"✅ Đã đồng bộ dữ liệu và thiết lập sơ đồ đánh số trích dẫn (Tổng số nguồn: {ref_counter - 1}).")
         else:
             st.info("ℹ️ Chưa có dữ liệu nền nào được nạp từ các Tab trước.")
 
@@ -40,8 +48,8 @@ def render_openrouter_writer_tab():
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # 3. XỬ LÝ LỆNH GỌI AI
-    user_query = st.chat_input("Yêu cầu AI viết (VD: Phân tích bảng số liệu 1 dựa trên các y văn đã trích xuất)...")
+    # 3. XỬ LÝ LỆNH GỌI AI VỚI QUY TẮC TRÍCH DẪN SỐ
+    user_query = st.chat_input("Yêu cầu AI viết (VD: Viết phần bàn luận và đính kèm số trích dẫn [1], [2] tương ứng)...")
 
     if user_query:
         st.session_state["or_messages"].append({"role": "user", "content": user_query})
@@ -51,11 +59,12 @@ def render_openrouter_writer_tab():
         with st.chat_message("assistant"):
             system_instruction = (
                 "Bạn là một chuyên gia Dược lâm sàng xuất sắc, hỗ trợ nghiên cứu viên viết luận văn Chuyên khoa I. "
-                "Văn phong yêu cầu: Khách quan, khoa học, đi thẳng vào vấn đề, sử dụng đúng thuật ngữ y khoa. "
-                "Hãy lập luận dựa trên BẢNG SỐ LIỆU và TÀI LIỆU Y VĂN được cung cấp bên dưới. "
-                "Khi phân tích thực trạng sử dụng thuốc hay chế độ liều, hãy gắn liền với điều kiện thực tế tại bệnh viện tuyến tỉnh. "
-                "Tuyệt đối không bịa đặt số liệu.\n\n"
-                f"=== DỮ LIỆU ĐỀ TÀI ===\n{compiled_context}"
+                "YÊU CẦU BẮT BUỘC VỀ TRÍCH DẪN: "
+                "1. Khi sử dụng thông tin, số liệu, hoặc kết luận từ các tài liệu được cung cấp, bạn PHẢI đính kèm số thứ tự tài liệu tham khảo dạng ngoặc vuông ở cuối câu (ví dụ: [1], [2]). "
+                "2. Các số trích dẫn phải tuân thủ đúng thứ tự xuất hiện của nguồn tài liệu trong ngữ cảnh bên dưới. "
+                "3. Tuyệt đối không bịa đặt số liệu hoặc tự ý gán nguồn sai sự thật. "
+                "4. Văn phong: Khách quan, khoa học, chuẩn mực y khoa, gắn liền thực tế bệnh viện tuyến tỉnh.\n\n"
+                f"=== DỮ LIỆU ĐỀ TÀI VÀ NGUỒN THAM KHẢO ===\n{compiled_context}"
             )
             
             api_messages = [{"role": "system", "content": system_instruction}]
@@ -72,7 +81,6 @@ def render_openrouter_writer_tab():
                         api_key=current_key,
                     )
                     
-                    # Bổ sung max_tokens để mô hình phản hồi ổn định
                     stream = client.chat.completions.create(
                         model="openrouter/free",
                         messages=api_messages,
