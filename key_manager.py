@@ -3,13 +3,10 @@ import itertools
 import streamlit as st
 
 # ==========================================
-# 1. DANH SÁCH KEY GROQ (Tab 1, Tab 5)
+# 1. DANH SÁCH KEY GROQ (Tab 1 MeSH, Tab 5)
 # ==========================================
 GROQ_KEYS = [
-    "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",
-    "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",
-    "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",
-    "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"
+    "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"
 ]
 
 @st.cache_resource
