@@ -5,6 +5,7 @@ torchvision
 
 # 2. CỐT LÕI AI & RAG
 streamlit
+openai
 google-genai
 sentence-transformers
 rank-bm25
