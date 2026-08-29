@@ -72,11 +72,12 @@ def render_openrouter_writer_tab():
                         api_key=current_key,
                     )
                     
-                    # Sử dụng openrouter/free để hệ thống tự chọn model sống khỏe nhất
+                    # Bổ sung max_tokens để mô hình phản hồi ổn định
                     stream = client.chat.completions.create(
                         model="openrouter/free",
                         messages=api_messages,
                         temperature=0.2,
+                        max_tokens=2048,
                         stream=True
                     )
                     
