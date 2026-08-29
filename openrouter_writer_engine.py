@@ -1,42 +1,50 @@
+# File: openrouter_writer_engine.py
 import time
 import streamlit as st
 from openai import OpenAI
 from key_manager import get_next_or_key
 
 def render_openrouter_writer_tab():
-    st.markdown("**🌐 Trợ lý Viết Luận văn (OpenRouter - Qwen 72B)**")
-    st.caption("Tối ưu văn phong học thuật và lập luận logic sâu.")
+    st.markdown("### 🌐 Trợ lý Viết Luận văn (OpenRouter - Qwen 2.5 72B)")
+    st.caption("Mô hình tối ưu cho văn phong y khoa, suy luận logic sâu và cá thể hóa số liệu.")
 
     if "or_messages" not in st.session_state:
         st.session_state["or_messages"] = []
 
-    # TỰ ĐỘNG ĐỒNG BỘ DỮ LIỆU TỪ CÁC TAB KHÁC
-    with st.expander("🔍 Dữ liệu bối cảnh đang nạp", expanded=False):
+    # 1. TỰ ĐỘNG THU THẬP BỐI CẢNH TỪ CÁC TAB 1, 2, 3, 4, 7
+    with st.expander("🔍 Dữ liệu bối cảnh đang nạp tự động", expanded=False):
         context_blocks = []
         
+        # Lấy bằng chứng từ RAG (Tab 1 & 2)
         evidence = st.session_state.get("last_evidence", [])
         if evidence:
             ev_text = "\n".join([f"- {e.get('text', '')}" for e in evidence[:5]])
-            context_blocks.append(f"TÀI LIỆU Y VĂN:\n{ev_text}")
+            context_blocks.append(f"TÀI LIỆU Y VĂN (RAG):\n{ev_text}")
             
+        # Lấy bảng tóm tắt y văn (Tab 4)
+        summary = st.session_state.get("cached_summary", "")
+        if summary:
+            context_blocks.append(f"TÓM TẮT ĐỀ TÀI:\n{summary}")
+
+        # Lấy bảng số liệu thống kê (Tab 7)
         saved_tables = st.session_state.get("saved_tables", {})
         if saved_tables:
             table_info = "".join([f"Bảng {name}:\n{df.to_markdown()}\n\n" for name, df in saved_tables.items()])
-            context_blocks.append(f"BẢNG SỐ LIỆU:\n{table_info}")
+            context_blocks.append(f"BẢNG SỐ LIỆU NGHIÊN CỨU:\n{table_info}")
 
         compiled_context = "\n\n".join(context_blocks)
         if compiled_context:
-            st.success("Đã đồng bộ dữ liệu từ Tab PubMed, RAG và Phân tích số liệu.")
+            st.success("✅ Đã kết nối và đồng bộ dữ liệu từ các Tab nghiên cứu.")
         else:
-            st.info("Chưa có dữ liệu nền được nạp.")
+            st.info("ℹ️ Chưa có dữ liệu nền nào được nạp từ các Tab trước.")
 
-    # HIỂN THỊ HỘI THOẠI
+    # 2. HIỂN THỊ LỊCH SỬ CHAT
     for msg in st.session_state["or_messages"]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # XỬ LÝ LỆNH GỌI API VỚI CƠ CHẾ THỬ LẠI (RETRY) TỰ ĐỘNG
-    user_query = st.chat_input("Yêu cầu AI viết (VD: Phân tích bảng số liệu 1)...")
+    # 3. XỬ LÝ LỆNH GỌI AI
+    user_query = st.chat_input("Yêu cầu AI viết (VD: Phân tích bảng số liệu 1 dựa trên các y văn đã trích xuất)...")
 
     if user_query:
         st.session_state["or_messages"].append({"role": "user", "content": user_query})
@@ -45,9 +53,11 @@ def render_openrouter_writer_tab():
 
         with st.chat_message("assistant"):
             system_instruction = (
-                "Bạn là chuyên gia Dược lâm sàng hỗ trợ viết luận văn Chuyên khoa I. "
-                "Hãy lập luận dựa trên BẢNG SỐ LIỆU và Y VĂN được cung cấp. Phân tích cần bám sát điều kiện "
-                "thực tế tại Bệnh viện ĐKTP Vinh. Tuyệt đối không bịa đặt số liệu.\n\n"
+                "Bạn là một chuyên gia Dược lâm sàng xuất sắc, hỗ trợ nghiên cứu viên viết luận văn Chuyên khoa I. "
+                "Văn phong yêu cầu: Khách quan, khoa học, đi thẳng vào vấn đề, sử dụng đúng thuật ngữ y khoa. "
+                "Hãy lập luận dựa trên BẢNG SỐ LIỆU và TÀI LIỆU Y VĂN được cung cấp bên dưới. "
+                "Khi phân tích thực trạng sử dụng thuốc hay chế độ liều, hãy gắn liền với điều kiện thực tế tại bệnh viện tuyến tỉnh. "
+                "Tuyệt đối không bịa đặt số liệu.\n\n"
                 f"=== DỮ LIỆU ĐỀ TÀI ===\n{compiled_context}"
             )
             
@@ -55,7 +65,7 @@ def render_openrouter_writer_tab():
             api_messages.extend(st.session_state["or_messages"][-4:])
             
             is_success = False
-            max_retries = 3 # Thử tối đa 3 key liên tiếp nếu gặp lỗi
+            max_retries = 3
             
             for attempt in range(max_retries):
                 current_key = get_next_or_key()
@@ -75,12 +85,12 @@ def render_openrouter_writer_tab():
                     response_text = st.write_stream(stream)
                     st.session_state["or_messages"].append({"role": "assistant", "content": response_text})
                     is_success = True
-                    break # Thoát vòng lặp nếu thành công
+                    break
                     
                 except Exception as e:
                     if attempt < max_retries - 1:
-                        st.warning(f"🔄 Đang xoay vòng Key OpenRouter do lỗi: {e}")
+                        st.warning(f"🔄 Đang chuyển key tiếp theo do lỗi: {e}")
                         time.sleep(1)
                     else:
-                        st.error(f"❌ Toàn bộ Key đều gặp lỗi. Vui lòng thử lại sau. Chi tiết: {e}")
+                        st.error(f"❌ Toàn bộ Key OpenRouter đều gặp lỗi. Chi tiết: {e}")
                         st.session_state["or_messages"].pop()
