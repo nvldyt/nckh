@@ -668,10 +668,11 @@ def main():
             extract_metadata_from_text_ai_wrapper=extract_metadata_from_text_ai_wrapper
         )
     # ------------------------------------------------------------
-    # TAB 6 – VIẾT BẰNG OLLAMA LOCAL 
+    # TAB 6 – VIẾT LUẬN VĂN (OPENROUTER - QWEN 72B)
     # ------------------------------------------------------------
     with tabs[5]:
-        render_ollama_writer_tab()
+        from openrouter_writer_engine import render_openrouter_writer_tab
+        render_openrouter_writer_tab()
     # ------------------------------------------------------------
     # TAB 7 – PHÂN TÍCH SỐ LIỆU (SPSS MINI - ĐÃ TÁCH MODULE)
     # ------------------------------------------------------------
