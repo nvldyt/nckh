@@ -14,6 +14,7 @@ import requests
 import xml.etree.ElementTree as ET
 import streamlit as st
 import fitz
+from openai import OpenAI # BỔ SUNG THƯ VIỆN ĐỂ GỌI TRỰC TIẾP GROQ
 
 # ============================================================
 # 1. CẤU TRÚC DỮ LIỆU BẰNG CHỨNG
@@ -157,6 +158,51 @@ def extract_pdf(uploaded_file) -> Tuple[SourceDocument, List[EvidenceChunk]]:
 # ============================================================
 # 6. TRA CỨU API (PUBMED QUỐC TẾ - MỞ RỘNG 20 BÀI)
 # ============================================================
+def translate_query_to_mesh(vietnamese_topic: str) -> str:
+    """Tích hợp trực tiếp dịch thuật AI vào engine để không phụ thuộc file api.py"""
+    groq_key = os.getenv("GROQ_API_KEYS", "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")
+    
+    system_prompt = (
+        "Bạn là một Chuyên gia Thư viện Y khoa (Medical Librarian) chuyên tra cứu PubMed.\n"
+        "Nhiệm vụ: Dịch đề tài nghiên cứu tiếng Việt sang cú pháp tìm kiếm MeSH của PubMed.\n\n"
+        "Quy tắc tuyệt đối:\n"
+        "- CHỈ trả về chuỗi boolean query cuối cùng.\n"
+        "- TUYỆT ĐỐI KHÔNG giải thích, KHÔNG bọc ngoặc kép ở 2 đầu chuỗi.\n\n"
+        "--- TỪ ĐIỂN ÁNH XẠ MESH BẮT BUỘC ---\n"
+        "- Thuốc, dược phẩm: \"Pharmaceutical Preparations\"[Mesh] OR \"Drug Therapy\"[Mesh] OR \"Drug Utilization\"[Mesh]\n"
+        "- Kháng sinh: \"Anti-Bacterial Agents\"[Mesh]\n"
+        "- Bệnh đái đường / đái tháo đường: \"Diabetes Mellitus\"[Mesh]\n"
+        "- Bệnh đau dạ dày: \"Stomach Diseases\"[Mesh] OR \"Gastritis\"[Mesh]\n"
+        "- Bệnh viêm gan: \"Hepatitis\"[Mesh]\n"
+        "- Bệnh đau tim / Nhồi máu cơ tim: \"Heart Diseases\"[Mesh] OR \"Myocardial Infarction\"[Mesh]\n"
+        "------------------------------------\n\n"
+        "--- VÍ DỤ CHUẨN (FEW-SHOT) ---\n"
+        "Input: Phân tích tình hình sử dụng thuốc đái tháo đường\n"
+        "Output: \"Diabetes Mellitus\"[Mesh] AND (\"Drug Utilization\"[Mesh] OR \"Drug Therapy\"[Mesh])\n\n"
+        "Input: Đánh giá hiệu quả điều trị bệnh đau dạ dày bằng kháng sinh\n"
+        "Output: (\"Stomach Diseases\"[Mesh] OR \"Gastritis\"[Mesh]) AND \"Anti-Bacterial Agents\"[Mesh] AND \"Treatment Outcome\"[Mesh]"
+    )
+    
+    try:
+        client = OpenAI(
+            base_url="https://api.groq.com/openai/v1", 
+            api_key=groq_key, 
+            timeout=15.0
+        )
+        response = client.chat.completions.create(
+            model="llama-3.1-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Input: {vietnamese_topic}\nOutput:"}
+            ],
+            temperature=0.0,
+            max_tokens=200
+        )
+        return response.choices[0].message.content.strip().strip('"').strip("'")
+        
+    except Exception as e:
+        return f"Lỗi gọi AI: {str(e)}"
+
 def search_pubmed(query_en: str, max_res: int = 20) -> List[Dict[str, Any]]:
     """Đã chỉnh sửa max_res mặc định lên 20"""
     search_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
