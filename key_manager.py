@@ -7,7 +7,7 @@ import streamlit as st
 # ==========================================
 def get_groq_keys():
     # Đọc từ Secrets, nếu không có thì dùng danh sách dự phòng cứng
-    secret_str = st.secrets.get("GROQ_API_KEYS", "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")
+    secret_str = st.secrets.get("GROQ_API_KEYS")
     return [k.strip() for k in secret_str.split(",") if k.strip()]
 
 @st.cache_resource
@@ -28,7 +28,7 @@ def get_next_key():
 # ==========================================
 def get_or_keys():
     # Đọc từ Secrets, nếu không có dùng key mặc định của bạn
-    secret_str = st.secrets.get("OPENROUTER_API_KEYS", "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")
+    secret_str = st.secrets.get("OPENROUTER_API_KEYS")
     return [k.strip() for k in secret_str.split(",") if k.strip()]
 
 @st.cache_resource
