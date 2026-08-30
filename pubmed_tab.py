@@ -79,10 +79,11 @@ def render_pubmed_tab(
                 with st.expander("Xem tóm tắt (Abstract)"): 
                     st.write(art.get("abstract", ""))
 
-                # SỬ DỤNG PMID LÀM KEY ĐỂ TRÁNH LỖI TRÙNG LẶP NÚT BẤM
-                pmid = art.get('pmid', str(i)) 
+                # KẾT HỢP INDEX 'i' VÀ 'pmid' ĐỂ TẠO KEY ĐỘC NHẤT TUYỆT ĐỐI
+                safe_pmid = art.get('pmid', 'no_pmid')
+                unique_button_key = ui_key(f"pm_ingest_row_{i}_id_{safe_pmid}")
                 
-                if st.button("➕ Nạp vào Evidence Database", key=ui_key(f"pm_ingest_{pmid}")):
+                if st.button("➕ Nạp vào Evidence Database", key=unique_button_key):
                     try:
                         if ingest_pubmed_article(art): 
                             rebuild_index()
