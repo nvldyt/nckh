@@ -1,0 +1,13 @@
+# Chặn toàn bộ thư mục và cấu hình Streamlit Local
+.streamlit/
+secrets.toml
+
+# Chặn file quản lý key nội bộ
+key_manager.py
+
+# Chặn file môi trường (nếu có)
+.env
+
+# Chặn các file rác của Python
+__pycache__/
+*.pyc
