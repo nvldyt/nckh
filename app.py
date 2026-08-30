@@ -599,8 +599,8 @@ def main():
         "📑 2. Tài liệu",
         "🛠️ 3. Tổng hợp", 
         "⚡ 4. Tóm tắt",
-        "✍️ 5. Viết văn (Grok AI)", 
-        "🤖 6. Viết văn (Qwen 72B)",
+        "✍️ 5. Viết văn (Groq AI)", 
+        "🤖 6. Viết văn (OpenRouter)",
         "📊 7. Phân tích số liệu", 
         "🔎 8. Kiểm tra luận văn"
     ])
