@@ -183,7 +183,7 @@ def render_gemini_writer_tab(
     k_custom = st.slider("Số nguồn bằng chứng truy xuất", 3, 20, 8, key=ui_key("top_k_tab3"))
     btnc = st.button("▶️ Chạy lệnh tùy chỉnh", key=ui_key("btn_custom"))
     
-    if btn1: run_quick_task("Đặt vấn đề", "Đặt vấn đề, tính cấp thiết, lý do nghiên cứu, dịch tễ học, gánh nặng bệnh tật liên quan sử dụng thuốc", f"Viết phần 'Đặt vấn đề'. Viết thành MỘT MẠCH VĂN LIỀN MẠCH, khoảng 400 từ, gồm 3-4 đoạn văn.\n{citation_rules}", 6)
+    if btn1: run_quick_task("Đặt vấn đề", "Đặt vấn đề, tính cấp thiết, lý do nghiên cứu, dịch tễ học, gánh nặng bệnh tật liên quan sử dụng thuốc", f"Viết phần 'Đặt vấn đề'. Viết thành MỘT MẠCH VĂN LIỀN MẠCH, khoảng 500 từ, gồm 3-4 đoạn văn.\n{citation_rules}", 6)
     if btn2: run_quick_task("Tổng quan tài liệu", "Tổng quan y văn, các nghiên cứu liên quan, cơ chế dược lý, kết quả chính, khuyến cáo điều trị", f"Viết phần 'Tổng quan tài liệu' chuyên sâu.\n{citation_rules}", 8)
     if btn3: run_quick_task("Phương pháp nghiên cứu", "Đối tượng nghiên cứu, tiêu chuẩn chọn loại, thiết kế nghiên cứu, cỡ mẫu, biến số nghiên cứu", f"Viết 'Chương 2. ĐỐI TƯỢNG VÀ PHƯƠNG PHÁP NGHIÊN CỨU'.\n{citation_rules}", 5)
     if btn4:
