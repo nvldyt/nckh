@@ -25,18 +25,33 @@ def render_pubmed_tab(
                 en_query = translate_query_to_mesh(t3_query)
                 st.session_state["t3_en_keyword"] = en_query
                 
-                # BẮT BUỘC THÊM DÒNG NÀY: Ép widget text_input nhận giá trị mới ngay lập tức
-                st.session_state[ui_key("t3_editable_mesh")] = en_query
+                # Ép widget text_input ở Bước 2 nhận giá trị mới ngay lập tức
+                st.session_state[ui_key("t3_editable_mesh_input")] = en_query
 
     # BƯỚC 2: CHỈNH SỬA TỪ KHÓA & TÌM KIẾM
     if "t3_en_keyword" in st.session_state:
         st.markdown("### 🔑 Từ khóa tra cứu PubMed")
         
-        # BỎ THAM SỐ `value=` vì Streamlit sẽ tự động lấy giá trị từ session_state thông qua key
+        # Bỏ tham số value=, dùng đúng key đã gán ở Bước 1
         editable_mesh = st.text_input(
             "Bạn có thể thêm/bớt từ khóa ở ô dưới đây trước khi tìm kiếm:", 
-            key=ui_key("t3_editable_mesh") 
+            key=ui_key("t3_editable_mesh_input") 
         )
+
+        # KHÔI PHỤC NÚT TÌM KIẾM (Đã bị thiếu trong code của bạn)
+        col1, col2 = st.columns([4, 1])
+        with col2: 
+            max_res = st.number_input("Số bài/nguồn", min_value=10, max_value=100, value=20, key=ui_key("t3_max_res"))
+        with col1:
+            st.write("") # Căn lề nút bấm
+            st.write("")
+            search_clicked = st.button("🚀 2. Tìm kiếm trên PubMed", type="primary", key=ui_key("t3_btn_search"))
+
+        if search_clicked:
+            st.session_state["t3_en_keyword"] = editable_mesh 
+            with st.spinner(f"Đang tìm & tải {max_res} Abstract từ PubMed..."):
+                final_query = normalize_pubmed_query(editable_mesh, st.session_state.get("t3_query", ""))
+                st.session_state["t3_pm_data"] = search_pubmed(final_query, max_res)
 
     # HIỂN THỊ KẾT QUẢ PUBMED
     if st.session_state.get("t3_pm_data"):
@@ -60,7 +75,7 @@ def render_pubmed_tab(
             
         st.write("---")
 
-        # VÒNG LẶP HIỂN THỊ TỪNG BÀI BÁO
+        # VÒNG LẶP HIỂN THỊ TỪNG BÀI BÁO (Đã xóa bỏ vòng lặp copy thừa)
         for i, art in enumerate(st.session_state.get("t3_pm_data", [])):
             with st.container(border=True):
                 st.markdown(f"**[{art.get('title', '')}]({art.get('url', '#')})**")
@@ -68,32 +83,11 @@ def render_pubmed_tab(
                 with st.expander("Xem tóm tắt (Abstract)"): 
                     st.write(art.get("abstract", ""))
 
-                # KẾT HỢP INDEX 'i' VÀ 'pmid' ĐỂ TẠO KEY ĐỘC NHẤT TUYỆT ĐỐI
+                # Kết hợp index 'i' và 'pmid' để tạo key độc nhất tuyệt đối
                 safe_pmid = art.get('pmid', 'no_pmid')
                 unique_button_key = ui_key(f"pm_ingest_row_{i}_id_{safe_pmid}")
                 
                 if st.button("➕ Nạp vào Evidence Database", key=unique_button_key):
-                    try:
-                        if ingest_pubmed_article(art): 
-                            rebuild_index()
-                            st.success("Đã nạp vào Evidence Database.")
-                            st.rerun()
-                        else: 
-                            st.info("Nguồn này đã có trong Evidence Database.")
-                    except Exception as exc: 
-                        st.error(f"❌ Lỗi nạp nguồn: {exc}")
-
-        for i, art in enumerate(st.session_state.get("t3_pm_data", [])):
-            with st.container(border=True):
-                st.markdown(f"**[{art.get('title', '')}]({art.get('url', '#')})**")
-                st.caption(f"✍️ {art.get('authors', '')} ({art.get('year', '')}) — {art.get('journal', '')}")
-                with st.expander("Xem tóm tắt (Abstract)"): 
-                    st.write(art.get("abstract", ""))
-
-                # SỬ DỤNG PMID LÀM KEY THAY VÌ INDEX ĐỂ TRÁNH LỖI DUPLICATE KEY CỦA STREAMLIT
-                pmid = art.get('pmid', str(i)) 
-                
-                if st.button("➕ Nạp vào Evidence Database", key=ui_key(f"pm_ingest_{pmid}")):
                     try:
                         if ingest_pubmed_article(art): 
                             rebuild_index()
