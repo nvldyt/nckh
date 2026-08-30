@@ -83,7 +83,7 @@ def render_openrouter_writer_tab():
                     )
                     
                     stream = client.chat.completions.create(
-                        model="openrouter/free",
+                        model="qwen/qwen-2.5-72b-instruct:free",
                         messages=api_messages,
                         temperature=0.2,
                         max_tokens=1024, # Giảm xuống 1024 để sinh nhanh hơn, tránh nghẽn
