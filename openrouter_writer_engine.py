@@ -72,33 +72,38 @@ def render_openrouter_writer_tab():
             for attempt in range(max_retries):
                 current_key = get_next_or_key()
                 try:
-                    with st.spinner(f"🔄 Đang kết nối AI (Lần thử {attempt + 1}/{max_retries})..."):
+                    with st.spinner(f"🔄 Đang xử lý toàn bộ văn bản (Lần thử {attempt + 1}/{max_retries})..."):
                         client = OpenAI(
                             base_url="https://openrouter.ai/api/v1",
                             api_key=current_key,
-                            timeout=45.0, # Bảo vệ 45s chống treo
+                            timeout=45.0, # Bảo vệ 45s sẽ hoạt động hiệu quả khi tắt stream
                         )
                         
-                        stream = client.chat.completions.create(
-                            model="openrouter/free",
+                        # Gọi API NHƯNG TẮT STREAM
+                        response = client.chat.completions.create(
+                            model="openrouter/free", 
                             messages=api_messages,
                             temperature=0.2,
                             max_tokens=1024,
-                            stream=True
+                            stream=False # QUAN TRỌNG: Tắt stream để chống treo vĩnh viễn
                         )
                     
-                    response_text = st.write_stream(stream)
+                    # Lấy kết quả trả về một lần
+                    response_text = response.choices[0].message.content
                     
                     if not response_text:
-                        raise ValueError("Máy chủ API trả về luồng dữ liệu rỗng.")
+                        raise ValueError("Máy chủ API trả về kết quả rỗng.")
                         
+                    # In kết quả ra màn hình
+                    st.markdown(response_text)
+                    
                     st.session_state["or_messages"].append({"role": "assistant", "content": response_text})
                     is_success = True
                     break
                     
                 except Exception as e:
                     if attempt < max_retries - 1:
-                        st.warning(f"⏳ Cổng API bị nghẽn hoặc từ chối, đang tự động thử lại... ({e})")
+                        st.warning(f"⏳ Cổng API nghẽn, đang thử lại... ({e})")
                         time.sleep(2)
                     else:
                         st.error(f"❌ Các mô hình miễn phí hiện đang quá tải. Vui lòng đợi vài phút rồi thử lại. Chi tiết: {e}")
