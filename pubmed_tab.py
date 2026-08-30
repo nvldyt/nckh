@@ -24,30 +24,19 @@ def render_pubmed_tab(
             with st.spinner("Đang phân tích ngữ nghĩa y khoa và dịch sang MeSH..."):
                 en_query = translate_query_to_mesh(t3_query)
                 st.session_state["t3_en_keyword"] = en_query
+                
+                # BẮT BUỘC THÊM DÒNG NÀY: Ép widget text_input nhận giá trị mới ngay lập tức
+                st.session_state[ui_key("t3_editable_mesh")] = en_query
 
     # BƯỚC 2: CHỈNH SỬA TỪ KHÓA & TÌM KIẾM
     if "t3_en_keyword" in st.session_state:
         st.markdown("### 🔑 Từ khóa tra cứu PubMed")
-        # Cho phép người dùng tự tay tinh chỉnh từ khóa MeSH nếu AI dịch chưa sát
+        
+        # BỎ THAM SỐ `value=` vì Streamlit sẽ tự động lấy giá trị từ session_state thông qua key
         editable_mesh = st.text_input(
             "Bạn có thể thêm/bớt từ khóa ở ô dưới đây trước khi tìm kiếm:", 
-            value=st.session_state["t3_en_keyword"], 
-            key=ui_key("t3_editable_mesh")
+            key=ui_key("t3_editable_mesh") 
         )
-
-        cs, cb = st.columns([4, 1])
-        with cb: 
-            max_res = st.number_input("Số bài/nguồn", min_value=10, max_value=100, value=20, key=ui_key("t3_max_res"))
-        with cs:
-            st.write("") # Căn lề cho nút bấm ngang hàng với ô nhập số
-            st.write("")
-            search_clicked = st.button("🚀 2. Tìm kiếm trên PubMed", type="primary", key=ui_key("t3_btn_search"))
-
-        if search_clicked:
-            st.session_state["t3_en_keyword"] = editable_mesh # Cập nhật lại từ khóa nếu có chỉnh sửa
-            with st.spinner(f"Đang tìm & tải {max_res} Abstract từ PubMed..."):
-                final_query = normalize_pubmed_query(editable_mesh, t3_query)
-                st.session_state["t3_pm_data"] = search_pubmed(final_query, max_res)
 
     # HIỂN THỊ KẾT QUẢ PUBMED
     if st.session_state.get("t3_pm_data"):
