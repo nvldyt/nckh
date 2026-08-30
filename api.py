@@ -32,16 +32,25 @@ class MeshRequest(BaseModel):
 @app.post("/api/v1/pubmed/translate_mesh")
 async def translate_to_mesh(request: MeshRequest):
     """API chuyên dụng dịch đề tài tiếng Việt sang cấu trúc truy vấn PubMed (MeSH)"""
-    # Khai báo key Groq (có thể dùng biến môi trường để bảo mật hơn trong thực tế)
+    
+    # ⚠️ Lưu ý bảo mật: Bạn đang lộ API Key cứng trong code. Hãy đảm bảo dùng biến môi trường khi deploy.
     groq_key = os.getenv("GROQ_API_KEYS", "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") 
     
+    # ÉP KHUÔN (FEW-SHOT PROMPTING) ĐỂ CHỐNG ẢO GIÁC LỆCH TỪ KHÓA
     system_prompt = (
-        "Bạn là một Chuyên gia Thư viện Y khoa (Medical Librarian). "
-        "Nhiệm vụ: Chuyển đổi tên đề tài nghiên cứu tiếng Việt thành chuỗi truy vấn PubMed tối ưu.\n"
-        "1. Phân tách các khái niệm cốt lõi: Bệnh lý, Thuốc, Đối tượng.\n"
-        "2. Chuyển sang chuẩn MeSH. VD: 'Tăng huyết áp' -> 'Hypertension'[MeSH], 'Kháng sinh' -> 'Anti-Bacterial Agents'[MeSH].\n"
-        "3. Kết hợp bằng toán tử Boolean (AND, OR) một cách logic.\n"
-        "4. CHỈ TRẢ VỀ DUY NHẤT chuỗi truy vấn, tuyệt đối không giải thích."
+        "Bạn là một Chuyên gia Thư viện Y khoa (Medical Librarian) chuyên tra cứu PubMed.\n"
+        "Nhiệm vụ: Dịch đề tài nghiên cứu tiếng Việt sang cú pháp tìm kiếm MeSH của PubMed.\n\n"
+        "Quy tắc tuyệt đối:\n"
+        "- CHỈ trả về chuỗi boolean query cuối cùng.\n"
+        "- TUYỆT ĐỐI KHÔNG giải thích, KHÔNG thêm câu chào, KHÔNG bọc ngoặc kép ở 2 đầu chuỗi kết quả.\n\n"
+        "--- VÍ DỤ CHUẨN (FEW-SHOT) ---\n"
+        "Input: Phân tích tình hình sử dụng thuốc đái tháo đường\n"
+        "Output: \"Diabetes Mellitus\"[Mesh] AND (\"Drug Utilization\"[Mesh] OR \"Drug Therapy\"[Mesh])\n\n"
+        "Input: Đánh giá hiệu quả điều trị viêm dạ dày bằng kháng sinh\n"
+        "Output: \"Gastritis\"[Mesh] AND \"Anti-Bacterial Agents\"[Mesh] AND \"Treatment Outcome\"[Mesh]\n\n"
+        "Input: Tuân thủ điều trị tăng huyết áp ở người cao tuổi\n"
+        "Output: \"Hypertension\"[Mesh] AND \"Treatment Adherence and Compliance\"[Mesh] AND \"Aged\"[Mesh]\n"
+        "------------------------------"
     )
     
     try:
@@ -51,17 +60,18 @@ async def translate_to_mesh(request: MeshRequest):
             timeout=15.0
         )
         response = client.chat.completions.create(
-            model="llama-3.1-8b-instant", # Tốc độ phản hồi cực nhanh cho API
+            model="llama-3.1-8b-instant",
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Đề tài: {request.vietnamese_topic}"}
+                # Thêm tiền tố "Input: " và "Output: " để kích hoạt nhận diện mẫu của LLM
+                {"role": "user", "content": f"Input: {request.vietnamese_topic}\nOutput:"}
             ],
-            temperature=0.1, # Đảm bảo tính chính xác, không sáng tạo từ vựng
+            temperature=0.0, # Đưa về 0.0 để loại bỏ hoàn toàn tính "sáng tạo" rủi ro
             max_tokens=200
         )
         
-        # Bóc tách và làm sạch chuỗi kết quả, xóa bỏ ngoặc kép thừa
-        mesh_query = response.choices[0].message.content.strip().strip('"')
+        # Làm sạch chuỗi kết quả triệt để
+        mesh_query = response.choices[0].message.content.strip().strip('"').strip("'")
         return {"status": "success", "mesh_query": mesh_query}
         
     except Exception as e:
