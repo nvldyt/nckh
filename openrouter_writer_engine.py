@@ -4,8 +4,8 @@ from openai import OpenAI
 from key_manager import get_next_or_key
 
 def render_openrouter_writer_tab():
-    st.markdown("### 🌐 Trợ lý Viết Luận văn (OpenRouter - Trích dẫn số tự động)")
-    st.caption("Tự động định tuyến mô hình mở và gán số thứ tự tài liệu tham khảo chuẩn y khoa.")
+    st.markdown("### 🌐 Trợ lý Viết Luận văn (OpenRouter - Gemini Flash)")
+    st.caption("Tự động định tuyến mô hình Gemini Flash miễn phí và gán số thứ tự tài liệu tham khảo chuẩn y khoa.")
 
     if "or_messages" not in st.session_state:
         st.session_state["or_messages"] = []
@@ -80,10 +80,10 @@ def render_openrouter_writer_tab():
                         )
                         
                         stream = client.chat.completions.create(
-                            model="nvidia/llama-3.1-nemotron-70b-instruct:free",
+                            model="google/gemini-flash-1.5-exp:free",
                             messages=api_messages,
                             temperature=0.2,
-                            max_tokens=1024,
+                            max_tokens=1500,
                             stream=True
                         )
                     
@@ -102,3 +102,5 @@ def render_openrouter_writer_tab():
                         time.sleep(2)
                     else:
                         st.error(f"❌ Các mô hình miễn phí hiện đang quá tải. Vui lòng đợi vài phút rồi thử lại. Chi tiết: {e}")
+                        if st.session_state["or_messages"]:
+                            st.session_state["or_messages"].pop()
