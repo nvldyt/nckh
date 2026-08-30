@@ -4,8 +4,8 @@ from openai import OpenAI
 from key_manager import get_next_or_key
 
 def render_openrouter_writer_tab():
-    st.markdown("### 🌐 Trợ lý Viết Luận văn (OpenRouter - Gemini Flash)")
-    st.caption("Tự động định tuyến mô hình Gemini Flash miễn phí và gán số thứ tự tài liệu tham khảo chuẩn y khoa.")
+    st.markdown("### 🌐 Trợ lý Viết Luận văn (OpenRouter - Tự động thông minh)")
+    st.caption("Tự động định tuyến mô hình miễn phí và gán số thứ tự tài liệu tham khảo chuẩn y khoa.")
 
     if "or_messages" not in st.session_state:
         st.session_state["or_messages"] = []
@@ -76,14 +76,14 @@ def render_openrouter_writer_tab():
                         client = OpenAI(
                             base_url="https://openrouter.ai/api/v1",
                             api_key=current_key,
-                            timeout=45.0,
+                            timeout=45.0, # Bảo vệ 45s chống treo
                         )
                         
                         stream = client.chat.completions.create(
-                            model="google/gemini-flash-1.5-exp:free",
+                            model="openrouter/free",
                             messages=api_messages,
                             temperature=0.2,
-                            max_tokens=1500,
+                            max_tokens=1024,
                             stream=True
                         )
                     
@@ -98,7 +98,7 @@ def render_openrouter_writer_tab():
                     
                 except Exception as e:
                     if attempt < max_retries - 1:
-                        st.warning(f"⏳ Cổng API bị nghẽn, đang tự động thử lại... ({e})")
+                        st.warning(f"⏳ Cổng API bị nghẽn hoặc từ chối, đang tự động thử lại... ({e})")
                         time.sleep(2)
                     else:
                         st.error(f"❌ Các mô hình miễn phí hiện đang quá tải. Vui lòng đợi vài phút rồi thử lại. Chi tiết: {e}")
