@@ -4,8 +4,24 @@ from openai import OpenAI
 from key_manager import get_next_or_key
 
 def render_openrouter_writer_tab():
-    st.markdown("### 🌐 Trợ lý Viết Luận văn (OpenRouter - Tự động thông minh)")
-    st.caption("Tự động định tuyến mô hình miễn phí và gán số thứ tự tài liệu tham khảo chuẩn y khoa.")
+    st.markdown("### 🌐 Trợ lý Viết Luận văn (OpenRouter - Kênh Dự Phòng)")
+    st.caption("Kênh song song hỗ trợ viết và trích dẫn. Bạn có thể tự do chuyển đổi mô hình để tránh lỗi mạng.")
+
+    # TẠO MENU CHỌN MODEL TRỰC TIẾP TRÊN GIAO DIỆN
+    model_options = {
+        "Tự động chọn model miễn phí khỏe nhất (openrouter/free)": "openrouter/free",
+        "Mistral 7B (Ổn định, logic tốt)": "mistralai/mistral-7b-instruct:free",
+        "Microsoft Phi-3 (Tối ưu ngữ cảnh dài)": "microsoft/phi-3-mini-128k-instruct:free",
+        "Llama 3 8B (Tốc độ nhanh)": "meta-llama/llama-3-8b-instruct:free",
+        "Hugging Face Zephyr 7B": "huggingfaceh4/zephyr-7b-beta:free"
+    }
+    
+    selected_model_label = st.selectbox(
+        "🤖 Chọn mô hình AI:", 
+        list(model_options.keys()),
+        help="Nếu mô hình đang chọn báo lỗi 404 hoặc quá tải, hãy đổi sang mô hình khác trong danh sách này."
+    )
+    current_model_slug = model_options[selected_model_label]
 
     if "or_messages" not in st.session_state:
         st.session_state["or_messages"] = []
@@ -35,7 +51,7 @@ def render_openrouter_writer_tab():
 
         compiled_context = "\n\n".join(context_blocks)
         if compiled_context:
-            st.success(f"✅ Đã đồng bộ dữ liệu và thiết lập sơ đồ đánh số trích dẫn (Tổng số nguồn: {ref_counter - 1}).")
+            st.success(f"✅ Đã đồng bộ dữ liệu (Tổng số nguồn: {ref_counter - 1}).")
         else:
             st.info("ℹ️ Chưa có dữ liệu nền nào được nạp từ các Tab trước.")
 
@@ -66,46 +82,40 @@ def render_openrouter_writer_tab():
             api_messages = [{"role": "system", "content": system_instruction}]
             api_messages.extend(st.session_state["or_messages"][-4:])
             
-            is_success = False
             max_retries = 3
             
             for attempt in range(max_retries):
                 current_key = get_next_or_key()
                 try:
-                    with st.spinner(f"🔄 Đang xử lý toàn bộ văn bản (Lần thử {attempt + 1}/{max_retries})..."):
+                    with st.spinner(f"🔄 Đang xử lý qua OpenRouter (Lần thử {attempt + 1}/{max_retries})..."):
                         client = OpenAI(
                             base_url="https://openrouter.ai/api/v1",
                             api_key=current_key,
-                            timeout=45.0, # Bảo vệ 45s sẽ hoạt động hiệu quả khi tắt stream
+                            timeout=45.0, 
                         )
                         
-                        # Gọi API NHƯNG TẮT STREAM
                         response = client.chat.completions.create(
-                            model="google/gemma-2-9b-it:free",
+                            model=current_model_slug, # Sử dụng model được chọn từ dropdown
                             messages=api_messages,
                             temperature=0.2,
                             max_tokens=1024,
-                            stream=False 
+                            stream=False # Tắt stream để chống treo
                         )
                     
-                    # Lấy kết quả trả về một lần
                     response_text = response.choices[0].message.content
                     
                     if not response_text:
                         raise ValueError("Máy chủ API trả về kết quả rỗng.")
                         
-                    # In kết quả ra màn hình
                     st.markdown(response_text)
-                    
                     st.session_state["or_messages"].append({"role": "assistant", "content": response_text})
-                    is_success = True
                     break
                     
                 except Exception as e:
                     if attempt < max_retries - 1:
-                        st.warning(f"⏳ Cổng API nghẽn, đang thử lại... ({e})")
+                        st.warning(f"⏳ Cổng OpenRouter bị nghẽn, đang thử lại... ({e})")
                         time.sleep(2)
                     else:
-                        st.error(f"❌ Các mô hình miễn phí hiện đang quá tải. Vui lòng đợi vài phút rồi thử lại. Chi tiết: {e}")
+                        st.error(f"❌ Mô hình này đang quá tải hoặc đã bị gỡ miễn phí. Bạn hãy chọn mô hình khác ở menu phía trên rồi thử lại nhé. Chi tiết: {e}")
                         if st.session_state["or_messages"]:
                             st.session_state["or_messages"].pop()
