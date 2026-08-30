@@ -81,11 +81,11 @@ def render_openrouter_writer_tab():
                         
                         # Gọi API NHƯNG TẮT STREAM
                         response = client.chat.completions.create(
-                            model="openrouter/free", 
+                            model="meta-llama/llama-3.1-8b-instruct:free", # Cố định model ổn định
                             messages=api_messages,
                             temperature=0.2,
                             max_tokens=1024,
-                            stream=False # QUAN TRỌNG: Tắt stream để chống treo vĩnh viễn
+                            stream=False 
                         )
                     
                     # Lấy kết quả trả về một lần
