@@ -1,4 +1,3 @@
-# File: openrouter_writer_engine.py
 import time
 import streamlit as st
 from openai import OpenAI
@@ -11,27 +10,24 @@ def render_openrouter_writer_tab():
     if "or_messages" not in st.session_state:
         st.session_state["or_messages"] = []
 
-    # 1. TỰ ĐỘNG THU THẬP VÀ ĐÁNH SỐ THỨ TỰ TÀI LIỆU TỪ CÁC TAB 1, 2, 3, 4, 7
+    # 1. TỰ ĐỘNG THU THẬP VÀ ĐÁNH SỐ THỨ TỰ TÀI LIỆU
     with st.expander("🔍 Dữ liệu bối cảnh và danh mục tham khảo đang nạp", expanded=False):
         context_blocks = []
         ref_counter = 1
         
-        # Đánh số thứ tự cho RAG / PubMed (Tab 1 & 2)
         evidence = st.session_state.get("last_evidence", [])
         if evidence:
             ev_lines = []
-            for e in evidence[:10]: # Lấy tối đa 10 tài liệu để đánh số
+            for e in evidence[:10]:
                 ev_lines.append(f"[{ref_counter}] {e.get('text', '')}")
                 ref_counter += 1
             context_blocks.append(f"DANH MỤC TÀI LIỆU Y VĂN (RAG):\n" + "\n".join(ev_lines))
             
-        # Đánh số thứ tự cho tóm tắt hoặc tài liệu khác (Tab 4)
         summary = st.session_state.get("cached_summary", "")
         if summary:
             context_blocks.append(f"TÓM TẮT ĐỀ TÀI [{ref_counter}]:\n{summary}")
             ref_counter += 1
 
-        # Nạp bảng số liệu (Tab 7)
         saved_tables = st.session_state.get("saved_tables", {})
         if saved_tables:
             table_info = "".join([f"Bảng {name}:\n{df.to_markdown()}\n\n" for name, df in saved_tables.items()])
@@ -48,7 +44,7 @@ def render_openrouter_writer_tab():
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # 3. XỬ LÝ LỆNH GỌI AI VỚI QUY TẮC TRÍCH DẪN SỐ
+    # 3. XỬ LÝ LỆNH GỌI AI
     user_query = st.chat_input("Yêu cầu AI viết (VD: Viết phần bàn luận và đính kèm số trích dẫn [1], [2] tương ứng)...")
 
     if user_query:
@@ -76,29 +72,33 @@ def render_openrouter_writer_tab():
             for attempt in range(max_retries):
                 current_key = get_next_or_key()
                 try:
-                    client = OpenAI(
-                        base_url="https://openrouter.ai/api/v1",
-                        api_key=current_key,
-                        timeout=30.0, # Thêm thời gian chờ tối đa 30 giây để tránh treo đơ
-                    )
-                    
-                    stream = client.chat.completions.create(
-                        model="model="nvidia/llama-3.1-nemotron-70b-instruct:free",
-                        messages=api_messages,
-                        temperature=0.2,
-                        max_tokens=1024, # Giảm xuống 1024 để sinh nhanh hơn, tránh nghẽn
-                        stream=True
-                    )
+                    with st.spinner(f"🔄 Đang kết nối AI (Lần thử {attempt + 1}/{max_retries})..."):
+                        client = OpenAI(
+                            base_url="https://openrouter.ai/api/v1",
+                            api_key=current_key,
+                            timeout=45.0,
+                        )
+                        
+                        stream = client.chat.completions.create(
+                            model="nvidia/llama-3.1-nemotron-70b-instruct:free",
+                            messages=api_messages,
+                            temperature=0.2,
+                            max_tokens=1024,
+                            stream=True
+                        )
                     
                     response_text = st.write_stream(stream)
+                    
+                    if not response_text:
+                        raise ValueError("Máy chủ API trả về luồng dữ liệu rỗng.")
+                        
                     st.session_state["or_messages"].append({"role": "assistant", "content": response_text})
                     is_success = True
                     break
                     
                 except Exception as e:
                     if attempt < max_retries - 1:
-                        st.warning(f"🔄 Đang chuyển key tiếp theo do lỗi: {e}")
-                        time.sleep(1)
+                        st.warning(f"⏳ Cổng API bị nghẽn, đang tự động thử lại... ({e})")
+                        time.sleep(2)
                     else:
-                        st.error(f"❌ Toàn bộ Key OpenRouter đều gặp lỗi. Chi tiết: {e}")
-                        st.session_state["or_messages"].pop()
+                        st.error(f"❌ Các mô hình miễn phí hiện đang quá tải. Vui lòng đợi vài phút rồi thử lại. Chi tiết: {e}")
