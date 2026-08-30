@@ -4,7 +4,7 @@ from openai import OpenAI
 from key_manager import get_next_or_key
 
 def render_openrouter_writer_tab():
-    st.markdown("### 🌐 Trợ lý Viết Luận văn (OpenRouter - Kênh Dự Phòng)")
+    st.markdown("### 🌐 Trợ lý Viết Luận văn (OpenRouter)")
     st.caption("Kênh song song hỗ trợ viết và trích dẫn. Bạn có thể tự do chuyển đổi mô hình để tránh lỗi mạng.")
 
     # TẠO MENU CHỌN MODEL TRỰC TIẾP TRÊN GIAO DIỆN
