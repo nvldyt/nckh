@@ -81,7 +81,7 @@ def render_openrouter_writer_tab():
                         
                         # Gọi API NHƯNG TẮT STREAM
                         response = client.chat.completions.create(
-                            model="meta-llama/llama-3.1-8b-instruct:free", # Cố định model ổn định
+                            model="google/gemma-2-9b-it:free",
                             messages=api_messages,
                             temperature=0.2,
                             max_tokens=1024,
