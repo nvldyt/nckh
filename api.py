@@ -1,15 +1,17 @@
 # api.py
-# Cài đặt: pip install fastapi uvicorn pydantic
+# Cài đặt: pip install fastapi uvicorn pydantic openai
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Any
 import uvicorn
+import pandas as pd
+import io
+import os
+from openai import OpenAI
 
 # Import các engine lõi của hệ thống
 from evidence_engine import extract_pdf, get_embeddings
 from statistical_engine import crosstab_test, binary_logistic_regression
-import pandas as pd
-import io
 
 app = FastAPI(title="Research Evidence API", version="1.0")
 
@@ -22,7 +24,48 @@ class StatsRequest(BaseModel):
     dependent_vars: List[str]
     independent_vars: List[str]
 
+class MeshRequest(BaseModel):
+    vietnamese_topic: str
+
 # --- Endpoints ---
+
+@app.post("/api/v1/pubmed/translate_mesh")
+async def translate_to_mesh(request: MeshRequest):
+    """API chuyên dụng dịch đề tài tiếng Việt sang cấu trúc truy vấn PubMed (MeSH)"""
+    # Khai báo key Groq (có thể dùng biến môi trường để bảo mật hơn trong thực tế)
+    groq_key = os.getenv("GROQ_API_KEYS", "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") 
+    
+    system_prompt = (
+        "Bạn là một Chuyên gia Thư viện Y khoa (Medical Librarian). "
+        "Nhiệm vụ: Chuyển đổi tên đề tài nghiên cứu tiếng Việt thành chuỗi truy vấn PubMed tối ưu.\n"
+        "1. Phân tách các khái niệm cốt lõi: Bệnh lý, Thuốc, Đối tượng.\n"
+        "2. Chuyển sang chuẩn MeSH. VD: 'Tăng huyết áp' -> 'Hypertension'[MeSH], 'Kháng sinh' -> 'Anti-Bacterial Agents'[MeSH].\n"
+        "3. Kết hợp bằng toán tử Boolean (AND, OR) một cách logic.\n"
+        "4. CHỈ TRẢ VỀ DUY NHẤT chuỗi truy vấn, tuyệt đối không giải thích."
+    )
+    
+    try:
+        client = OpenAI(
+            base_url="https://api.groq.com/openai/v1", 
+            api_key=groq_key, 
+            timeout=15.0
+        )
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant", # Tốc độ phản hồi cực nhanh cho API
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Đề tài: {request.vietnamese_topic}"}
+            ],
+            temperature=0.1, # Đảm bảo tính chính xác, không sáng tạo từ vựng
+            max_tokens=200
+        )
+        
+        # Bóc tách và làm sạch chuỗi kết quả, xóa bỏ ngoặc kép thừa
+        mesh_query = response.choices[0].message.content.strip().strip('"')
+        return {"status": "success", "mesh_query": mesh_query}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/v1/evidence/upload_pdf")
 async def upload_evidence_pdf(file: UploadFile = File(...)):
