@@ -5,6 +5,7 @@ torchvision
 
 # 2. CỐT LÕI AI & RAG
 streamlit
+groq
 openai
 google-genai
 sentence-transformers
