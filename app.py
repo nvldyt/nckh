@@ -82,7 +82,27 @@ def call_ollama_colab(prompt: str, url: str, model_name: str = "qwen2.5:14b") ->
         return result.get("response", "")
     except requests.exceptions.RequestException as e:
         return f"❌ Mất kết nối với Colab. Chi tiết lỗi: {e}"
+import streamlit as st
+from groq import Groq
 
+# Import hàm lấy key xoay vòng từ module bạn vừa tạo
+from key_manager import get_next_groq_key 
+
+# ... (các phần code khác của bạn) ...
+
+# Bất cứ khi nào cần gọi AI, chỉ cần lấy key và khởi tạo Client:
+try:
+    current_key = get_next_groq_key()
+    client = Groq(api_key=current_key)
+    
+    # Gọi model xử lý
+    completion = client.chat.completions.create(
+        model="llama-3.1-70b-versatile",
+        messages=[...],
+    )
+except Exception as e:
+    st.error(f"Lỗi khi gọi Groq API: {e}")
+    
 # ============================================================
 # 1. CẤU HÌNH
 # ============================================================
