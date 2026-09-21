@@ -69,6 +69,7 @@ def call_gemini(
                 "temperature": temperature,
             }
 
+            st.write("DEBUG PAYLOAD:", payload)
             response = requests.post(
                 GROQ_API_URL, headers=headers, json=payload, timeout=60
             )
