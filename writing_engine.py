@@ -21,8 +21,8 @@ import key_manager
 #   ✅ openai/gpt-oss-120b  — ~500 t/s, context 131K — task nặng (viết luận)
 #   ✅ openai/gpt-oss-20b   — ~1000 t/s, context 131K — task nhanh/nhẹ
 # ============================================================
-DEFAULT_MODEL = "openai/gpt-oss-120b"
-MODEL_LITE    = "openai/gpt-oss-20b"
+DEFAULT_MODEL = "llama-3.3-70b-versatile" # Hoặc model lớn nhất hiện có trên Groq
+MODEL_LITE    = "llama-3.1-8b-instant"    # Model nhẹ, tốc độ cao
 GROQ_API_URL  = "https://api.groq.com/openai/v1/chat/completions"
 
 BASE_SYSTEM_RULES = """
