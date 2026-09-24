@@ -97,7 +97,7 @@ try:
     
     # Gọi model xử lý
     completion = client.chat.completions.create(
-        model="llama-3.1-70b-versatile",
+        model="llama-3.1-8b-instant",
         messages=[
             {"role": "system", "content": "Bạn là trợ lý hỗ trợ nghiên cứu khoa học."},
             {"role": "user", "content": "Nội dung prompt của bạn truyền vào đây"}
