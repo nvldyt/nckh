@@ -17,6 +17,20 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+class NumpyEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if pd.isna(obj):
+            return None
+        try:
+            return super().default(obj)
+        except TypeError:
+            return str(obj)
 import streamlit as st
 import requests
 from docx import Document
@@ -608,7 +622,7 @@ def main():
         if st.button("🧹 Làm mới Giao diện", use_container_width=True):
             reset_ui_state(); st.rerun()
         st.divider(); st.subheader("💾 Lưu & Khôi phục (.json)")
-        pdata = json.dumps(project_payload(), ensure_ascii=False, indent=4)
+        pdata = json.dumps(project_payload(), ensure_ascii=False, indent=4, cls=NumpyEncoder)
         st.download_button("📥 Tải file dự án", data=pdata, file_name="Du_An_Luan_Van.json", mime="application/json", use_container_width=True)
         uploaded_proj = st.file_uploader("Khôi phục từ file:", type=["json"], key=ui_key("upload_project_json"))
         if uploaded_proj and st.button("🚀 Khôi phục", type="primary", use_container_width=True):
