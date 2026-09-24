@@ -190,7 +190,7 @@ def translate_query_to_mesh(vietnamese_topic: str) -> str:
             timeout=15.0
         )
         response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model="openai/gpt-oss-20b",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Input: {vietnamese_topic}\nOutput:"}
