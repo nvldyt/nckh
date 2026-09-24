@@ -97,12 +97,12 @@ try:
     
     # Gọi model xử lý
     completion = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
+        model="openai/gpt-oss-20b", # <--- Cập nhật sang model hợp lệ
         messages=[
             {"role": "system", "content": "Bạn là trợ lý hỗ trợ nghiên cứu khoa học."},
             {"role": "user", "content": "Nội dung prompt của bạn truyền vào đây"}
         ],
-    )
+    )    )
 except Exception as e:
     st.error(f"Lỗi khi gọi Groq API: {e}")
     
