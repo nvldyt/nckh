@@ -8,8 +8,8 @@ from typing import List, Dict, Any, Tuple, Optional
 
 import key_manager
 
-DEFAULT_MODEL = "llama-3.1-8b-instant" # Hoặc model lớn nhất hiện có trên Groq
-MODEL_LITE    = "llama-3.1-8b-instant"    # Model nhẹ, tốc độ cao
+DEFAULT_MODEL = "openai/gpt-oss-120b"
+MODEL_LITE    = "openai/gpt-oss-20b"
 GROQ_API_URL  = "https://api.groq.com/openai/v1/chat/completions"
 
 BASE_SYSTEM_RULES = """
