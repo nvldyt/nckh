@@ -8,20 +8,7 @@ from typing import List, Dict, Any, Tuple, Optional
 
 import key_manager
 
-# ============================================================
-# CẤU HÌNH MODEL GROQ HIỆN HÀNH (cập nhật tháng 8/2026)
-#
-# ĐÃ BỊ KHAI TỬ (không dùng được nữa):
-#   ❌ llama3-70b-8192          (khai tử 5/2025)
-#   ❌ llama3-8b-8192           (khai tử 5/2025)
-#   ❌ llama-3.3-70b-versatile  (khai tử 6/2026, hết hẳn 8/2026)
-#   ❌ llama-3.1-8b-instant     (khai tử 6/2026, hết hẳn 8/2026)
-#
-# PRODUCTION MODELS HIỆN TẠI của Groq (tháng 8/2026):
-#   ✅ openai/gpt-oss-120b  — ~500 t/s, context 131K — task nặng (viết luận)
-#   ✅ openai/gpt-oss-20b   — ~1000 t/s, context 131K — task nhanh/nhẹ
-# ============================================================
-DEFAULT_MODEL = "llama-3.3-70b-versatile" # Hoặc model lớn nhất hiện có trên Groq
+DEFAULT_MODEL = "llama-3.1-8b-instant" # Hoặc model lớn nhất hiện có trên Groq
 MODEL_LITE    = "llama-3.1-8b-instant"    # Model nhẹ, tốc độ cao
 GROQ_API_URL  = "https://api.groq.com/openai/v1/chat/completions"
 
