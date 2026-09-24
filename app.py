@@ -102,7 +102,7 @@ try:
             {"role": "system", "content": "Bạn là trợ lý hỗ trợ nghiên cứu khoa học."},
             {"role": "user", "content": "Nội dung prompt của bạn truyền vào đây"}
         ],
-    )    
+    )   
 except Exception as e:
     st.error(f"Lỗi khi gọi Groq API: {e}")
     
