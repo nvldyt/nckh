@@ -637,7 +637,7 @@ def main():
         "🛠️ 3. Tổng hợp", 
         "⚡ 4. Tóm tắt",
         "✍️ 5. Viết văn (Groq AI)", 
-        "🤖 6. Viết văn (OpenRouter)",
+        "🤖 6. Viết văn (Gemini)",
         "📊 7. Phân tích số liệu", 
         "🔎 8. Kiểm tra luận văn"
     ])
@@ -705,11 +705,11 @@ def main():
             extract_metadata_from_text_ai_wrapper=extract_metadata_from_text_ai_wrapper
         )
     # ------------------------------------------------------------
-    # TAB 6 – VIẾT LUẬN VĂN (OPENROUTER - QWEN 72B)
+    # TAB 6 – VIẾT LUẬN VĂN (GEMINI 3.8 FLASH)
     # ------------------------------------------------------------
     with tabs[5]:
-        from openrouter_writer_engine import render_openrouter_writer_tab
-        render_openrouter_writer_tab()
+        from gemini_flash_writer import render_gemini_flash_tab
+        render_gemini_flash_tab()
     # ------------------------------------------------------------
     # TAB 7 – PHÂN TÍCH SỐ LIỆU (SPSS MINI - ĐÃ TÁCH MODULE)
     # ------------------------------------------------------------
