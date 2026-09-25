@@ -29,7 +29,7 @@ def get_gemini_key() -> str:
     # Cứu cánh cuối cùng: lấy từ biến môi trường
     return os.getenv("GEMINI_API_KEY", "")
 
-def render_openrouter_writer_tab():
+def render_gemini_flash_tab():
     st.markdown("### 🚀 Trợ lý Viết Luận văn (Gemini 3.8 Flash)")
     st.caption("Ứng dụng mô hình Gemini 3.8 Flash thế hệ mới với bộ nhớ siêu dài, tối ưu cho tổng hợp tài liệu và viết luận văn chuyên sâu.")
 
