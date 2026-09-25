@@ -51,32 +51,59 @@ def render_gemini_flash_tab():
     if "gemini_writer_messages" not in st.session_state:
         st.session_state["gemini_writer_messages"] = []
 
-    # 2. TỰ ĐỘNG THU THẬP VÀ ĐỒNG BỘ DỮ LIỆU BỐI CẢNH (RAG)
+    # 2. NẠP TOÀN BỘ DỮ LIỆU BỐI CẢNH (LONG-CONTEXT PROMPTING)
     with st.expander("🔍 Dữ liệu bối cảnh và danh mục tham khảo đang nạp", expanded=False):
         context_blocks = []
+        
+        # Kéo toàn bộ PDF và Bài báo đã nạp từ Tab 1 & Tab 2
+        docs = st.session_state.get("documents", {})
+        chunks = st.session_state.get("chunks", [])
+        
         ref_counter = 1
         
-        evidence = st.session_state.get("last_evidence", [])
-        if evidence:
-            ev_lines = []
-            for e in evidence[:10]:
-                ev_lines.append(f"[{ref_counter}] {e.get('text', '')}")
-                ref_counter += 1
-            context_blocks.append("DANH MỤC TÀI LIỆU Y VĂN (RAG):\n" + "\n".join(ev_lines))
+        if docs and chunks:
+            doc_list_text = []
+            doc_mapping = {} # Bản đồ ánh xạ ID -> Số thứ tự [1], [2]
             
+            # 2.1. Xây dựng Danh mục tài liệu tham khảo cho AI
+            for sid, meta in docs.items():
+                doc_mapping[sid] = ref_counter
+                title = meta.get("title") or meta.get("file_name") or sid
+                authors = meta.get("authors", "Không rõ tác giả")
+                year = meta.get("year", "")
+                doc_list_text.append(f"[{ref_counter}] {authors}. {title}. {year}")
+                ref_counter += 1
+                
+            context_blocks.append("DANH MỤC TÀI LIỆU GỐC:\n" + "\n".join(doc_list_text))
+            
+            # 2.2. Nhồi TOÀN BỘ các đoạn văn (Chunks) vào bộ nhớ Flash
+            ev_lines = []
+            for c in chunks:
+                sid = c.get("source_id")
+                doc_idx = doc_mapping.get(sid, "?")
+                text = c.get("text", "")
+                if text.strip():
+                    # Đóng dấu số [1], [2] vào từng đoạn để AI biết trích dẫn từ đâu
+                    ev_lines.append(f"[Trích đoạn từ tài liệu {doc_idx}]:\n{text}")
+                    
+            context_blocks.append("NỘI DUNG CHI TIẾT TỪ CÁC TÀI LIỆU:\n" + "\n---\n".join(ev_lines))
+            
+        # 2.3. Nạp thêm Tóm tắt (nếu có)
         summary = st.session_state.get("cached_summary", "")
         if summary:
-            context_blocks.append(f"TÓM TẮT ĐỀ TÀI [{ref_counter}]:\n{summary}")
+            context_blocks.append(f"TÓM TẮT ĐỀ TÀI (Nguồn nội bộ [{ref_counter}]):\n{summary}")
             ref_counter += 1
 
+        # 2.4. Nạp thêm Bảng số liệu từ SPSS (nếu có)
         saved_tables = st.session_state.get("saved_tables", {})
         if saved_tables:
             table_info = "".join([f"Bảng {name}:\n{df.to_markdown()}\n\n" for name, df in saved_tables.items()])
             context_blocks.append(f"BẢNG SỐ LIỆU NGHIÊN CỨU:\n{table_info}")
 
         compiled_context = "\n\n".join(context_blocks)
+        
         if compiled_context:
-            st.success(f"✅ Đã đồng bộ dữ liệu (Tổng số nguồn: {ref_counter - 1}).")
+            st.success(f"✅ Đã nạp TOÀN BỘ dữ liệu vào siêu bộ nhớ Flash (Tổng số nguồn: {ref_counter - 1}). Sẵn sàng viết luận văn!")
         else:
             st.info("ℹ️ Chưa có dữ liệu nền nào được nạp từ các Tab trước.")
 
