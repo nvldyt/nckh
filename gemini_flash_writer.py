@@ -153,15 +153,19 @@ def render_gemini_flash_tab():
             
             for attempt in range(max_retries):
                 try:
-                    with st.spinner(f"🚀 Gemini 3.8 Flash đang viết bản thảo (Lần thử {attempt + 1})..."):
+                    with st.spinner(f"🚀 Gemini 3.8 Flash đang phân tích y văn và viết bản thảo (Lần thử {attempt + 1})..."):
                         # Xoay vòng lấy key mới ở mỗi lần thử nghiệm (trường hợp key cũ bị giới hạn)
                         current_key = get_gemini_key() if attempt > 0 else active_key
                         client = genai.Client(api_key=current_key)
                         
                         try:
+                            # CẤU HÌNH MỚI: Thêm generation_config để giảm độ trễ (Thinking Level)
                             interaction = client.interactions.create(
                                 model="gemini-3.8-flash",
-                                input=full_prompt
+                                input=full_prompt,
+                                generation_config={
+                                    "thinking_level": "low"  # Ép AI phản hồi nhanh, bỏ qua suy luận thừa
+                                }
                             )
                             response_text = interaction.output_text
                         except AttributeError:
