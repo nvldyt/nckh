@@ -254,7 +254,7 @@ def render_gemini_writer_tab(
     with b1: btn1 = st.button("1. Đặt vấn đề", key=ui_key("btn_dat_van_de"), use_container_width=True)
     with b2: btn2 = st.button("2. Tổng quan tài liệu", key=ui_key("btn_tong_quan"), use_container_width=True)
     with b3: btn3 = st.button("3. Phương pháp NC", key=ui_key("btn_phuong_phap"), use_container_width=True)
-    with b4: btn4 = st.button("4. Bàn luận & So sánh", key=ui_key("btn_ban_luan"), use_container_width=True, type="primary")
+    with b4: btn4 = st.button("4. Bàn luận & So sánh", key=ui_key("btn_ban_luan"), use_container_width=True)
     with b5: btn5 = st.button("5. Xem trích dẫn", key=ui_key("btn_tltk"), use_container_width=True)
     
     st.write("---")
