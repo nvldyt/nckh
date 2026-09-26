@@ -155,9 +155,9 @@ def render_gemini_flash_tab():
                         model="gemini-3.8-flash",
                         contents=chat_prompt,
                         config={
-                            "system_instruction": system_instruction, # Đẩy ngữ cảnh khổng lồ vào System để API xử lý cực nhanh
-                            "temperature": 0.2, # Giữ mức sáng tạo thấp để bám sát số liệu y khoa
-                            "thinking_level": "low" # Ép AI phản hồi nhanh chóng, loại bỏ độ trễ
+                            "system_instruction": system_instruction, # Đẩy ngữ cảnh khổng lồ vào System
+                            "temperature": 0.2
+                            # Đã xóa dòng "thinking_level": "low" để khắc phục lỗi Extra inputs
                         }
                     )
                     
