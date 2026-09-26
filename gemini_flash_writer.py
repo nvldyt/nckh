@@ -1,42 +1,33 @@
 import os
 import time
+import random
 import streamlit as st
 from google import genai
-import random
 
 def get_gemini_key() -> str:
-    """
-    Tự động xoay vòng lấy API Key từ danh sách trong st.secrets.
-    Yêu cầu cấu hình st.secrets (ví dụ trong file .streamlit/secrets.toml hoặc trên Streamlit Cloud):
-    [GEMINI]
-    API_KEYS = [
-        "AIzaSyxxxxxxxxxxxxxxxxx",
-        "AIzaSyyyyyyyyyyyyyyyyyy",
-        "AIzaSzzzzzzzzzzzzzzzzzz"
-    ]
-    """
+    """Tự động xoay vòng lấy API Key từ danh sách trong st.secrets hoặc biến môi trường."""
     try:
         if "GEMINI" in st.secrets and "API_KEYS" in st.secrets["GEMINI"]:
             keys = st.secrets["GEMINI"]["API_KEYS"]
             if keys and isinstance(keys, list):
-                # Cơ chế xoay vòng: Bốc ngẫu nhiên một khóa để cân bằng tải
                 return random.choice(keys).strip()
             elif isinstance(keys, str):
-                return keys.strip()
+                # Hỗ trợ cả trường hợp user khai báo nhầm thành chuỗi (ngăn cách bởi dấu phẩy)
+                return random.choice([k.strip() for k in keys.split(",") if k.strip()])
     except Exception:
         pass
         
-    # Cứu cánh cuối cùng: lấy từ biến môi trường
     return os.getenv("GEMINI_API_KEY", "")
 
 def render_gemini_flash_tab():
     st.markdown("### 🚀 Trợ lý Viết Luận văn (Gemini 3.8 Flash)")
-    st.caption("Ứng dụng mô hình Gemini 3.8 Flash thế hệ mới với bộ nhớ siêu dài, tối ưu cho tổng hợp tài liệu và viết luận văn chuyên sâu.")
+    st.caption("Ứng dụng mô hình Gemini 3.8 Flash với bộ nhớ siêu dài (1M Token) và công nghệ phản hồi tức thì (Streaming).")
 
+    # ==========================================
     # 1. QUẢN LÝ KHÓA API
+    # ==========================================
     active_key = get_gemini_key()
     
-    # Cho phép người dùng nhập khóa riêng nếu st.secrets không có
     if not active_key:
         active_key = st.text_input(
             "🔑 Nhập Google Gemini API Key:", 
@@ -44,28 +35,24 @@ def render_gemini_flash_tab():
             key="input_gemini_key_tab6",
             help="Hệ thống không tìm thấy khóa mặc định trong secrets. Vui lòng nhập thủ công."
         )
-    else:
-        # Tùy chọn: Hiển thị thông báo nhỏ báo hiệu đang dùng key từ hệ thống
-        pass 
 
     if "gemini_writer_messages" not in st.session_state:
         st.session_state["gemini_writer_messages"] = []
 
-    # 2. NẠP TOÀN BỘ DỮ LIỆU BỐI CẢNH (LONG-CONTEXT PROMPTING)
+    # ==========================================
+    # 2. NẠP TOÀN BỘ DỮ LIỆU BỐI CẢNH (RAG LONG-CONTEXT)
+    # ==========================================
     with st.expander("🔍 Dữ liệu bối cảnh và danh mục tham khảo đang nạp", expanded=False):
         context_blocks = []
-        
-        # Kéo toàn bộ PDF và Bài báo đã nạp từ Tab 1 & Tab 2
         docs = st.session_state.get("documents", {})
         chunks = st.session_state.get("chunks", [])
-        
         ref_counter = 1
         
         if docs and chunks:
             doc_list_text = []
-            doc_mapping = {} # Bản đồ ánh xạ ID -> Số thứ tự [1], [2]
+            doc_mapping = {}
             
-            # 2.1. Xây dựng Danh mục tài liệu tham khảo cho AI
+            # 2.1. Xây dựng Danh mục
             for sid, meta in docs.items():
                 doc_mapping[sid] = ref_counter
                 title = meta.get("title") or meta.get("file_name") or sid
@@ -76,29 +63,34 @@ def render_gemini_flash_tab():
                 
             context_blocks.append("DANH MỤC TÀI LIỆU GỐC:\n" + "\n".join(doc_list_text))
             
-            # 2.2. Nhồi TOÀN BỘ các đoạn văn (Chunks) vào bộ nhớ Flash
+            # 2.2. Nhồi Chunks
             ev_lines = []
             for c in chunks:
                 sid = c.get("source_id")
                 doc_idx = doc_mapping.get(sid, "?")
                 text = c.get("text", "")
                 if text.strip():
-                    # Đóng dấu số [1], [2] vào từng đoạn để AI biết trích dẫn từ đâu
                     ev_lines.append(f"[Trích đoạn từ tài liệu {doc_idx}]:\n{text}")
-                    
             context_blocks.append("NỘI DUNG CHI TIẾT TỪ CÁC TÀI LIỆU:\n" + "\n---\n".join(ev_lines))
             
-        # 2.3. Nạp thêm Tóm tắt (nếu có)
+        # 2.3. Nạp Text từ Word (Nếu có từ Tab 7/Tab khác chuyển sang)
+        analyzed_data = st.session_state.get("analyzed_data", {"dataframes": {}, "word_texts": []})
+        if analyzed_data.get("word_texts"):
+            context_blocks.extend(analyzed_data["word_texts"])
+            
+        # 2.4. Nạp Tóm tắt & Bảng SPSS
         summary = st.session_state.get("cached_summary", "")
         if summary:
             context_blocks.append(f"TÓM TẮT ĐỀ TÀI (Nguồn nội bộ [{ref_counter}]):\n{summary}")
             ref_counter += 1
 
-        # 2.4. Nạp thêm Bảng số liệu từ SPSS (nếu có)
         saved_tables = st.session_state.get("saved_tables", {})
         if saved_tables:
             table_info = "".join([f"Bảng {name}:\n{df.to_markdown()}\n\n" for name, df in saved_tables.items()])
             context_blocks.append(f"BẢNG SỐ LIỆU NGHIÊN CỨU:\n{table_info}")
+
+        for name, df in analyzed_data.get("dataframes", {}).items():
+            context_blocks.append(f"DỮ LIỆU BẢNG EXCEL [{name}]:\n{df.to_markdown()}")
 
         compiled_context = "\n\n".join(context_blocks)
         
@@ -107,12 +99,16 @@ def render_gemini_flash_tab():
         else:
             st.info("ℹ️ Chưa có dữ liệu nền nào được nạp từ các Tab trước.")
 
+    # ==========================================
     # 3. HIỂN THỊ LỊCH SỬ CHAT
+    # ==========================================
     for msg in st.session_state["gemini_writer_messages"]:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # 4. XỬ LÝ LỆNH GỌI AI
+    # ==========================================
+    # 4. XỬ LÝ LỆNH GỌI AI (VỚI CƠ CHẾ STREAMING SIÊU TỐC)
+    # ==========================================
     user_query = st.chat_input("Yêu cầu AI viết (VD: Viết phần bàn luận về kết quả kiểm soát huyết áp và chèn trích dẫn [1], [2])...")
 
     if user_query:
@@ -120,75 +116,72 @@ def render_gemini_flash_tab():
             st.error("❌ Vui lòng cung cấp Gemini API Key để tiếp tục.")
             return
 
+        # Hiển thị câu hỏi của User
         st.session_state["gemini_writer_messages"].append({"role": "user", "content": user_query})
         with st.chat_message("user"):
             st.markdown(user_query)
 
+        # Chuẩn bị gọi AI
         with st.chat_message("assistant"):
+            # CẤU TRÚC PROMPTING CHUYÊN SÂU DÀNH CHO LUẬN VĂN Y KHOA (RAG)
             system_instruction = (
                 "Bạn là một chuyên gia Dược lâm sàng xuất sắc, hỗ trợ nghiên cứu viên viết luận văn Chuyên khoa I. "
-                "YÊU CẦU BẮT BUỘC VỀ TRÍCH DẪN: "
-                "1. Khi sử dụng thông tin, số liệu, hoặc kết luận từ các tài liệu được cung cấp, bạn PHẢI đính kèm số thứ tự tài liệu tham khảo dạng ngoặc vuông ở cuối câu (ví dụ: [1], [2]). "
-                "2. Các số trích dẫn phải tuân thủ đúng thứ tự xuất hiện của nguồn tài liệu trong ngữ cảnh bên dưới. "
-                "3. Tuyệt đối không bịa đặt số liệu hoặc tự ý gán nguồn sai sự thật. "
-                "4. Văn phong: Khách quan, khoa học, chuẩn mực y khoa, lập luận liền mạch.\n\n"
-                f"=== DỮ LIỆU ĐỀ TÀI VÀ NGUỒN THAM KHẢO ===\n{compiled_context}"
+                "Bạn đang được cung cấp một khối lượng y văn lớn. YÊU CẦU LẬP LUẬN BẮT BUỘC:\n"
+                "1. ĐỌC HIỂU ĐA NGUỒN: Phân tích và tổng hợp điểm tương đồng/khác biệt giữa các tài liệu trước khi viết.\n"
+                "2. TRÍCH DẪN GỘP: Nếu nhiều tài liệu cùng ủng hộ một quan điểm, BẮT BUỘC gộp trích dẫn ở cuối câu dạng ngoặc vuông, ví dụ: [2, 5, 12].\n"
+                "3. TÍNH CHUẨN XÁC: Thông tin, con số xuất phát từ tài liệu số mấy phải khớp 100% với nội dung tài liệu đó. Tuyệt đối không bịa số liệu.\n"
+                "4. VĂN PHONG: Khách quan, khoa học, lập luận liền mạch theo chuẩn Y khoa.\n\n"
+                f"=== DỮ LIỆU BỐI CẢNH (RAG) ===\n{compiled_context}"
             )
 
-            # Xây dựng ngữ cảnh hội thoại
+            # Xây dựng ngữ cảnh hội thoại ngắn gọn để truyền vào contents
             conversation_history = ""
-            for m in st.session_state["gemini_writer_messages"][-4:]:
+            for m in st.session_state["gemini_writer_messages"][-5:-1]: # Lấy 4 tin nhắn gần nhất
                 sender = "Người dùng" if m["role"] == "user" else "Trợ lý AI"
                 conversation_history += f"{sender}: {m['content']}\n\n"
 
-            full_prompt = (
-                f"{system_instruction}\n\n"
-                f"=== LỊCH SỬ TRAO ĐỔI GẦN ĐÂY ===\n{conversation_history}"
-                f"YÊU CẦU HIỆN TẠI TỪ NGHIÊN CỨU VIÊN: {user_query}\n"
-                "TRẢ LỜI CỦA TRỢ LÝ AI:"
-            )
+            chat_prompt = f"LỊCH SỬ TRAO ĐỔI:\n{conversation_history}\nYÊU CẦU MỚI: {user_query}"
 
             max_retries = 3
-            success = False
             
             for attempt in range(max_retries):
                 try:
-                    with st.spinner(f"🚀 Gemini 3.8 Flash đang phân tích y văn và viết bản thảo (Lần thử {attempt + 1})..."):
-                        # Xoay vòng lấy key mới ở mỗi lần thử nghiệm (trường hợp key cũ bị giới hạn)
-                        current_key = get_gemini_key() if attempt > 0 else active_key
-                        client = genai.Client(api_key=current_key)
-                        
-                        try:
-                            # CẤU HÌNH MỚI: Thêm generation_config để giảm độ trễ (Thinking Level)
-                            interaction = client.interactions.create(
-                                model="gemini-3.8-flash",
-                                input=full_prompt,
-                                generation_config={
-                                    "thinking_level": "low"  # Ép AI phản hồi nhanh, bỏ qua suy luận thừa
-                                }
-                            )
-                            response_text = interaction.output_text
-                        except AttributeError:
-                            # Fallback cho phiên bản thư viện cũ hơn
-                            res = client.models.generate_content(
-                                model="gemini-3.8-flash",
-                                contents=full_prompt
-                            )
-                            response_text = res.text
+                    # Xoay vòng lấy key mới ở mỗi lần thử nghiệm nếu bị Rate Limit
+                    current_key = get_gemini_key() if attempt > 0 else active_key
+                    client = genai.Client(api_key=current_key)
+                    
+                    # SỬ DỤNG STREAMING ĐỂ NHẢ CHỮ TỨC THÌ
+                    response_stream = client.models.generate_content_stream(
+                        model="gemini-3.8-flash",
+                        contents=chat_prompt,
+                        config={
+                            "system_instruction": system_instruction, # Đẩy ngữ cảnh khổng lồ vào System để API xử lý cực nhanh
+                            "temperature": 0.2, # Giữ mức sáng tạo thấp để bám sát số liệu y khoa
+                            "thinking_level": "low" # Ép AI phản hồi nhanh chóng, loại bỏ độ trễ
+                        }
+                    )
+                    
+                    # Hàm yield để Streamlit render hiệu ứng gõ chữ
+                    def stream_generator():
+                        for chunk in response_stream:
+                            if chunk.text:
+                                yield chunk.text
+                    
+                    # st.write_stream tự động in ra màn hình và trả về toàn bộ chuỗi khi kết thúc
+                    final_response_text = st.write_stream(stream_generator())
+                    
+                    if not final_response_text:
+                        raise ValueError("Máy chủ trả về kết quả rỗng.")
 
-                        if not response_text:
-                            raise ValueError("Phản hồi nhận được từ máy chủ rỗng.")
-
-                        st.markdown(response_text)
-                        st.session_state["gemini_writer_messages"].append({"role": "assistant", "content": response_text})
-                        success = True
-                        break # Thoát vòng lặp retry nếu thành công
-                        
+                    # Lưu kết quả vào lịch sử
+                    st.session_state["gemini_writer_messages"].append({"role": "assistant", "content": final_response_text})
+                    break # Thành công -> Thoát vòng lặp retry
+                    
                 except Exception as e:
                     if attempt < max_retries - 1:
-                        st.warning(f"⏳ Cổng Gemini đang bận hoặc giới hạn token, đang tự động đổi Key và thử lại... ({e})")
-                        time.sleep(2) # Nghỉ 2 giây trước khi thử lại
+                        st.warning(f"⏳ Cổng Gemini đang bận, đang tự động đổi Key và kết nối lại... ({e})")
+                        time.sleep(2)
                     else:
-                        st.error(f"❌ Toàn bộ các API Key đều gặp lỗi hoặc đang quá tải. Chi tiết: {e}")
+                        st.error(f"❌ Các API Key đều gặp lỗi hoặc đang quá tải. Chi tiết: {e}")
                         if st.session_state["gemini_writer_messages"]:
-                            st.session_state["gemini_writer_messages"].pop()
+                            st.session_state["gemini_writer_messages"].pop() # Xóa câu hỏi của user nếu AI không trả lời được
