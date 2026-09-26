@@ -376,8 +376,14 @@ def render_statistics_tab(
             elif choice != "-- Chỉ dùng số liệu dán tay bên dưới --": 
                 final += f"### BẢNG: {choice}\n" + saved[choice].to_markdown(index=False) + "\n\n"
             if extra.strip(): final += f"SỐ LIỆU / YÊU CẦU BỔ SUNG:\n{extra.strip()}"
+            
             if not final.strip(): st.warning("⚠️ Anh chưa chọn bảng nào hoặc chưa dán số liệu!")
             else:
+                # -------------------------------------------------------------
+                # BƯỚC QUAN TRỌNG: LƯU TOÀN BỘ SỐ LIỆU VÀO "BÀN CHUNG" CHO AI CHATBOT Ở TAB 4
+                # -------------------------------------------------------------
+                st.session_state["latest_stat_result"] = final
+                
                 # 1. TẠO PROMPT TỐI ƯU CHO GEMINI WEB (Kẻ bảng đẹp + Viết nhận xét)
                 prompt = f"""{BASE_SYSTEM_RULES}
 
@@ -404,12 +410,14 @@ DỮ LIỆU ĐẦU VÀO:
                 st.info("Bấm vào biểu tượng Copy ở góc phải ô dưới đây và dán vào Gemini Web.")
                 st.code(prompt, language="markdown")
 
-                # 3. VẪN GIỮ LẠI NÚT CHẠY API NHƯ CŨ (Phòng khi anh lười copy)
+                # 3. VẪN GIỮ LẠI NÚT CHẠY API NHƯ CŨ
                 try:
                     with st.spinner("AI đang phân tích số liệu và soạn nhận xét chuyên sâu..."): 
                         out = call_gemini(prompt, model=DEFAULT_MODEL)
                     if out: 
                         st.markdown("### 📝 Kết quả Nhận xét Bảng (Từ API API):")
                         st.markdown(out)
+                        # Tự động chuyển thẳng sang Tab AI Chatbot để trò chuyện tiếp
+                        st.success("✅ Số liệu đã được nạp vào bộ nhớ của Chatbot. Anh có thể cuộn lên phần **🤖 Phân tích Dữ liệu với Groq AI** để thảo luận thêm về các số liệu này.")
                 except Exception as exc: 
                     st.error(f"Lỗi gọi AI: {exc}")
