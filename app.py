@@ -705,11 +705,26 @@ def main():
             extract_metadata_from_text_ai_wrapper=extract_metadata_from_text_ai_wrapper
         )
     # ------------------------------------------------------------
-    # TAB 6 – VIẾT LUẬN VĂN (GEMINI 3.8 FLASH)
+    # TAB 6 – VIẾT LUẬN VĂN TỰ ĐỘNG BẰNG AI (RAG PRO)
     # ------------------------------------------------------------
     with tabs[5]:
-        from gemini_flash_writer import render_gemini_flash_tab
-        render_gemini_flash_tab()
+        from gemini_writer_tab import render_gemini_writer_tab
+        
+        # Gọi giao diện Pro và truyền toàn bộ các hàm xử lý dữ liệu vào
+        render_gemini_writer_tab(
+            ui_key=lambda k: f"tab6_{k}", 
+            render_evidence_database_status=render_evidence_database_status, 
+            build_literature_matrix=build_literature_matrix, 
+            create_word_document=create_word_document, 
+            generate_evidence_based_wrapper=generate_evidence_based_wrapper, 
+            get_citation_engine=get_citation_engine, 
+            citation_bibliography_wrapper=citation_bibliography_wrapper, 
+            Audit_generated_text_wrapper=Audit_generated_text_wrapper, 
+            internal_overlap_Audit_wrapper=internal_overlap_Audit_wrapper, 
+            _field=_field,
+            format_numbered_citations=format_numbered_citations,
+            extract_metadata_from_text_ai_wrapper=extract_metadata_from_text_ai_wrapper
+        )
     # ------------------------------------------------------------
     # TAB 7 – PHÂN TÍCH SỐ LIỆU (SPSS MINI - ĐÃ TÁCH MODULE)
     # ------------------------------------------------------------
