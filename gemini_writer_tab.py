@@ -151,14 +151,31 @@ def render_gemini_writer_tab(
             st.warning("⚠️ Vui lòng dán bảng số liệu vào ô số 1 trước!")
         else:
             prompt = f"{BASE_SYSTEM_RULES}\nNHIỆM VỤ: Ngắn gọn, CHỈ diễn giải số liệu nổi bật. BẢNG SỐ LIỆU:\n{my_research_data}"
-            try:
-                client = genai.Client(api_key=active_key)
-                response = client.models.generate_content(model="gemini-3.8-flash", contents=prompt)
-                if response.text:
-                    st.session_state["ai_pending_remark"] = response.text
-                    st.rerun()
-            except Exception as exc: 
-                st.error(f"❌ Lỗi gọi AI: {exc}")
+            
+            # THÊM CƠ CHẾ TỰ ĐỘNG THỬ LẠI (AUTO-RETRY) 3 LẦN KHI SERVER QUÁ TẢI
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    # Nếu lỗi ở lần đầu, các lần sau sẽ tự động bốc API Key khác để thử
+                    current_key = get_gemini_key() if attempt > 0 else active_key
+                    client = genai.Client(api_key=current_key)
+                    
+                    with st.spinner(f"⏳ AI đang đọc bảng và soạn nhận xét (Lần thử {attempt + 1})..."):
+                        response = client.models.generate_content(
+                            model="gemini-3.8-flash", 
+                            contents=prompt
+                        )
+                        if response.text:
+                            st.session_state["ai_pending_remark"] = response.text
+                            st.rerun()
+                            break # Nếu thành công thì thoát khỏi vòng lặp thử lại ngay
+                            
+                except Exception as exc: 
+                    if attempt < max_retries - 1:
+                        st.warning(f"⏳ Server Google đang quá tải, đang tự động đổi Key và thử lại... ({exc})")
+                        time.sleep(2) # Nghỉ 2 giây trước khi thử lại để tránh bị block
+                    else:
+                        st.error(f"❌ Lỗi gọi AI sau {max_retries} lần thử: {exc}")
 
     # =====================================================================
     # 4. HỆ THỐNG XỬ LÝ LỆNH VIẾT (CÓ STREAMING SIÊU TỐC)
