@@ -37,7 +37,7 @@ def extract_text_from_file(uploaded_file):
 def render_chat_assistant():
     st.write("---")
     st.subheader("🤖 Phân tích Dữ liệu với Groq AI")
-    st.caption("Trò chuyện trực tiếp với dữ liệu Excel của anh. AI đã bị ép buộc bám sát danh sách thuốc thực tế.")
+    st.caption("Trò chuyện trực tiếp với dữ liệu Excel của anh. AI đã bị ép buộc bám sát danh sách thuốc thực tế và Số liệu Thống kê Mini.")
     
     # 1. Khởi tạo bộ nhớ cho cuộc trò chuyện
     if "data_chat_history" not in st.session_state:
@@ -108,23 +108,30 @@ def render_chat_assistant():
 
             sample_data = df.head(3).to_markdown() 
             
+            # ---> NÂNG CẤP MẠNH NHẤT NẰM Ở ĐÂY <---
+            # Hệ thống hút kết quả thống kê mới nhất từ Tab 7 truyền xuống
+            latest_stat = st.session_state.get("latest_stat_result", "Chưa có phép tính thống kê nào được thực hiện gần đây.")
+            
             context = f"""
 [BỐI CẢNH ẨN - HƯỚNG DẪN NGHIÊM NGẶT]
 Người dùng đang phân tích file Excel y khoa với {shape[0]} dòng và {shape[1]} cột.
 Tên các cột: {cols}
 
-DANH SÁCH GIÁ TRỊ THỰC TẾ ĐANG CÓ TRONG FILE (Dùng để đối chiếu):
+DANH SÁCH GIÁ TRỊ THỰC TẾ ĐANG CÓ TRONG FILE:
 {unique_info}
 
+KẾT QUẢ THỐNG KÊ CHÍNH XÁC (SPSS MINI) VỪA CHẠY (Rất quan trọng):
+{latest_stat}
+
 LỆNH BẮT BUỘC DÀNH CHO AI:
-1. TUYỆT ĐỐI KHÔNG BỊA ĐẶT (hallucinate) tên thuốc, thảo dược hoặc số liệu không có trong "Danh sách giá trị thực tế" ở trên.
-2. Khi phân tích tương tác thuốc hoặc lập bảng, CHỈ ĐƯỢC PHÉP sử dụng các tên thuốc/hoạt chất có xuất hiện thực tế trong danh sách.
-3. Nếu người dùng hỏi về một thông tin/thuốc không có trong dữ liệu, phải trả lời rõ: "Dữ liệu thực tế trong file không chứa loại thuốc này".
+1. NẾU NGƯỜI DÙNG HỎI VỀ SỐ LIỆU: BẮT BUỘC phải lấy số liệu từ phần "KẾT QUẢ THỐNG KÊ CHÍNH XÁC" ở trên để trả lời.
+2. TUYỆT ĐỐI KHÔNG TỰ TÍNH TOÁN LẠI TỪ DỮ LIỆU MẪU. Không bịa số liệu p-value, tỷ lệ %.
+3. Khi phân tích tương tác thuốc, CHỈ ĐƯỢC PHÉP sử dụng các tên thuốc/hoạt chất có xuất hiện thực tế trong danh sách.
 4. Dữ liệu mẫu (3 dòng đầu) để hiểu cấu trúc: 
 {sample_data}
 """
         
-        # 5. Giao tiếp với Groq AI 
+        # 5. Giao tiếp với AI 
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             with st.spinner("AI đang quét dữ liệu thực tế và phân tích..."):
