@@ -182,9 +182,45 @@ def render_gemini_writer_tab(
     # =====================================================================
     result_box = st.container()
 
-    def run_quick_task(label, task):
-        if not active_key: return
-        client = genai.Client(api_key=active_key)
+    with result_box:
+            st.write("---")
+            st.subheader(f"📝 {label}")
+            
+            clean_out = ""
+            max_retries = 3
+            
+            # KÍCH HOẠT VÒNG LẶP AUTO-RETRY CHO CHẾ ĐỘ STREAMING
+            for attempt in range(max_retries):
+                try:
+                    # Tự động bốc Key mới nếu lần đầu bị lỗi 503 hoặc 429
+                    current_key = get_gemini_key() if attempt > 0 else active_key
+                    client = genai.Client(api_key=current_key)
+                    
+                    if attempt > 0:
+                        st.warning(f"⏳ Mạng đang nghẽn, tự động đổi Key và kết nối lại (Lần thử {attempt + 1})...")
+
+                    response_stream = client.models.generate_content_stream(
+                        model="gemini-3.8-flash",
+                        contents=task,
+                        config={"system_instruction": system_instruction, "temperature": 0.2}
+                    )
+                    
+                    def stream_generator():
+                        for chunk in response_stream:
+                            if chunk.text: yield chunk.text
+                    
+                    # st.write_stream tự động render chữ ra màn hình
+                    clean_out = st.write_stream(stream_generator())
+                    
+                    if clean_out:
+                        break # Nhả chữ thành công -> Thoát vòng lặp
+                        
+                except Exception as exc:
+                    if attempt < max_retries - 1:
+                        time.sleep(2) # Nghỉ 2 giây trước khi thử lại với Key mới
+                    else:
+                        st.error(f"❌ Lỗi Stream AI sau {max_retries} lần thử: {exc}")
+                        return # Thất bại hoàn toàn thì dừng hàm
         
         ctx = st.session_state.get("study_context", {})
         study_context_str = f"Tên đề tài: {ctx.get('title', '')}\nThiết kế: {ctx.get('design', '')}\nĐối tượng: {ctx.get('population', '')}\nCỡ mẫu: {ctx.get('sample_size', '')}\nMục tiêu: {ctx.get('objectives', '')}"
