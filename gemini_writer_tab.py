@@ -182,7 +182,24 @@ def render_gemini_writer_tab(
     # =====================================================================
     result_box = st.container()
 
-    with result_box:
+    def run_quick_task(label, task):
+        if not active_key: return
+        
+        ctx = st.session_state.get("study_context", {})
+        study_context_str = f"Tên đề tài: {ctx.get('title', '')}\nThiết kế: {ctx.get('design', '')}\nĐối tượng: {ctx.get('population', '')}\nCỡ mẫu: {ctx.get('sample_size', '')}\nMục tiêu: {ctx.get('objectives', '')}"
+        
+        system_instruction = (
+            "Bạn là một chuyên gia Dược lâm sàng xuất sắc, hỗ trợ viết luận văn Chuyên khoa I.\n"
+            f"🎯 BỐI CẢNH ĐỀ TÀI CỦA NGHIÊN CỨU VIÊN:\n{study_context_str}\n\n"
+            "YÊU CẦU LẬP LUẬN BẮT BUỘC:\n"
+            "1. Bám sát Bối cảnh đề tài. Phân tích và tổng hợp điểm tương đồng/khác biệt giữa các tài liệu.\n"
+            "2. TRÍCH DẪN: Bắt buộc dùng số thứ tự tài liệu trong ngoặc vuông, ví dụ: [1], [2]. Trích dẫn gộp dạng [2, 5].\n"
+            "3. TÍNH CHUẨN XÁC: Thông tin phải khớp 100% với tài liệu cung cấp. KHÔNG bịa số liệu.\n"
+            "4. VĂN PHONG: Khách quan, khoa học.\n\n"
+            f"=== DỮ LIỆU Y VĂN ĐÃ NẠP (RAG) ===\n{compiled_context}"
+        )
+        
+        with result_box:
             st.write("---")
             st.subheader(f"📝 {label}")
             
@@ -221,40 +238,6 @@ def render_gemini_writer_tab(
                     else:
                         st.error(f"❌ Lỗi Stream AI sau {max_retries} lần thử: {exc}")
                         return # Thất bại hoàn toàn thì dừng hàm
-        
-        ctx = st.session_state.get("study_context", {})
-        study_context_str = f"Tên đề tài: {ctx.get('title', '')}\nThiết kế: {ctx.get('design', '')}\nĐối tượng: {ctx.get('population', '')}\nCỡ mẫu: {ctx.get('sample_size', '')}\nMục tiêu: {ctx.get('objectives', '')}"
-        
-        system_instruction = (
-            "Bạn là một chuyên gia Dược lâm sàng xuất sắc, hỗ trợ viết luận văn Chuyên khoa I.\n"
-            f"🎯 BỐI CẢNH ĐỀ TÀI CỦA NGHIÊN CỨU VIÊN:\n{study_context_str}\n\n"
-            "YÊU CẦU LẬP LUẬN BẮT BUỘC:\n"
-            "1. Bám sát Bối cảnh đề tài. Phân tích và tổng hợp điểm tương đồng/khác biệt giữa các tài liệu.\n"
-            "2. TRÍCH DẪN: Bắt buộc dùng số thứ tự tài liệu trong ngoặc vuông, ví dụ: [1], [2]. Trích dẫn gộp dạng [2, 5].\n"
-            "3. TÍNH CHUẨN XÁC: Thông tin phải khớp 100% với tài liệu cung cấp. KHÔNG bịa số liệu.\n"
-            "4. VĂN PHONG: Khách quan, khoa học.\n\n"
-            f"=== DỮ LIỆU Y VĂN ĐÃ NẠP (RAG) ===\n{compiled_context}"
-        )
-        
-        with result_box:
-            st.write("---")
-            st.subheader(f"📝 {label}")
-            
-            try:
-                # KÍCH HOẠT NHẢ CHỮ LIÊN TỤC (STREAMING)
-                response_stream = client.models.generate_content_stream(
-                    model="gemini-3.8-flash",
-                    contents=task,
-                    config={"system_instruction": system_instruction, "temperature": 0.2}
-                )
-                def stream_generator():
-                    for chunk in response_stream:
-                        if chunk.text: yield chunk.text
-                
-                clean_out = st.write_stream(stream_generator())
-            except Exception as exc:
-                st.error(f"❌ Lỗi Stream AI: {exc}")
-                return
                 
         # --- HẬU XỬ LÝ: TRÍCH XUẤT TRÍCH DẪN & KIỂM ĐỊNH SỐ LIỆU ---
         st.session_state["last_generated"] = clean_out
