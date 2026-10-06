@@ -7,12 +7,13 @@ def render_audit_tab(
     ui_key,
     Audit_generated_text_wrapper,
     internal_overlap_Audit_wrapper,
+    check_internet_plagiarism, # Bổ sung hàm quét Internet truyền vào từ main
     call_gemini,
     BASE_SYSTEM_RULES,
     MODEL_LITE
 ):
     st.header("🔎 Audit luận văn toàn diện")
-    st.markdown('<div class="warning-box">⚠️ <b>Giới hạn cần biết:</b> Công cụ chỉ báo nguy cơ.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="warning-box">⚠️ <b>Giới hạn cần biết:</b> Công cụ chỉ báo nguy cơ. Quét Internet có thể mất vài giây.</div>', unsafe_allow_html=True)
     
     text = st.text_area("Dán đoạn văn cần Audit vào đây:", height=250, key=ui_key("Audit_text"))
     c1, c2, c3, c4, c5, c6 = st.columns(6)
@@ -62,7 +63,12 @@ def render_audit_tab(
                         st.info("Không tìm thấy trích dẫn [n].")
                         
     with c3:
-        if st.button("🔍 Trùng lặp", use_container_width=True, key=ui_key("Audit_overlap")):
+        # Tách thành 2 nút quét trùng lặp
+        btn_overlap_internal = st.button("🔍 Nội bộ", use_container_width=True, key=ui_key("Audit_overlap"), help="Quét trùng lặp với các tài liệu đã tải lên")
+        btn_overlap_internet = st.button("🌐 Internet", use_container_width=True, key=ui_key("Audit_internet"), help="Dò tìm đạo văn trên Google/DuckDuckGo")
+        
+        # Xử lý quét Nội bộ
+        if btn_overlap_internal:
             if not text.strip(): 
                 st.warning("Chưa có văn bản.")
             else:
@@ -73,23 +79,46 @@ def render_audit_tab(
                     st.error(f"❌ Không thể quét trùng lặp: {exc}")
                 
                 with box:
-                    st.markdown("### 🔍 Báo cáo Trùng lặp (Plagiarism & Overlap)")
+                    st.markdown("### 🔍 Báo cáo Trùng lặp Nội bộ (Internal Overlap)")
                     if not ov: 
-                        st.success("✅ Tuyệt vời! Không tìm thấy đoạn văn trùng lặp đáng kể nào trong tài liệu nội bộ.")
+                        st.success("✅ Không tìm thấy đoạn văn trùng lặp đáng kể nào trong tài liệu nội bộ.")
                     else:
                         st.warning(f"⚠️ Phát hiện {len(ov)} đoạn có dấu hiệu trùng lặp cao.")
-                        
                         df_ov = pd.DataFrame(ov)
-                        
                         if not df_ov.empty:
                             df_ov["% Trùng lặp"] = (df_ov["similarity"] * 100).round(1).astype(str) + "%"
                             df_ov["Tài liệu gốc"] = df_ov["file"] + " (Trang " + df_ov["page"].astype(str) + ")"
-                            
                             display_df = df_ov[["% Trùng lặp", "Tài liệu gốc", "text"]]
                             display_df.rename(columns={"text": "Nội dung trùng khớp"}, inplace=True)
-                            
+                            st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+        # Xử lý quét Internet
+        if btn_overlap_internet:
+            if not text.strip(): 
+                st.warning("Chưa có văn bản.")
+            else:
+                with st.spinner("🌐 Đang kết nối Internet và đối chiếu dữ liệu (có thể mất 5-10 giây)..."):
+                    try: 
+                        ext_results = check_internet_plagiarism(text)
+                    except Exception as exc: 
+                        ext_results = []
+                        st.error(f"❌ Lỗi kết nối Internet: {exc}")
+                
+                with box:
+                    st.markdown("### 🌐 Báo cáo Đạo văn Internet (External Plagiarism)")
+                    if not ext_results: 
+                        st.success("✅ Tuyệt vời! Thuật toán dò tìm không phát hiện câu văn này bị sao chép trực tiếp từ Internet.")
+                    else:
+                        st.error(f"🚨 CẢNH BÁO ĐẠO VĂN: Tìm thấy {len(ext_results)} nguồn trên mạng chứa nguyên văn câu chữ này!")
+                        
+                        df_ext = pd.DataFrame(ext_results)
+                        if not df_ext.empty:
+                            # Hiển thị DataFrame với URL có thể click được (Cần Streamlit bản mới >= 1.23)
                             st.dataframe(
-                                display_df, 
+                                df_ext, 
+                                column_config={
+                                    "Nguồn (URL)": st.column_config.LinkColumn("Link Website (Click để xem)"),
+                                },
                                 use_container_width=True,
                                 hide_index=True
                             )
@@ -113,37 +142,29 @@ def render_audit_tab(
                 st.warning("Chưa có văn bản.")
             else:
                 AI_DETECT_PROMPT = f"""{BASE_SYSTEM_RULES}
-Bạn là một hệ thống phân tích ngôn ngữ học chuyên nghiệp (AI Text Detector) tương tự như Originality.ai hay ZeroGPT.
-Hãy phân tích đoạn văn sau và đánh giá xác suất nó được viết bởi AI (như ChatGPT, Claude, Gemini) hay con người.
+Bạn là một hệ thống phân tích ngôn ngữ học chuyên nghiệp (AI Text Detector).
+Hãy phân tích đoạn văn sau và đánh giá xác suất nó được viết bởi AI hay con người.
 
 Tiêu chí phân tích (BẮT BUỘC):
-1. Perplexity (Độ lúng túng): Tính dễ đoán của từ vựng. AI thường dùng từ rất phổ biến, dễ đoán, khuôn sáo (Perplexity thấp). Con người dùng từ vựng đa dạng, có thể có từ lóng, thuật ngữ chuyên ngành hẹp hoặc cách dùng từ độc đáo (Perplexity cao).
-2. Burstiness (Độ bùng nổ): Sự đa dạng về cấu trúc và độ dài câu. Con người viết câu lúc ngắn lúc dài, lúc phức tạp lúc đơn giản, nhịp điệu không đều (Burstiness cao). AI thường viết các câu có độ dài và cấu trúc rất đều đặn, câu văn xuôi mượt mà nhưng rập khuôn (Burstiness thấp).
+1. Perplexity (Độ lúng túng): Tính dễ đoán của từ vựng.
+2. Burstiness (Độ bùng nổ): Sự đa dạng về cấu trúc và độ dài câu. 
 
 Hãy trả về kết quả theo cấu trúc Markdown sau:
 ### 📊 Tỷ lệ rủi ro AI: [Điền % từ 0-100%]
-* (>70%: Chắc chắn AI, 30-70%: Có thể chỉnh sửa từ AI, <30%: Khả năng cao là người viết)*
 
-**1. Phân tích Perplexity (Lựa chọn từ vựng):**
-[Đánh giá chi tiết của bạn về cách dùng từ...]
+**1. Phân tích Perplexity:** [Đánh giá...]
+**2. Phân tích Burstiness:** [Đánh giá...]
+**3. Bằng chứng:** [Trích dẫn câu có vẻ máy móc nhất]
 
-**2. Phân tích Burstiness (Cấu trúc & Độ dài câu):**
-[Đánh giá chi tiết của bạn về cấu trúc câu...]
-
-**3. Bằng chứng cụ thể:**
-[Trích dẫn 1-2 câu trong bài có văn phong đậm chất "máy móc" nhất nếu có, và giải thích tại sao]
-
-ĐOẠN VĂN CẦN KIỂM TRA:
+ĐOẠN VĂN:
 {text}
 """
                 try: 
-                    # Sử dụng mô hình mặc định (Pro/Flash) mạnh hơn thay vì LITE để phân tích ngữ nghĩa chính xác
                     res = call_gemini(AI_DETECT_PROMPT) 
                 except Exception as exc: 
                     res = f"Lỗi gọi Gemini: {exc}"
                 with box: 
                     st.markdown("### 🤖 Báo cáo phân tích văn phong AI")
-                    st.info("💡 **Lưu ý:** AI Detection dựa trên thuật toán ngữ nghĩa, có thể xảy ra dương tính giả (false positive) nếu văn bản học thuật được viết với cấu trúc quá khuôn mẫu.")
                     st.markdown(str(res))
                     
     with c6:
