@@ -1,4 +1,4 @@
-# audit_tab.py
+# audit_tab.py (Cập nhật Error Handling cho đầu vào)
 import streamlit as st
 import re
 import pandas as pd
@@ -7,7 +7,7 @@ def render_audit_tab(
     ui_key,
     Audit_generated_text_wrapper,
     internal_overlap_Audit_wrapper,
-    check_internet_plagiarism, # Bổ sung hàm quét Internet truyền vào từ main
+    check_internet_plagiarism, 
     call_gemini,
     BASE_SYSTEM_RULES,
     MODEL_LITE
@@ -15,15 +15,37 @@ def render_audit_tab(
     st.header("🔎 Audit luận văn toàn diện")
     st.markdown('<div class="warning-box">⚠️ <b>Giới hạn cần biết:</b> Công cụ chỉ báo nguy cơ. Quét Internet có thể mất vài giây.</div>', unsafe_allow_html=True)
     
+    # 1. Nhận văn bản đầu vào
     text = st.text_area("Dán đoạn văn cần Audit vào đây:", height=250, key=ui_key("Audit_text"))
+    
+    # 2. XỬ LÝ LỖI (ERROR HANDLING) VÀ KIỂM TRA CHẤT LƯỢNG VĂN BẢN ĐẦU VÀO
+    # Khởi tạo cờ kiểm tra hợp lệ
+    is_valid_input = False
+    
+    if not text.strip():
+        st.info("ℹ️ Vui lòng dán văn bản luận văn/báo cáo vào ô trống phía trên để bắt đầu phân tích.")
+    else:
+        # Kiểm tra độ dài tối thiểu (ví dụ: cần ít nhất 30 từ để phân tích có ý nghĩa)
+        word_count = len(text.strip().split())
+        # Đếm số lượng câu (dựa vào dấu chấm, hỏi, than)
+        sentence_count = len(re.split(r'[.!?]+', text.strip())) - 1 
+
+        if word_count < 30:
+            st.warning("⚠️ VĂN BẢN QUÁ NGẮN: Vui lòng nhập đoạn văn dài hơn (ít nhất 30 từ) để thuật toán có đủ dữ liệu nhận diện văn phong AI và quét đạo văn.")
+        elif sentence_count < 2:
+            st.warning("⚠️ THIẾU CẤU TRÚC CÂU: Đoạn văn có vẻ giống một danh sách liệt kê hơn là văn xuôi (không có đủ dấu chấm câu). Hãy chuyển dữ liệu thành văn bản mô tả (Prose) để AI có thể phân tích Burstiness và Perplexity chính xác.")
+        else:
+            is_valid_input = True # Đã đạt chuẩn
+
+    # Bố cục nút bấm
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     st.write("---")
     box = st.container()
     
     with c1:
         if st.button("🔢 Số liệu", use_container_width=True, key=ui_key("Audit_numbers")):
-            if not text.strip(): 
-                st.warning("Chưa có văn bản.")
+            if not is_valid_input:
+                st.error("Vui lòng nhập văn bản có cấu trúc câu đầy đủ và đủ dài để phân tích.")
             else:
                 try: 
                     r = Audit_generated_text_wrapper(text)
@@ -47,8 +69,8 @@ def render_audit_tab(
                             
     with c2:
         if st.button("📚 Trích dẫn", use_container_width=True, key=ui_key("Audit_citation")):
-            if not text.strip(): 
-                st.warning("Chưa có văn bản.")
+            if not is_valid_input:
+                st.error("Vui lòng nhập văn bản có cấu trúc câu đầy đủ và đủ dài để phân tích.")
             else:
                 cites = re.findall(r"\[(\d+)\]", text)
                 refs = {str(x.get("vancouver_index")): x for x in st.session_state.get("current_references", [])}
@@ -63,14 +85,12 @@ def render_audit_tab(
                         st.info("Không tìm thấy trích dẫn [n].")
                         
     with c3:
-        # Tách thành 2 nút quét trùng lặp
         btn_overlap_internal = st.button("🔍 Nội bộ", use_container_width=True, key=ui_key("Audit_overlap"), help="Quét trùng lặp với các tài liệu đã tải lên")
         btn_overlap_internet = st.button("🌐 Internet", use_container_width=True, key=ui_key("Audit_internet"), help="Dò tìm đạo văn trên Google/DuckDuckGo")
         
-        # Xử lý quét Nội bộ
         if btn_overlap_internal:
-            if not text.strip(): 
-                st.warning("Chưa có văn bản.")
+            if not is_valid_input:
+                st.error("Vui lòng nhập văn bản có cấu trúc câu đầy đủ và đủ dài để phân tích.")
             else:
                 try: 
                     ov = internal_overlap_Audit_wrapper(text)
@@ -92,10 +112,9 @@ def render_audit_tab(
                             display_df.rename(columns={"text": "Nội dung trùng khớp"}, inplace=True)
                             st.dataframe(display_df, use_container_width=True, hide_index=True)
 
-        # Xử lý quét Internet
         if btn_overlap_internet:
-            if not text.strip(): 
-                st.warning("Chưa có văn bản.")
+            if not is_valid_input:
+                st.error("Vui lòng nhập văn bản có cấu trúc câu đầy đủ và đủ dài để phân tích.")
             else:
                 with st.spinner("🌐 Đang kết nối Internet và đối chiếu dữ liệu (có thể mất 5-10 giây)..."):
                     try: 
@@ -113,7 +132,6 @@ def render_audit_tab(
                         
                         df_ext = pd.DataFrame(ext_results)
                         if not df_ext.empty:
-                            # Hiển thị DataFrame với URL có thể click được (Cần Streamlit bản mới >= 1.23)
                             st.dataframe(
                                 df_ext, 
                                 column_config={
@@ -125,8 +143,8 @@ def render_audit_tab(
                         
     with c4:
         if st.button("🔤 Chính tả", use_container_width=True, key=ui_key("Audit_spelling")):
-            if not text.strip(): 
-                st.warning("Chưa có văn bản.")
+            if not is_valid_input:
+                 st.error("Vui lòng nhập văn bản có cấu trúc câu đầy đủ và đủ dài để phân tích.")
             else:
                 p = f"{BASE_SYSTEM_RULES}\nRà soát đoạn văn bản sau để tìm lỗi chính tả/thuật ngữ. ĐOẠN VĂN: {text}"
                 try: 
@@ -138,8 +156,8 @@ def render_audit_tab(
                     
     with c5:
         if st.button("🤖 Check văn AI", use_container_width=True, key=ui_key("Audit_ai_style")):
-            if not text.strip(): 
-                st.warning("Chưa có văn bản.")
+            if not is_valid_input:
+                 st.error("Vui lòng nhập văn bản có cấu trúc câu đầy đủ và đủ dài để phân tích.")
             else:
                 AI_DETECT_PROMPT = f"""{BASE_SYSTEM_RULES}
 Bạn là một hệ thống phân tích ngôn ngữ học chuyên nghiệp (AI Text Detector).
@@ -169,8 +187,8 @@ Hãy trả về kết quả theo cấu trúc Markdown sau:
                     
     with c6:
         if st.button("⚖️ Phản biện", use_container_width=True, key=ui_key("logic_review")):
-            if not text.strip(): 
-                st.warning("Chưa có văn bản.")
+            if not is_valid_input:
+                 st.error("Vui lòng nhập văn bản có cấu trúc câu đầy đủ và đủ dài để phân tích. Bạn cũng nên bổ sung quan điểm cá nhân để thuật toán có cơ sở phản biện lại.")
             else:
                 p = f"{BASE_SYSTEM_RULES}\nĐóng vai phản biện luận văn CKI Dược lâm sàng. Chỉ ra điểm yếu logic: thiếu bằng chứng, tương quan/nhân quả, vượt giới hạn thiết kế nghiên cứu. ĐOẠN VĂN: {text}"
                 try: 
