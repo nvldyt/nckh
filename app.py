@@ -13,6 +13,7 @@ import time
 import json
 import gc
 
+from utils import check_internet_plagiarism
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -756,14 +757,17 @@ def main():
             DEFAULT_MODEL=DEFAULT_MODEL
         )
     # ------------------------------------------------------------
-    # TAB 8 – AUDIT (ĐÃ TÁCH MODULE)
+    # TAB 8 - AUDIT (ĐÃ TÁCH MODULE)
     # ------------------------------------------------------------
     with tabs[7]:
         from audit_tab import render_audit_tab
+        
+        # Bổ sung tham số check_internet_plagiarism vào đây
         render_audit_tab(
             ui_key=ui_key,
             Audit_generated_text_wrapper=Audit_generated_text_wrapper,
             internal_overlap_Audit_wrapper=internal_overlap_Audit_wrapper,
+            check_internet_plagiarism=check_internet_plagiarism, # Dòng mới thêm
             call_gemini=call_gemini,
             BASE_SYSTEM_RULES=BASE_SYSTEM_RULES,
             MODEL_LITE=MODEL_LITE
