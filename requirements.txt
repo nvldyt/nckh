@@ -29,3 +29,4 @@ openpyxl
 requests
 tabulate
 google-search-results
+duckduckgo-search
